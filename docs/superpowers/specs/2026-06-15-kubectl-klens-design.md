@@ -63,7 +63,7 @@ All re-implemented against the API via client-go. Output is a tabwriter table.
 | `capacity`        | nodes                      | NAME, CPU_CAP, CPU_ALLOC, MEM_CAP, MEM_ALLOC                                        |
 | `zones`           | nodes                      | NAME, REGION (`topology.kubernetes.io/region`), ZONE (`topology.kubernetes.io/zone`) |
 | `pods-per-node`   | pods (all ns)              | NODE, PODS (count), sorted desc                                                     |
-| `reqlim`          | pods (all ns)              | NS, POD, CONTAINER, REQ_CPU, LIM_CPU, REQ_MEM, LIM_MEM — excludes `kube-system`     |
+| `reqlim`          | pods (current ns)          | NS, POD, CONTAINER, REQ_CPU, LIM_CPU, REQ_MEM, LIM_MEM — excludes `kube-system`; current namespace by default, `-A` for all |
 | `images`          | pods (all ns)              | COUNT, IMAGE — occurrences across the cluster, sorted desc                          |
 | `on-node <node>`  | pods (field selector)      | NS, POD, STATUS, NODE — pods scheduled on `<node>`; node arg required               |
 | `pvc`             | pods + pvc (all ns)        | NS, POD, NODE, PVC — PVCs bound to a pod and its node                               |
@@ -74,8 +74,12 @@ All re-implemented against the API via client-go. Output is a tabwriter table.
 - No subcommand or unknown subcommand → usage to stderr + exit 1.
 - `on-node` without a node argument → explicit error + exit 1.
 - Node-scoped commands (`nodes`, `taints`, `capacity`, `zones`) ignore namespace.
-- Default scope for pod-scoped commands: all namespaces (matches the original
-  wiki one-liners which used `-A`); `-n` narrows it.
+- Default scope for most pod-scoped commands (`pods-per-node`, `images`,
+  `on-node`, `pvc`): all namespaces (matches the original wiki one-liners which
+  used `-A`); `-n` narrows it.
+- `reqlim` is the exception: it defaults to the current kubeconfig namespace
+  (the one set by kubens/kubectx, resolved via `clientcmd.Namespace()`); `-A`
+  widens it to all namespaces and `-n` targets a specific one.
 
 ## Testing
 

@@ -20,7 +20,8 @@ kubectl klens taints           # taints per node
 kubectl klens capacity         # CPU/mem capacity + allocatable
 kubectl klens zones            # region/zone per node
 kubectl klens pods-per-node    # pod count per node
-kubectl klens reqlim           # requests/limits per container (excl kube-system)
+kubectl klens reqlim           # requests/limits per container, current ns (excl kube-system)
+kubectl klens reqlim -A        # ... across all namespaces
 kubectl klens images           # image occurrence counts
 kubectl klens on-node <node>   # pods on a node
 kubectl klens pvc              # PVCs bound to pod + node
@@ -28,6 +29,10 @@ kubectl klens pvc              # PVCs bound to pod + node
 
 Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `--version`.
+
+`reqlim` defaults to the current kubeconfig namespace (the one set by
+kubens/kubectx); `-A` widens it to all namespaces and `-n` targets a specific
+one. The other pod-scoped commands default to all namespaces.
 
 ## Development
 
