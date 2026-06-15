@@ -1,0 +1,4 @@
+/kubectl-klens
+/dist/
+*.tar.gz
+checksums.txt
