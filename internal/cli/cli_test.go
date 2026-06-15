@@ -15,9 +15,21 @@ func testApp(out, errw *bytes.Buffer) App {
 	return App{
 		Info:      BuildInfo{Version: "test", Commit: "abc", Date: "today"},
 		NewClient: func(kube.Flags) (kubernetes.Interface, error) { return fake.NewClientset(), nil },
+		Namespace: func(kube.Flags) (string, error) { return "current-ns", nil },
 		Out:       out,
 		Err:       errw,
 	}
+}
+
+// listedNamespace returns the namespace of the first pods "list" action the
+// fake clientset recorded, or "<none>" if no such action happened.
+func listedNamespace(c *fake.Clientset) string {
+	for _, action := range c.Actions() {
+		if action.GetVerb() == "list" && action.GetResource().Resource == "pods" {
+			return action.GetNamespace()
+		}
+	}
+	return "<none>"
 }
 
 func TestRunNoArgs(t *testing.T) {
@@ -77,5 +89,76 @@ func TestRunDispatchesNodes(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "NODEPOOL") {
 		t.Fatalf("want nodes header, got %q", out.String())
+	}
+}
+
+// reqlimApp builds an App whose injected client and namespace resolver are
+// observable: it records resolver calls and exposes the fake clientset.
+func reqlimApp(out, errw *bytes.Buffer, resolved string) (App, *fake.Clientset, *bool) {
+	c := fake.NewClientset()
+	called := false
+	return App{
+		Info:      BuildInfo{Version: "test"},
+		NewClient: func(kube.Flags) (kubernetes.Interface, error) { return c, nil },
+		Namespace: func(kube.Flags) (string, error) { called = true; return resolved, nil },
+		Out:       out,
+		Err:       errw,
+	}, c, &called
+}
+
+func TestRunReqlimDefaultsToCurrentNamespace(t *testing.T) {
+	var out, errw bytes.Buffer
+	app, c, called := reqlimApp(&out, &errw, "team-a")
+	if code := app.Run([]string{"reqlim"}); code != 0 {
+		t.Fatalf("want exit 0, got %d (err=%q)", code, errw.String())
+	}
+	if !*called {
+		t.Fatal("resolver should be called when neither -n nor -A is set")
+	}
+	if got := listedNamespace(c); got != "team-a" {
+		t.Fatalf("want list scoped to current namespace team-a, got %q", got)
+	}
+}
+
+func TestRunReqlimAllNamespaces(t *testing.T) {
+	var out, errw bytes.Buffer
+	app, c, called := reqlimApp(&out, &errw, "team-a")
+	if code := app.Run([]string{"reqlim", "-A"}); code != 0 {
+		t.Fatalf("want exit 0, got %d (err=%q)", code, errw.String())
+	}
+	if *called {
+		t.Fatal("resolver must not be called when -A is set")
+	}
+	if got := listedNamespace(c); got != "" {
+		t.Fatalf("want list across all namespaces (empty), got %q", got)
+	}
+}
+
+func TestRunReqlimExplicitNamespace(t *testing.T) {
+	var out, errw bytes.Buffer
+	app, c, called := reqlimApp(&out, &errw, "team-a")
+	if code := app.Run([]string{"reqlim", "-n", "custom"}); code != 0 {
+		t.Fatalf("want exit 0, got %d (err=%q)", code, errw.String())
+	}
+	if *called {
+		t.Fatal("resolver must not be called when -n is set")
+	}
+	if got := listedNamespace(c); got != "custom" {
+		t.Fatalf("want list scoped to custom, got %q", got)
+	}
+}
+
+func TestRunPodCommandStaysClusterWide(t *testing.T) {
+	// images has no CurrentNSDefault: it must keep listing all namespaces.
+	var out, errw bytes.Buffer
+	app, c, called := reqlimApp(&out, &errw, "team-a")
+	if code := app.Run([]string{"images"}); code != 0 {
+		t.Fatalf("want exit 0, got %d (err=%q)", code, errw.String())
+	}
+	if *called {
+		t.Fatal("resolver must not be called for non-CurrentNSDefault commands")
+	}
+	if got := listedNamespace(c); got != "" {
+		t.Fatalf("want images across all namespaces (empty), got %q", got)
 	}
 }

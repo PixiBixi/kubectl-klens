@@ -22,24 +22,27 @@ type BuildInfo struct {
 // RunFunc is the signature every subcommand implements.
 type RunFunc func(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error
 
-// Command is a registry entry.
+// Command is a registry entry. CurrentNSDefault means that, absent -n and -A,
+// the command scopes to the current kubeconfig namespace instead of all
+// namespaces.
 type Command struct {
-	Name    string
-	Summary string
-	Run     RunFunc
+	Name             string
+	Summary          string
+	Run              RunFunc
+	CurrentNSDefault bool
 }
 
 func commands() []Command {
 	return []Command{
-		{"nodes", "List nodes with GKE nodepool and instance-type", view.Nodes},
-		{"taints", "List taints of all nodes", view.Taints},
-		{"capacity", "Show CPU/memory capacity and allocatable per node", view.Capacity},
-		{"zones", "Show region and zone per node", view.Zones},
-		{"pods-per-node", "Count pods per node", view.PodsPerNode},
-		{"reqlim", "Show requests/limits per container (excludes kube-system)", view.Reqlim},
-		{"images", "Count image occurrences across the cluster", view.Images},
-		{"on-node", "List pods scheduled on a given node", view.OnNode},
-		{"pvc", "List PVCs bound to a pod and node", view.Pvc},
+		{Name: "nodes", Summary: "List nodes with GKE nodepool and instance-type", Run: view.Nodes},
+		{Name: "taints", Summary: "List taints of all nodes", Run: view.Taints},
+		{Name: "capacity", Summary: "Show CPU/memory capacity and allocatable per node", Run: view.Capacity},
+		{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones},
+		{Name: "pods-per-node", Summary: "Count pods per node", Run: view.PodsPerNode},
+		{Name: "reqlim", Summary: "Show requests/limits per container in the current namespace (-A for all; excludes kube-system)", Run: view.Reqlim, CurrentNSDefault: true},
+		{Name: "images", Summary: "Count image occurrences across the cluster", Run: view.Images},
+		{Name: "on-node", Summary: "List pods scheduled on a given node", Run: view.OnNode},
+		{Name: "pvc", Summary: "List PVCs bound to a pod and node", Run: view.Pvc},
 	}
 }
 
@@ -47,13 +50,14 @@ func commands() []Command {
 type App struct {
 	Info      BuildInfo
 	NewClient func(kube.Flags) (kubernetes.Interface, error)
+	Namespace func(kube.Flags) (string, error)
 	Out       io.Writer
 	Err       io.Writer
 }
 
 // NewApp returns an App backed by the real kube client and os streams.
 func NewApp(info BuildInfo) App {
-	return App{Info: info, NewClient: kube.Client, Out: os.Stdout, Err: os.Stderr}
+	return App{Info: info, NewClient: kube.Client, Namespace: kube.CurrentNamespace, Out: os.Stdout, Err: os.Stderr}
 }
 
 // Run parses args, dispatches the subcommand, and returns a process exit code.
@@ -92,6 +96,14 @@ func (a App) Run(args []string) int {
 	if err != nil {
 		fmt.Fprintln(a.Err, "error: failed to build kubernetes client:", err)
 		return 1
+	}
+	if cmd.CurrentNSDefault && !f.AllNamespaces && f.Namespace == "" {
+		ns, err := a.Namespace(f)
+		if err != nil {
+			fmt.Fprintln(a.Err, "error: failed to resolve current namespace:", err)
+			return 1
+		}
+		f.Namespace = ns
 	}
 	if err := cmd.Run(context.Background(), client, f, fs.Args(), a.Out); err != nil {
 		fmt.Fprintln(a.Err, "error:", err)
