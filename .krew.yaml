@@ -1,0 +1,37 @@
+apiVersion: krew.googlecontainertools.github.com/v1alpha2
+kind: Plugin
+metadata:
+  name: klens
+spec:
+  version: "{{ .TagName }}"
+  homepage: https://github.com/PixiBixi/kubectl-klens
+  shortDescription: Quick read-only cluster inspection shortcuts
+  description: |
+    klens bundles frequently-used read-only inspection commands: node pools,
+    taints, capacity, zones, pods-per-node, requests/limits, image counts,
+    pods on a node, and PVC bindings.
+  platforms:
+    - selector:
+        matchLabels:
+          os: darwin
+          arch: amd64
+      {{addURIAndSha "https://github.com/PixiBixi/kubectl-klens/releases/download/{{ .TagName }}/kubectl-klens_{{ .TagName }}_Darwin_x86_64.tar.gz" .TagName }}
+      bin: kubectl-klens
+    - selector:
+        matchLabels:
+          os: darwin
+          arch: arm64
+      {{addURIAndSha "https://github.com/PixiBixi/kubectl-klens/releases/download/{{ .TagName }}/kubectl-klens_{{ .TagName }}_Darwin_arm64.tar.gz" .TagName }}
+      bin: kubectl-klens
+    - selector:
+        matchLabels:
+          os: linux
+          arch: amd64
+      {{addURIAndSha "https://github.com/PixiBixi/kubectl-klens/releases/download/{{ .TagName }}/kubectl-klens_{{ .TagName }}_Linux_x86_64.tar.gz" .TagName }}
+      bin: kubectl-klens
+    - selector:
+        matchLabels:
+          os: linux
+          arch: arm64
+      {{addURIAndSha "https://github.com/PixiBixi/kubectl-klens/releases/download/{{ .TagName }}/kubectl-klens_{{ .TagName }}_Linux_arm64.tar.gz" .TagName }}
+      bin: kubectl-klens
