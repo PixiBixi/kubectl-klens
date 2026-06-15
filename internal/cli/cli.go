@@ -43,6 +43,10 @@ func commands() []Command {
 		{Name: "images", Summary: "Count image occurrences across the cluster", Run: view.Images},
 		{Name: "on-node", Summary: "List pods scheduled on a given node", Run: view.OnNode},
 		{Name: "pvc", Summary: "List PVCs bound to a pod and node", Run: view.Pvc},
+		{Name: "default-sa", Summary: "List pods still using the default service account", Run: view.DefaultSA},
+		{Name: "svc-fqdn", Summary: "Show in-cluster FQDN of services in the current namespace (-A for all)", Run: view.SvcFQDN, CurrentNSDefault: true},
+		{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler},
+		{Name: "secret", Summary: "Decode and print a secret's data in the current namespace (-n to target another)", Run: view.Secret, CurrentNSDefault: true},
 	}
 }
 

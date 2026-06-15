@@ -162,3 +162,18 @@ func TestRunPodCommandStaysClusterWide(t *testing.T) {
 		t.Fatalf("want images across all namespaces (empty), got %q", got)
 	}
 }
+
+// TestCurrentNSDefaultFlags locks in which commands scope to the current
+// kubeconfig namespace by default (vs. all namespaces).
+func TestCurrentNSDefaultFlags(t *testing.T) {
+	want := map[string]bool{
+		"reqlim":   true,
+		"svc-fqdn": true,
+		"secret":   true,
+	}
+	for _, c := range commands() {
+		if got := c.CurrentNSDefault; got != want[c.Name] {
+			t.Errorf("%s: CurrentNSDefault = %v, want %v", c.Name, got, want[c.Name])
+		}
+	}
+}
