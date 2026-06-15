@@ -25,14 +25,20 @@ kubectl klens reqlim -A        # ... across all namespaces
 kubectl klens images           # image occurrence counts
 kubectl klens on-node <node>   # pods on a node
 kubectl klens pvc              # PVCs bound to pod + node
+kubectl klens default-sa       # pods still using the default service account
+kubectl klens svc-fqdn         # in-cluster FQDN of services, current ns
+kubectl klens svc-fqdn -A      # ... across all namespaces
+kubectl klens autoscaler       # cluster-autoscaler status (kube-system)
+kubectl klens secret <name>    # decode a secret's data, current ns
 ```
 
 Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `--version`.
 
-`reqlim` defaults to the current kubeconfig namespace (the one set by
-kubens/kubectx); `-A` widens it to all namespaces and `-n` targets a specific
-one. The other pod-scoped commands default to all namespaces.
+`reqlim`, `svc-fqdn`, and `secret` default to the current kubeconfig namespace
+(the one set by kubens/kubectx); `-A` widens to all namespaces and `-n` targets
+a specific one. The other pod-scoped commands default to all namespaces.
+`autoscaler` always reads from `kube-system` and ignores namespace flags.
 
 ## Development
 

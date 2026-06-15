@@ -52,7 +52,7 @@ kubectl-klens/
 └── CHANGELOG.md
 ```
 
-## Subcommands (9, read-only)
+## Subcommands (13, read-only)
 
 All re-implemented against the API via client-go. Output is a tabwriter table.
 
@@ -67,19 +67,26 @@ All re-implemented against the API via client-go. Output is a tabwriter table.
 | `images`          | pods (all ns)              | COUNT, IMAGE — occurrences across the cluster, sorted desc                          |
 | `on-node <node>`  | pods (field selector)      | NS, POD, STATUS, NODE — pods scheduled on `<node>`; node arg required               |
 | `pvc`             | pods + pvc (all ns)        | NS, POD, NODE, PVC — PVCs bound to a pod and its node                               |
+| `default-sa`      | pods (all ns)              | NS, POD — pods whose `spec.serviceAccountName == "default"`                         |
+| `svc-fqdn`        | services (current ns)      | NS, SERVICE, FQDN (`<svc>.<ns>.svc.cluster.local`); current namespace by default, `-A` for all |
+| `autoscaler`      | configmap `kube-system`    | prints the `status` field of the `cluster-autoscaler-status` configmap verbatim; ignores namespace flags |
+| `secret <name>`   | secret (current ns)        | KEY, VALUE — decoded data of the named secret; name arg required; current namespace by default, `-n` to target another |
 
 ## Global flags & behavior
 
 - `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`, `--help`, `--version`.
 - No subcommand or unknown subcommand → usage to stderr + exit 1.
-- `on-node` without a node argument → explicit error + exit 1.
+- `on-node` and `secret` without their required argument → explicit error + exit 1.
 - Node-scoped commands (`nodes`, `taints`, `capacity`, `zones`) ignore namespace.
+- `autoscaler` always reads the `cluster-autoscaler-status` configmap in
+  `kube-system` and ignores namespace flags.
 - Default scope for most pod-scoped commands (`pods-per-node`, `images`,
-  `on-node`, `pvc`): all namespaces (matches the original wiki one-liners which
-  used `-A`); `-n` narrows it.
-- `reqlim` is the exception: it defaults to the current kubeconfig namespace
-  (the one set by kubens/kubectx, resolved via `clientcmd.Namespace()`); `-A`
-  widens it to all namespaces and `-n` targets a specific one.
+  `on-node`, `pvc`, `default-sa`): all namespaces (matches the original wiki
+  one-liners which used `-A`); `-n` narrows it.
+- `reqlim`, `svc-fqdn`, and `secret` are the exceptions: they default to the
+  current kubeconfig namespace (the one set by kubens/kubectx, resolved via
+  `clientcmd.Namespace()`); `-A` widens to all namespaces and `-n` targets a
+  specific one.
 
 ## Testing
 
