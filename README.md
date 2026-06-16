@@ -35,8 +35,15 @@ kubectl klens default-sa       # pods still using the default service account
 kubectl klens svc-fqdn         # in-cluster FQDN of services, current ns
 kubectl klens svc-fqdn -A      # ... across all namespaces
 kubectl klens autoscaler       # cluster-autoscaler status (kube-system)
-kubectl klens secret <name>    # decode a secret's data, current ns
+kubectl klens secret           # pick a secret, then a key (interactive)
+kubectl klens secret <name>    # pick a key of <name> (interactive)
+kubectl klens secret <name> <key>  # decode and print one key's value
+kubectl klens secret <name> all    # decode and print all keys
 ```
+
+`secret` opens interactive pickers when run in a terminal; when piped (script,
+CI) it falls back to plain listings (`secret` lists secrets, `secret <name>`
+lists keys).
 
 Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `--version`.
