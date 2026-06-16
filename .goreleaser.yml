@@ -32,6 +32,22 @@ archives:
       - LICENSE*
       - completion/kubectl_complete-klens
 
+krews:
+  - name: klens
+    ids: [default]
+    repository:
+      owner: PixiBixi
+      name: kubectl-klens
+      branch: master
+    homepage: "https://github.com/PixiBixi/kubectl-klens"
+    short_description: "Quick read-only cluster inspection shortcuts"
+    description: |
+      klens bundles frequently-used read-only inspection commands: node
+      pools, taints, capacity, zones, pods-per-node, requests/limits, image
+      counts, pods on a node, PVC bindings, and more.
+    caveats: "Run 'kubectl klens completion install' to enable shell completion."
+    skip_upload: auto
+
 checksum:
   name_template: 'checksums.txt'
 
