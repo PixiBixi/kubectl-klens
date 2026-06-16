@@ -126,22 +126,26 @@ func lookup(name string) (Command, bool) {
 }
 
 func (a App) usage(w io.Writer) {
-	fmt.Fprintln(w, "klens — kubectl plugin for quick cluster inspection")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  kubectl klens <command> [flags]")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Commands:")
+	fmt.Fprint(w, `klens — kubectl plugin for quick cluster inspection
+
+Usage:
+  kubectl klens <command> [flags]
+
+`)
 	tw := tabwriter.NewWriter(w, 0, 8, 2, ' ', 0)
+	fmt.Fprintln(tw, "Commands:")
 	for _, c := range commands() {
 		fmt.Fprintf(tw, "  %s\t%s\n", c.Name, c.Summary)
 	}
+	fmt.Fprintln(tw, "\nFlags:")
+	for _, fl := range []struct{ flag, help string }{
+		{"--kubeconfig string", "path to the kubeconfig file"},
+		{"--context string", "kubeconfig context to use"},
+		{"-n, --namespace string", "namespace scope (pod-based commands)"},
+		{"-A, --all-namespaces", "list across all namespaces"},
+		{"--version", "print version"},
+	} {
+		fmt.Fprintf(tw, "  %s\t%s\n", fl.flag, fl.help)
+	}
 	tw.Flush()
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Flags:")
-	fmt.Fprintln(w, "  --kubeconfig string    path to the kubeconfig file")
-	fmt.Fprintln(w, "  --context string       kubeconfig context to use")
-	fmt.Fprintln(w, "  -n, --namespace string namespace scope (pod-based commands)")
-	fmt.Fprintln(w, "  -A, --all-namespaces   list across all namespaces")
-	fmt.Fprintln(w, "  --version              print version")
 }
