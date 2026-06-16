@@ -46,7 +46,7 @@ func commands() []Command {
 		{Name: "default-sa", Summary: "List pods still using the default service account", Run: view.DefaultSA},
 		{Name: "svc-fqdn", Summary: "Show in-cluster FQDN of services in the current namespace (-A for all)", Run: view.SvcFQDN, CurrentNSDefault: true},
 		{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler},
-		{Name: "secret", Summary: "Decode and print a secret's data in the current namespace (-n to target another)", Run: view.Secret, CurrentNSDefault: true},
+		{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},
 	}
 }
 
