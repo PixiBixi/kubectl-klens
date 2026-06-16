@@ -66,6 +66,9 @@ func NewApp(info BuildInfo) App {
 
 // Run parses args, dispatches the subcommand, and returns a process exit code.
 func (a App) Run(args []string) int {
+	if len(args) > 0 && args[0] == "__complete" {
+		return a.complete(args[1:])
+	}
 	if len(args) == 0 {
 		a.usage(a.Err)
 		return 1
