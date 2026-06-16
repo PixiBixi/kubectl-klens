@@ -1,7 +1,7 @@
 # kubectl-klens
 
 A kubectl plugin for quick, read-only cluster inspection. One dispatcher,
-nine shortcuts.
+thirteen shortcuts.
 
 ## Install (krew, personal)
 
@@ -41,6 +41,35 @@ namespace (the one set by kubens/kubectx); `-A` widens to all namespaces and
 `-n` targets a specific one. The other pod-scoped commands default to all
 namespaces. `autoscaler` always reads from `kube-system` and ignores namespace
 flags.
+
+## Shell completion
+
+`kubectl klens <TAB>` completion uses kubectl's plugin-completion mechanism
+(kubectl 1.26+): kubectl looks for an executable `kubectl_complete-klens` on
+your `PATH` and asks it for candidates. This repo ships that shim
+(`completion/kubectl_complete-klens`), a one-liner that forwards to the plugin's
+hidden `__complete` command. Load kubectl's own completion first (e.g.
+`source <(kubectl completion zsh)`).
+
+Standalone — drop both executables on your `PATH` (from the extracted archive):
+
+```bash
+install -m 0755 kubectl-klens /usr/local/bin/
+install -m 0755 completion/kubectl_complete-klens /usr/local/bin/
+```
+
+krew — krew only links the main binary, so add the shim to krew's bin dir
+(already on your `PATH`):
+
+```bash
+cat > "${KREW_ROOT:-$HOME/.krew}/bin/kubectl_complete-klens" <<'EOF'
+#!/usr/bin/env bash
+exec kubectl-klens __complete "$@"
+EOF
+chmod +x "${KREW_ROOT:-$HOME/.krew}/bin/kubectl_complete-klens"
+```
+
+Then `kubectl klens <TAB>` completes subcommands and flags.
 
 ## Development
 
