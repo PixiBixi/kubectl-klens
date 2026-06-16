@@ -43,7 +43,8 @@ kubectl klens secret <name> all    # decode and print all keys
 
 `secret` opens interactive pickers when run in a terminal; when piped (script,
 CI) it falls back to plain listings (`secret` lists secrets, `secret <name>`
-lists keys).
+lists keys). In a picker, press `/` to filter the list as you type. A secret
+with a single key skips the key picker and decodes that key directly.
 
 Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `--version`.
