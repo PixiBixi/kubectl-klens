@@ -1,0 +1,29 @@
+version: '3'
+
+tasks:
+  build:
+    desc: Build the local kubectl-klens binary
+    cmds:
+      - go build -ldflags "-s -w" -o kubectl-klens .
+
+  lint:
+    desc: Run go vet and staticcheck
+    cmds:
+      - go vet ./...
+      - staticcheck ./...
+
+  test:
+    desc: Run tests with the race detector
+    cmds:
+      - go test -race ./...
+
+  snapshot:
+    desc: Build a goreleaser snapshot (dry-run release)
+    cmds:
+      - goreleaser release --snapshot --clean
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - rm -f kubectl-klens
+      - rm -rf dist/
