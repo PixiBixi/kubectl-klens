@@ -18,6 +18,10 @@ Invocation: `kubectl klens <subcommand>`.
 - **Phase 2 — upstream (later)**: PR to `kubernetes-sigs/krew-index` via
   `krew-release-bot`. Wired in the release workflow but only triggers when the
   user decides to point it upstream.
+- **Shell completion**: ships a `kubectl_complete-klens` shim that forwards to
+  the hidden `__complete` subcommand (kubectl 1.26+ plugin-completion protocol).
+  Since krew links only the main binary, `kubectl klens completion install`
+  drops the shim into a PATH directory (krew's bin by default, or `--dir`).
 
 ## Stack (mirrors `github.com/PixiBixi/kubearch` conventions)
 
