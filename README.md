@@ -3,10 +3,15 @@
 A kubectl plugin for quick, read-only cluster inspection. One dispatcher,
 thirteen shortcuts.
 
-## Install (krew, personal)
+## Install (krew, personal index)
+
+Each tagged release publishes `plugins/klens.yaml` to this repo, so the repo
+itself is a krew custom index. On any machine:
 
 ```bash
-kubectl krew install --manifest=.krew.yaml --archive=dist/kubectl-klens_<ver>_<os>_<arch>.tar.gz
+kubectl krew index add pixibixi https://github.com/PixiBixi/kubectl-klens.git
+kubectl krew install pixibixi/klens
+kubectl krew upgrade pixibixi/klens   # later, to update
 ```
 
 Or download a release archive, extract `kubectl-klens` onto your `PATH`, and
