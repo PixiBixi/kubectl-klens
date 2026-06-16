@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/manifoldco/promptui"
@@ -126,7 +127,12 @@ func pickSecret(ctx context.Context, c kubernetes.Interface, f kube.Flags) (*cor
 			items[i] = s.Name
 		}
 	}
-	idx, _, err := (&promptui.Select{Label: "Select secret", Items: items, Size: 15}).Run()
+	idx, _, err := (&promptui.Select{
+		Label:    "Select secret",
+		Items:    items,
+		Size:     15,
+		Searcher: substringSearcher(items),
+	}).Run()
 	if err != nil {
 		return nil, err
 	}
@@ -138,13 +144,25 @@ func pickKey(s *corev1.Secret) (string, error) {
 	if len(keys) == 0 {
 		return "", fmt.Errorf("secret %q has no data", s.Name)
 	}
+	if len(keys) == 1 {
+		return keys[0], nil
+	}
 	items := append([]string{"all"}, keys...)
 	_, choice, err := (&promptui.Select{
-		Label: fmt.Sprintf("Key in %q", s.Name),
-		Items: items,
-		Size:  15,
+		Label:    fmt.Sprintf("Key in %q", s.Name),
+		Items:    items,
+		Size:     15,
+		Searcher: substringSearcher(items),
 	}).Run()
 	return choice, err
+}
+
+// substringSearcher backs promptui's '/' filter: case-insensitive substring
+// match against the visible item labels.
+func substringSearcher(items []string) func(input string, index int) bool {
+	return func(input string, index int) bool {
+		return strings.Contains(strings.ToLower(items[index]), strings.ToLower(strings.TrimSpace(input)))
+	}
 }
 
 func sortSecrets(items []corev1.Secret) {

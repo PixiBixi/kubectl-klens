@@ -92,6 +92,20 @@ func TestSecretAllDumpsValues(t *testing.T) {
 	}
 }
 
+func TestPickKeyAutoSelectsSingleKey(t *testing.T) {
+	s := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "single", Namespace: "default"},
+		Data:       map[string][]byte{"token": []byte("abc")},
+	}
+	key, err := pickKey(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if key != "token" {
+		t.Errorf("expected auto-selected key %q, got %q", "token", key)
+	}
+}
+
 func TestSecretKeyNotFound(t *testing.T) {
 	c := fake.NewClientset(dbCreds())
 	var buf bytes.Buffer
