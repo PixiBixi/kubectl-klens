@@ -51,22 +51,20 @@ your `PATH` and asks it for candidates. This repo ships that shim
 hidden `__complete` command. Load kubectl's own completion first (e.g.
 `source <(kubectl completion zsh)`).
 
+Easiest — let klens drop the shim for you. It writes
+`kubectl_complete-klens` into krew's bin dir (already on your `PATH`), or
+pass `--dir` to target another directory on your `PATH`:
+
+```bash
+kubectl klens completion install
+kubectl klens completion install --dir /usr/local/bin   # non-krew install
+```
+
 Standalone — drop both executables on your `PATH` (from the extracted archive):
 
 ```bash
 install -m 0755 kubectl-klens /usr/local/bin/
 install -m 0755 completion/kubectl_complete-klens /usr/local/bin/
-```
-
-krew — krew only links the main binary, so add the shim to krew's bin dir
-(already on your `PATH`):
-
-```bash
-cat > "${KREW_ROOT:-$HOME/.krew}/bin/kubectl_complete-klens" <<'EOF'
-#!/usr/bin/env bash
-exec kubectl-klens __complete "$@"
-EOF
-chmod +x "${KREW_ROOT:-$HOME/.krew}/bin/kubectl_complete-klens"
 ```
 
 Then `kubectl klens <TAB>` completes subcommands and flags.
