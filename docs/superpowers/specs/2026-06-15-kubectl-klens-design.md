@@ -66,7 +66,7 @@ All re-implemented against the API via client-go. Output is a tabwriter table.
 | `reqlim`          | pods (current ns)          | NS, POD, CONTAINER, REQ_CPU, LIM_CPU, REQ_MEM, LIM_MEM — excludes `kube-system`; current namespace by default, `-A` for all |
 | `images`          | pods (all ns)              | COUNT, IMAGE — occurrences across the cluster, sorted desc                          |
 | `on-node <node>`  | pods (field selector)      | NS, POD, STATUS, NODE — pods scheduled on `<node>`; node arg required               |
-| `pvc`             | pods + pvc (all ns)        | NS, POD, NODE, PVC — PVCs bound to a pod and its node                               |
+| `pvc`             | pods + pvc (current ns)    | NS, POD, NODE, PVC — PVCs bound to a pod and its node; current namespace by default, `-A` for all |
 | `default-sa`      | pods (all ns)              | NS, POD — pods whose `spec.serviceAccountName == "default"`                         |
 | `svc-fqdn`        | services (current ns)      | NS, SERVICE, FQDN (`<svc>.<ns>.svc.cluster.local`); current namespace by default, `-A` for all |
 | `autoscaler`      | configmap `kube-system`    | prints the `status` field of the `cluster-autoscaler-status` configmap verbatim; ignores namespace flags |
@@ -81,10 +81,10 @@ All re-implemented against the API via client-go. Output is a tabwriter table.
 - `autoscaler` always reads the `cluster-autoscaler-status` configmap in
   `kube-system` and ignores namespace flags.
 - Default scope for most pod-scoped commands (`pods-per-node`, `images`,
-  `on-node`, `pvc`, `default-sa`): all namespaces (matches the original wiki
+  `on-node`, `default-sa`): all namespaces (matches the original wiki
   one-liners which used `-A`); `-n` narrows it.
-- `reqlim`, `svc-fqdn`, and `secret` are the exceptions: they default to the
-  current kubeconfig namespace (the one set by kubens/kubectx, resolved via
+- `reqlim`, `svc-fqdn`, `secret`, and `pvc` are the exceptions: they default to
+  the current kubeconfig namespace (the one set by kubens/kubectx, resolved via
   `clientcmd.Namespace()`); `-A` widens to all namespaces and `-n` targets a
   specific one.
 

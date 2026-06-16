@@ -42,7 +42,7 @@ func commands() []Command {
 		{Name: "reqlim", Summary: "Show requests/limits per container in the current namespace (-A for all; excludes kube-system)", Run: view.Reqlim, CurrentNSDefault: true},
 		{Name: "images", Summary: "Count image occurrences across the cluster", Run: view.Images},
 		{Name: "on-node", Summary: "List pods scheduled on a given node", Run: view.OnNode},
-		{Name: "pvc", Summary: "List PVCs bound to a pod and node", Run: view.Pvc},
+		{Name: "pvc", Summary: "List PVCs bound to a pod and node in the current namespace (-A for all)", Run: view.Pvc, CurrentNSDefault: true},
 		{Name: "default-sa", Summary: "List pods still using the default service account", Run: view.DefaultSA},
 		{Name: "svc-fqdn", Summary: "Show in-cluster FQDN of services in the current namespace (-A for all)", Run: view.SvcFQDN, CurrentNSDefault: true},
 		{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler},

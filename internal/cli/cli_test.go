@@ -170,6 +170,7 @@ func TestCurrentNSDefaultFlags(t *testing.T) {
 		"reqlim":   true,
 		"svc-fqdn": true,
 		"secret":   true,
+		"pvc":      true,
 	}
 	for _, c := range commands() {
 		if got := c.CurrentNSDefault; got != want[c.Name] {
