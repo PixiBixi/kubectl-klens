@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -62,5 +64,54 @@ func TestCompleteAfterSubcommandNoNames(t *testing.T) {
 	out := completeOut(t, "secret", "")
 	if strings.Contains(out, "nodes") {
 		t.Errorf("should not offer subcommand names after a subcommand:\n%s", out)
+	}
+}
+
+func TestCompleteOffersCompletion(t *testing.T) {
+	out := completeOut(t, "comp")
+	if !strings.Contains(out, "completion") {
+		t.Errorf("want completion in candidates:\n%s", out)
+	}
+}
+
+func TestCompleteCompletionInstall(t *testing.T) {
+	out := completeOut(t, "completion", "")
+	if !strings.Contains(out, "install") {
+		t.Errorf("want install candidate:\n%s", out)
+	}
+}
+
+func TestCompletionInstallWritesShim(t *testing.T) {
+	dir := t.TempDir()
+	var out, errw bytes.Buffer
+	app := testApp(&out, &errw)
+	if code := app.Run([]string{"completion", "install", "--dir", dir}); code != 0 {
+		t.Fatalf("exit = %d, want 0 (err=%q)", code, errw.String())
+	}
+	path := filepath.Join(dir, "kubectl_complete-klens")
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("shim not written: %v", err)
+	}
+	if fi.Mode().Perm()&0o100 == 0 {
+		t.Errorf("shim is not executable: %v", fi.Mode())
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `exec kubectl-klens __complete "$@"`) {
+		t.Errorf("unexpected shim content:\n%s", b)
+	}
+}
+
+func TestCompletionInstallRequiresInstallArg(t *testing.T) {
+	var out, errw bytes.Buffer
+	app := testApp(&out, &errw)
+	if code := app.Run([]string{"completion"}); code != 1 {
+		t.Fatalf("exit = %d, want 1", code)
+	}
+	if !strings.Contains(errw.String(), "completion install") {
+		t.Errorf("want usage hint, got %q", errw.String())
 	}
 }

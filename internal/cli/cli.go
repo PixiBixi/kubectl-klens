@@ -80,6 +80,8 @@ func (a App) Run(args []string) int {
 	case "-v", "--version", "version":
 		fmt.Fprintf(a.Out, "klens %s (commit %s, built %s)\n", a.Info.Version, a.Info.Commit, a.Info.Date)
 		return 0
+	case "completion":
+		return a.completionInstall(args[1:])
 	}
 	cmd, ok := lookup(args[0])
 	if !ok {
@@ -150,5 +152,7 @@ Usage:
 	} {
 		fmt.Fprintf(tw, "  %s\t%s\n", fl.flag, fl.help)
 	}
+	fmt.Fprintln(tw, "\nOther:")
+	fmt.Fprintf(tw, "  %s\t%s\n", "completion install", "install the shell-completion shim on your PATH")
 	tw.Flush()
 }
