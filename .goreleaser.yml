@@ -30,6 +30,7 @@ archives:
     files:
       - README.md
       - LICENSE*
+      - completion/kubectl_complete-klens
 
 checksum:
   name_template: 'checksums.txt'

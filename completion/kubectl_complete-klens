@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Shell-completion shim for "kubectl klens". kubectl invokes this executable
+# with the words to complete; delegate to the plugin's hidden __complete command.
+exec kubectl-klens __complete "$@"
