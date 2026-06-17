@@ -49,6 +49,7 @@ var commands = []Command{
 	{Name: "node-conditions", Summary: "Show node readiness and memory/disk/pid pressure", Run: view.NodeConditions, SortColumns: []string{"name", "status", "memory", "disk", "pid"}},
 	{Name: "reqlim", Summary: "Show requests/limits per container in the current namespace (-A for all; excludes kube-system)", Run: view.Reqlim, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "req_cpu", "lim_cpu", "req_mem", "lim_mem"}},
 	{Name: "no-limits", Summary: "List containers missing CPU/memory limits in the current namespace (-A for all; excludes kube-system)", Run: view.NoLimits, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "missing"}},
+	{Name: "no-requests", Summary: "List containers missing CPU/memory requests in the current namespace (-A for all; excludes kube-system)", Run: view.NoRequests, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "missing"}},
 	{Name: "images", Summary: "List images per container per pod in the current namespace (-A for all)", Run: view.Images, CurrentNSDefault: true, SortColumns: []string{"podname", "container", "pull", "image", "tag"}},
 	{Name: "image-count", Summary: "Count image occurrences split by registry/image/tag across the cluster", Run: view.ImageCount, SortColumns: []string{"count", "registry", "image", "tag"}},
 	{Name: "on-node", Summary: "List pods scheduled on a given node", Run: view.OnNode, SortColumns: []string{"ns", "pod", "status", "node"}},
