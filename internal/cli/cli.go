@@ -46,6 +46,7 @@ var commands = []Command{
 	{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones, SortColumns: []string{"name", "region", "zone"}},
 	{Name: "pods-per-node", Summary: "Count pods per node", Run: view.PodsPerNode, SortColumns: []string{"node", "pods"}},
 	{Name: "max-pods", Summary: "Show pod ceiling (allocatable), current count, and free slots per node", Run: view.MaxPods, SortColumns: []string{"node", "maxpods", "used", "free"}},
+	{Name: "node-conditions", Summary: "Show node readiness and memory/disk/pid pressure", Run: view.NodeConditions, SortColumns: []string{"name", "status", "memory", "disk", "pid"}},
 	{Name: "reqlim", Summary: "Show requests/limits per container in the current namespace (-A for all; excludes kube-system)", Run: view.Reqlim, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "req_cpu", "lim_cpu", "req_mem", "lim_mem"}},
 	{Name: "images", Summary: "List images per container per pod in the current namespace (-A for all)", Run: view.Images, CurrentNSDefault: true, SortColumns: []string{"podname", "container", "pull", "image", "tag"}},
 	{Name: "image-count", Summary: "Count image occurrences split by registry/image/tag across the cluster", Run: view.ImageCount, SortColumns: []string{"count", "registry", "image", "tag"}},
