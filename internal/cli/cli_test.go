@@ -226,6 +226,7 @@ func TestCurrentNSDefaultFlags(t *testing.T) {
 		"secret":   true,
 		"pvc":      true,
 		"images":   true,
+		"restarts": true,
 	}
 	for _, c := range commands {
 		if got := c.CurrentNSDefault; got != want[c.Name] {

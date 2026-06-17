@@ -1,7 +1,7 @@
 # kubectl-klens
 
 A kubectl plugin for quick, read-only cluster inspection. One dispatcher,
-fifteen shortcuts.
+sixteen shortcuts.
 
 ## Install (krew, personal index)
 
@@ -33,6 +33,7 @@ kubectl klens images -A        # ... across all namespaces
 kubectl klens image-count      # image occurrence counts, split registry/image/tag (cluster-wide)
 kubectl klens image-count --sort registry   # sort by a column: count|registry|image|tag
 kubectl klens on-node <node>   # pods on a node
+kubectl klens restarts         # restarted containers + crash reason, current ns (-A for all)
 kubectl klens pvc              # PVCs bound to pod + node, current ns
 kubectl klens pvc -A           # ... across all namespaces
 kubectl klens default-sa       # pods still using the default service account
@@ -56,14 +57,15 @@ image` ≡ `kubectl klens images`, `node` ≡ `nodes`, ...).
 Most table commands accept `--sort <column>` to order rows by one of their
 columns (e.g. `kubectl klens zones --sort region`, `kubectl klens nodes --sort
 nodepool`). Sorting is ascending, with numeric columns ordered by value;
-`image-count` keeps its count-descending default unless `--sort` is given.
+`image-count` and `restarts` keep their count-descending default unless
+`--sort` is given.
 `<TAB>` completes the valid column names per command.
 
 Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `--version`.
 
-`reqlim`, `svc-fqdn`, `secret`, `pvc`, and `images` default to the current
-kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
+`reqlim`, `svc-fqdn`, `secret`, `pvc`, `images`, and `restarts` default to the
+current kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
 namespaces and `-n` targets a specific one. The other pod-scoped commands
 (including `image-count`) default to all namespaces. `autoscaler` always reads
 from `kube-system` and ignores namespace flags.
