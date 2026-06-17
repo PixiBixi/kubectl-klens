@@ -2,12 +2,14 @@ package kube
 
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-// Flags holds the standard kubeconfig-related options shared by all commands.
+// Flags holds the standard kubeconfig-related options shared by all commands,
+// plus optional command-specific options registered via Command.RegisterFlags.
 type Flags struct {
 	Kubeconfig    string
 	Context       string
 	Namespace     string
 	AllNamespaces bool
+	Sort          string // command-specific sort column (e.g. image-count)
 }
 
 // NamespaceScope returns the namespace to list in. Empty string means all
