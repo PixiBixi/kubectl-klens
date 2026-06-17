@@ -56,6 +56,7 @@ var commands = []Command{
 	{Name: "restarts", Summary: "List containers that have restarted, with the crash reason, in the current namespace (-A for all)", Run: view.Restarts, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "restarts", "state"}},
 	{Name: "pvc", Summary: "List PVCs bound to a pod and node in the current namespace (-A for all)", Run: view.Pvc, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "node", "pvc"}},
 	{Name: "default-sa", Summary: "List pods still using the default service account", Run: view.DefaultSA, SortColumns: []string{"ns", "pod"}},
+	{Name: "privileged", Summary: "List containers with privileged/host security flags in the current namespace (-A for all)", Run: view.Privileged, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "flags"}},
 	{Name: "svc-fqdn", Summary: "Show in-cluster FQDN of services in the current namespace (-A for all)", Run: view.SvcFQDN, CurrentNSDefault: true, SortColumns: []string{"ns", "service", "fqdn"}},
 	{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler},
 	{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},

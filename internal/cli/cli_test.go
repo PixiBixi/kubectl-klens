@@ -229,6 +229,7 @@ func TestCurrentNSDefaultFlags(t *testing.T) {
 		"restarts":    true,
 		"no-limits":   true,
 		"no-requests": true,
+		"privileged":  true,
 	}
 	for _, c := range commands {
 		if got := c.CurrentNSDefault; got != want[c.Name] {

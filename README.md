@@ -1,7 +1,7 @@
 # kubectl-klens
 
 A kubectl plugin for quick, read-only cluster inspection. One dispatcher,
-nineteen shortcuts.
+twenty shortcuts.
 
 ## Install (krew, personal index)
 
@@ -40,6 +40,7 @@ kubectl klens restarts         # restarted containers + crash reason, current ns
 kubectl klens pvc              # PVCs bound to pod + node, current ns
 kubectl klens pvc -A           # ... across all namespaces
 kubectl klens default-sa       # pods still using the default service account
+kubectl klens privileged       # containers with privileged/host security flags, current ns (-A for all)
 kubectl klens svc-fqdn         # in-cluster FQDN of services, current ns
 kubectl klens svc-fqdn -A      # ... across all namespaces
 kubectl klens autoscaler       # cluster-autoscaler status (kube-system)
@@ -67,8 +68,8 @@ nodepool`). Sorting is ascending, with numeric columns ordered by value;
 Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `--version`.
 
-`reqlim`, `svc-fqdn`, `secret`, `pvc`, `images`, `restarts`, `no-limits`, and
-`no-requests` default to the current kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
+`reqlim`, `svc-fqdn`, `secret`, `pvc`, `images`, `restarts`, `no-limits`,
+`no-requests`, and `privileged` default to the current kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
 namespaces and `-n` targets a specific one. The other pod-scoped commands
 (including `image-count`) default to all namespaces. `autoscaler` always reads
 from `kube-system` and ignores namespace flags.
