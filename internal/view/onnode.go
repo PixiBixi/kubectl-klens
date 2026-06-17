@@ -31,5 +31,6 @@ func OnNode(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 		}
 		t.Row(p.Namespace, p.Name, string(p.Status.Phase), p.Spec.NodeName)
 	}
+	t.SortBy(f.Sort)
 	return t.Flush()
 }

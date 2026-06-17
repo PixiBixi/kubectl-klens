@@ -33,5 +33,6 @@ func Reqlim(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 			)
 		}
 	}
+	t.SortBy(f.Sort)
 	return t.Flush()
 }

@@ -44,5 +44,6 @@ func PodsPerNode(ctx context.Context, c kubernetes.Interface, f kube.Flags, args
 	for _, e := range list {
 		t.Row(e.node, strconv.Itoa(e.n))
 	}
+	t.SortBy(f.Sort)
 	return t.Flush()
 }

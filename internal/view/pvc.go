@@ -24,5 +24,6 @@ func Pvc(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 			}
 		}
 	}
+	t.SortBy(f.Sort)
 	return t.Flush()
 }

@@ -22,5 +22,6 @@ func SvcFQDN(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []s
 		fqdn := fmt.Sprintf("%s.%s.svc.cluster.local", s.Name, s.Namespace)
 		t.Row(s.Namespace, s.Name, fqdn)
 	}
+	t.SortBy(f.Sort)
 	return t.Flush()
 }

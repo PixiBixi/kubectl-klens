@@ -30,5 +30,6 @@ func Taints(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 		}
 		t.Row(n.Name, val)
 	}
+	t.SortBy(f.Sort)
 	return t.Flush()
 }

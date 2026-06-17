@@ -25,5 +25,6 @@ func Nodes(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []str
 			kube.Label(n.Labels, "node.kubernetes.io/instance-type"),
 		)
 	}
+	t.SortBy(f.Sort)
 	return t.Flush()
 }

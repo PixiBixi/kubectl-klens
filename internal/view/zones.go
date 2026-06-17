@@ -24,5 +24,6 @@ func Zones(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []str
 			kube.Label(n.Labels, "topology.kubernetes.io/zone"),
 		)
 	}
+	t.SortBy(f.Sort)
 	return t.Flush()
 }

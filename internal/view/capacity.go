@@ -28,5 +28,6 @@ func Capacity(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []
 			qtyOrNone(alloc, corev1.ResourceMemory),
 		)
 	}
+	t.SortBy(f.Sort)
 	return t.Flush()
 }

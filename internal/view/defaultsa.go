@@ -23,5 +23,6 @@ func DefaultSA(ctx context.Context, c kubernetes.Interface, f kube.Flags, args [
 		}
 		t.Row(p.Namespace, p.Name)
 	}
+	t.SortBy(f.Sort)
 	return t.Flush()
 }
