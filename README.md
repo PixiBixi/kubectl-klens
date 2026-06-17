@@ -1,7 +1,7 @@
 # kubectl-klens
 
 A kubectl plugin for quick, read-only cluster inspection. One dispatcher,
-thirteen shortcuts.
+fifteen shortcuts.
 
 ## Install (krew, personal index)
 
@@ -25,6 +25,7 @@ kubectl klens taints           # taints per node
 kubectl klens capacity         # CPU/mem capacity + allocatable
 kubectl klens zones            # region/zone per node
 kubectl klens pods-per-node    # pod count per node
+kubectl klens max-pods         # pod ceiling (allocatable), current count, free slots per node
 kubectl klens reqlim           # requests/limits per container, current ns (excl kube-system)
 kubectl klens reqlim -A        # ... across all namespaces
 kubectl klens images           # image per container per pod, current ns
