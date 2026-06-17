@@ -57,8 +57,8 @@ func completions(prior []string, toComplete string) []string {
 	if subcommandChosen(prior) {
 		return nil
 	}
-	names := make([]string, 0, len(commands())+1)
-	for _, c := range commands() {
+	names := make([]string, 0, len(commands)+1)
+	for _, c := range commands {
 		names = append(names, c.Name)
 	}
 	names = append(names, "completion")

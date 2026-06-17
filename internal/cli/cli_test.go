@@ -66,7 +66,7 @@ func TestRunVersion(t *testing.T) {
 func TestRunHelpListsAllCommands(t *testing.T) {
 	var out, errw bytes.Buffer
 	testApp(&out, &errw).Run([]string{"--help"})
-	for _, c := range commands() {
+	for _, c := range commands {
 		if !strings.Contains(out.String(), c.Name) {
 			t.Fatalf("help missing %q", c.Name)
 		}
@@ -167,7 +167,7 @@ func TestRunPodCommandStaysClusterWide(t *testing.T) {
 // TestSortColumnsMatchHeaders guards against a declared --sort column drifting
 // from a command's actual table headers.
 func TestSortColumnsMatchHeaders(t *testing.T) {
-	for _, c := range commands() {
+	for _, c := range commands {
 		if len(c.SortColumns) == 0 {
 			continue
 		}
@@ -227,7 +227,7 @@ func TestCurrentNSDefaultFlags(t *testing.T) {
 		"pvc":      true,
 		"images":   true,
 	}
-	for _, c := range commands() {
+	for _, c := range commands {
 		if got := c.CurrentNSDefault; got != want[c.Name] {
 			t.Errorf("%s: CurrentNSDefault = %v, want %v", c.Name, got, want[c.Name])
 		}

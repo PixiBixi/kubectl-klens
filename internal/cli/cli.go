@@ -37,23 +37,23 @@ type Command struct {
 	SortColumns []string
 }
 
-func commands() []Command {
-	return []Command{
-		{Name: "nodes", Summary: "List nodes with GKE nodepool and instance-type", Run: view.Nodes, SortColumns: []string{"name", "status", "nodepool", "instance-type"}},
-		{Name: "taints", Summary: "List taints of all nodes", Run: view.Taints, SortColumns: []string{"name", "taints"}},
-		{Name: "capacity", Summary: "Show CPU/memory capacity and allocatable per node", Run: view.Capacity, SortColumns: []string{"name", "cpu_cap", "cpu_alloc", "mem_cap", "mem_alloc"}},
-		{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones, SortColumns: []string{"name", "region", "zone"}},
-		{Name: "pods-per-node", Summary: "Count pods per node", Run: view.PodsPerNode, SortColumns: []string{"node", "pods"}},
-		{Name: "reqlim", Summary: "Show requests/limits per container in the current namespace (-A for all; excludes kube-system)", Run: view.Reqlim, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "req_cpu", "lim_cpu", "req_mem", "lim_mem"}},
-		{Name: "images", Summary: "List images per container per pod in the current namespace (-A for all)", Run: view.Images, CurrentNSDefault: true, SortColumns: []string{"podname", "container", "pull", "image", "tag"}},
-		{Name: "image-count", Summary: "Count image occurrences split by registry/image/tag across the cluster", Run: view.ImageCount, SortColumns: []string{"count", "registry", "image", "tag"}},
-		{Name: "on-node", Summary: "List pods scheduled on a given node", Run: view.OnNode, SortColumns: []string{"ns", "pod", "status", "node"}},
-		{Name: "pvc", Summary: "List PVCs bound to a pod and node in the current namespace (-A for all)", Run: view.Pvc, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "node", "pvc"}},
-		{Name: "default-sa", Summary: "List pods still using the default service account", Run: view.DefaultSA, SortColumns: []string{"ns", "pod"}},
-		{Name: "svc-fqdn", Summary: "Show in-cluster FQDN of services in the current namespace (-A for all)", Run: view.SvcFQDN, CurrentNSDefault: true, SortColumns: []string{"ns", "service", "fqdn"}},
-		{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler},
-		{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},
-	}
+// commands is the registry of every subcommand. Built once at init; callers
+// only range over it, so sharing the slice is safe.
+var commands = []Command{
+	{Name: "nodes", Summary: "List nodes with GKE nodepool and instance-type", Run: view.Nodes, SortColumns: []string{"name", "status", "nodepool", "instance-type"}},
+	{Name: "taints", Summary: "List taints of all nodes", Run: view.Taints, SortColumns: []string{"name", "taints"}},
+	{Name: "capacity", Summary: "Show CPU/memory capacity and allocatable per node", Run: view.Capacity, SortColumns: []string{"name", "cpu_cap", "cpu_alloc", "mem_cap", "mem_alloc"}},
+	{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones, SortColumns: []string{"name", "region", "zone"}},
+	{Name: "pods-per-node", Summary: "Count pods per node", Run: view.PodsPerNode, SortColumns: []string{"node", "pods"}},
+	{Name: "reqlim", Summary: "Show requests/limits per container in the current namespace (-A for all; excludes kube-system)", Run: view.Reqlim, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "req_cpu", "lim_cpu", "req_mem", "lim_mem"}},
+	{Name: "images", Summary: "List images per container per pod in the current namespace (-A for all)", Run: view.Images, CurrentNSDefault: true, SortColumns: []string{"podname", "container", "pull", "image", "tag"}},
+	{Name: "image-count", Summary: "Count image occurrences split by registry/image/tag across the cluster", Run: view.ImageCount, SortColumns: []string{"count", "registry", "image", "tag"}},
+	{Name: "on-node", Summary: "List pods scheduled on a given node", Run: view.OnNode, SortColumns: []string{"ns", "pod", "status", "node"}},
+	{Name: "pvc", Summary: "List PVCs bound to a pod and node in the current namespace (-A for all)", Run: view.Pvc, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "node", "pvc"}},
+	{Name: "default-sa", Summary: "List pods still using the default service account", Run: view.DefaultSA, SortColumns: []string{"ns", "pod"}},
+	{Name: "svc-fqdn", Summary: "Show in-cluster FQDN of services in the current namespace (-A for all)", Run: view.SvcFQDN, CurrentNSDefault: true, SortColumns: []string{"ns", "service", "fqdn"}},
+	{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler},
+	{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},
 }
 
 // App wires dependencies so dispatch is testable with an injected client.
@@ -146,8 +146,7 @@ func contains(items []string, want string) bool {
 // lookup resolves a subcommand by name, accepting singular or plural forms
 // (e.g. "image" and "images") by toggling a trailing "s".
 func lookup(name string) (Command, bool) {
-	cmds := commands()
-	for _, c := range cmds {
+	for _, c := range commands {
 		if c.Name == name {
 			return c, true
 		}
@@ -156,7 +155,7 @@ func lookup(name string) (Command, bool) {
 	if strings.HasSuffix(name, "s") {
 		alt = strings.TrimSuffix(name, "s")
 	}
-	for _, c := range cmds {
+	for _, c := range commands {
 		if c.Name == alt {
 			return c, true
 		}
@@ -173,7 +172,7 @@ Usage:
 `)
 	tw := tabwriter.NewWriter(w, 0, 8, 2, ' ', 0)
 	fmt.Fprintln(tw, "Commands:")
-	for _, c := range commands() {
+	for _, c := range commands {
 		fmt.Fprintf(tw, "  %s\t%s\n", c.Name, c.Summary)
 	}
 	fmt.Fprintln(tw, "\nFlags:")
