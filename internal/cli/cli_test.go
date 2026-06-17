@@ -221,12 +221,13 @@ func TestRunAcceptsSingularAlias(t *testing.T) {
 // kubeconfig namespace by default (vs. all namespaces).
 func TestCurrentNSDefaultFlags(t *testing.T) {
 	want := map[string]bool{
-		"reqlim":   true,
-		"svc-fqdn": true,
-		"secret":   true,
-		"pvc":      true,
-		"images":   true,
-		"restarts": true,
+		"reqlim":    true,
+		"svc-fqdn":  true,
+		"secret":    true,
+		"pvc":       true,
+		"images":    true,
+		"restarts":  true,
+		"no-limits": true,
 	}
 	for _, c := range commands {
 		if got := c.CurrentNSDefault; got != want[c.Name] {
