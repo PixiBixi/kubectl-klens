@@ -27,7 +27,10 @@ kubectl klens zones            # region/zone per node
 kubectl klens pods-per-node    # pod count per node
 kubectl klens reqlim           # requests/limits per container, current ns (excl kube-system)
 kubectl klens reqlim -A        # ... across all namespaces
-kubectl klens images           # image occurrence counts
+kubectl klens images           # image per container per pod, current ns
+kubectl klens images -A        # ... across all namespaces
+kubectl klens image-count      # image occurrence counts, split registry/image/tag (cluster-wide)
+kubectl klens image-count --sort registry   # sort by a column: count|registry|image|tag
 kubectl klens on-node <node>   # pods on a node
 kubectl klens pvc              # PVCs bound to pod + node, current ns
 kubectl klens pvc -A           # ... across all namespaces
@@ -46,14 +49,23 @@ CI) it falls back to plain listings (`secret` lists secrets, `secret <name>`
 lists keys). In a picker, press `/` to filter the list as you type. A secret
 with a single key skips the key picker and decodes that key directly.
 
+Commands accept their singular or plural form interchangeably (`kubectl klens
+image` ≡ `kubectl klens images`, `node` ≡ `nodes`, ...).
+
+Most table commands accept `--sort <column>` to order rows by one of their
+columns (e.g. `kubectl klens zones --sort region`, `kubectl klens nodes --sort
+nodepool`). Sorting is ascending, with numeric columns ordered by value;
+`image-count` keeps its count-descending default unless `--sort` is given.
+`<TAB>` completes the valid column names per command.
+
 Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `--version`.
 
-`reqlim`, `svc-fqdn`, `secret`, and `pvc` default to the current kubeconfig
-namespace (the one set by kubens/kubectx); `-A` widens to all namespaces and
-`-n` targets a specific one. The other pod-scoped commands default to all
-namespaces. `autoscaler` always reads from `kube-system` and ignores namespace
-flags.
+`reqlim`, `svc-fqdn`, `secret`, `pvc`, and `images` default to the current
+kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
+namespaces and `-n` targets a specific one. The other pod-scoped commands
+(including `image-count`) default to all namespaces. `autoscaler` always reads
+from `kube-system` and ignores namespace flags.
 
 ## Shell completion
 
