@@ -41,8 +41,18 @@ func completions(prior []string, toComplete string) []string {
 		}
 		return withPrefix([]string{"install"}, toComplete)
 	}
+	if len(prior) > 0 && prior[len(prior)-1] == "--sort" {
+		if c, ok := chosenCommand(prior); ok {
+			return withPrefix(c.SortColumns, toComplete)
+		}
+		return nil
+	}
 	if strings.HasPrefix(toComplete, "-") {
-		return withPrefix(completionFlags, toComplete)
+		flags := completionFlags
+		if c, ok := chosenCommand(prior); ok && len(c.SortColumns) > 0 {
+			flags = append(append([]string{}, completionFlags...), "--sort")
+		}
+		return withPrefix(flags, toComplete)
 	}
 	if subcommandChosen(prior) {
 		return nil
@@ -56,12 +66,19 @@ func completions(prior []string, toComplete string) []string {
 }
 
 func subcommandChosen(prior []string) bool {
+	_, ok := chosenCommand(prior)
+	return ok
+}
+
+// chosenCommand returns the first already-typed word that resolves to a command
+// (honoring singular/plural aliases).
+func chosenCommand(prior []string) (Command, bool) {
 	for _, w := range prior {
-		if _, ok := lookup(w); ok {
-			return true
+		if c, ok := lookup(w); ok {
+			return c, true
 		}
 	}
-	return false
+	return Command{}, false
 }
 
 func withPrefix(candidates []string, prefix string) []string {

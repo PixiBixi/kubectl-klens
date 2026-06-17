@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 
@@ -149,17 +150,70 @@ func TestRunReqlimExplicitNamespace(t *testing.T) {
 }
 
 func TestRunPodCommandStaysClusterWide(t *testing.T) {
-	// images has no CurrentNSDefault: it must keep listing all namespaces.
+	// image-count has no CurrentNSDefault: it must keep listing all namespaces.
 	var out, errw bytes.Buffer
 	app, c, called := reqlimApp(&out, &errw, "team-a")
-	if code := app.Run([]string{"images"}); code != 0 {
+	if code := app.Run([]string{"image-count"}); code != 0 {
 		t.Fatalf("want exit 0, got %d (err=%q)", code, errw.String())
 	}
 	if *called {
 		t.Fatal("resolver must not be called for non-CurrentNSDefault commands")
 	}
 	if got := listedNamespace(c); got != "" {
-		t.Fatalf("want images across all namespaces (empty), got %q", got)
+		t.Fatalf("want image-count across all namespaces (empty), got %q", got)
+	}
+}
+
+// TestSortColumnsMatchHeaders guards against a declared --sort column drifting
+// from a command's actual table headers.
+func TestSortColumnsMatchHeaders(t *testing.T) {
+	for _, c := range commands() {
+		if len(c.SortColumns) == 0 {
+			continue
+		}
+		var buf bytes.Buffer
+		if err := c.Run(context.Background(), fake.NewClientset(), kube.Flags{}, []string{"dummy"}, &buf); err != nil {
+			t.Fatalf("%s: run failed: %v", c.Name, err)
+		}
+		header := strings.Split(buf.String(), "\n")[0]
+		got := map[string]bool{}
+		for _, h := range strings.Fields(strings.ToLower(header)) {
+			got[h] = true
+		}
+		for _, col := range c.SortColumns {
+			if !got[col] {
+				t.Errorf("%s: sort column %q not a header (%q)", c.Name, col, header)
+			}
+		}
+	}
+}
+
+func TestRunRejectsInvalidSort(t *testing.T) {
+	var out, errw bytes.Buffer
+	if code := testApp(&out, &errw).Run([]string{"zones", "--sort", "bogus"}); code != 1 {
+		t.Fatalf("want exit 1, got %d", code)
+	}
+	if !strings.Contains(errw.String(), "invalid --sort") {
+		t.Fatalf("want invalid --sort error, got %q", errw.String())
+	}
+}
+
+func TestRunRejectsSortOnNonSortable(t *testing.T) {
+	var out, errw bytes.Buffer
+	// autoscaler declares no SortColumns, so --sort is an unknown flag.
+	if code := testApp(&out, &errw).Run([]string{"autoscaler", "--sort", "name"}); code != 1 {
+		t.Fatalf("want exit 1, got %d", code)
+	}
+}
+
+func TestRunAcceptsSingularAlias(t *testing.T) {
+	var out, errw bytes.Buffer
+	// "image" (singular) must resolve to the "images" command.
+	if code := testApp(&out, &errw).Run([]string{"image"}); code != 0 {
+		t.Fatalf("want exit 0, got %d (err=%q)", code, errw.String())
+	}
+	if !strings.Contains(out.String(), "PODNAME") {
+		t.Fatalf("want images header from singular alias, got %q", out.String())
 	}
 }
 
@@ -171,6 +225,7 @@ func TestCurrentNSDefaultFlags(t *testing.T) {
 		"svc-fqdn": true,
 		"secret":   true,
 		"pvc":      true,
+		"images":   true,
 	}
 	for _, c := range commands() {
 		if got := c.CurrentNSDefault; got != want[c.Name] {

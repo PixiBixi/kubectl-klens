@@ -60,6 +60,27 @@ func TestCompleteLongFlagPrefix(t *testing.T) {
 	}
 }
 
+func TestCompleteOffersSortForSortableCommands(t *testing.T) {
+	for _, name := range []string{"image-count", "nodes", "zones"} {
+		if out := completeOut(t, name, "-"); !strings.Contains(out, "--sort") {
+			t.Errorf("want --sort offered for %s:\n%s", name, out)
+		}
+	}
+	// Commands without sort columns must not offer --sort.
+	if out := completeOut(t, "autoscaler", "-"); strings.Contains(out, "--sort") {
+		t.Errorf("--sort must not be offered for autoscaler:\n%s", out)
+	}
+}
+
+func TestCompleteSortColumns(t *testing.T) {
+	out := completeOut(t, "image-count", "--sort", "")
+	for _, want := range []string{"count", "registry", "image", "tag"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sort-column completion missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestCompleteAfterSubcommandNoNames(t *testing.T) {
 	out := completeOut(t, "secret", "")
 	if strings.Contains(out, "nodes") {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"k8s.io/client-go/kubernetes"
@@ -30,21 +31,26 @@ type Command struct {
 	Summary          string
 	Run              RunFunc
 	CurrentNSDefault bool
+	// SortColumns lists the column names accepted by --sort (lowercased headers).
+	// When non-empty the dispatcher registers --sort, validates the value, and
+	// the command sorts its output by that column.
+	SortColumns []string
 }
 
 func commands() []Command {
 	return []Command{
-		{Name: "nodes", Summary: "List nodes with GKE nodepool and instance-type", Run: view.Nodes},
-		{Name: "taints", Summary: "List taints of all nodes", Run: view.Taints},
-		{Name: "capacity", Summary: "Show CPU/memory capacity and allocatable per node", Run: view.Capacity},
-		{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones},
-		{Name: "pods-per-node", Summary: "Count pods per node", Run: view.PodsPerNode},
-		{Name: "reqlim", Summary: "Show requests/limits per container in the current namespace (-A for all; excludes kube-system)", Run: view.Reqlim, CurrentNSDefault: true},
-		{Name: "images", Summary: "Count image occurrences across the cluster", Run: view.Images},
-		{Name: "on-node", Summary: "List pods scheduled on a given node", Run: view.OnNode},
-		{Name: "pvc", Summary: "List PVCs bound to a pod and node in the current namespace (-A for all)", Run: view.Pvc, CurrentNSDefault: true},
-		{Name: "default-sa", Summary: "List pods still using the default service account", Run: view.DefaultSA},
-		{Name: "svc-fqdn", Summary: "Show in-cluster FQDN of services in the current namespace (-A for all)", Run: view.SvcFQDN, CurrentNSDefault: true},
+		{Name: "nodes", Summary: "List nodes with GKE nodepool and instance-type", Run: view.Nodes, SortColumns: []string{"name", "status", "nodepool", "instance-type"}},
+		{Name: "taints", Summary: "List taints of all nodes", Run: view.Taints, SortColumns: []string{"name", "taints"}},
+		{Name: "capacity", Summary: "Show CPU/memory capacity and allocatable per node", Run: view.Capacity, SortColumns: []string{"name", "cpu_cap", "cpu_alloc", "mem_cap", "mem_alloc"}},
+		{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones, SortColumns: []string{"name", "region", "zone"}},
+		{Name: "pods-per-node", Summary: "Count pods per node", Run: view.PodsPerNode, SortColumns: []string{"node", "pods"}},
+		{Name: "reqlim", Summary: "Show requests/limits per container in the current namespace (-A for all; excludes kube-system)", Run: view.Reqlim, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "req_cpu", "lim_cpu", "req_mem", "lim_mem"}},
+		{Name: "images", Summary: "List images per container per pod in the current namespace (-A for all)", Run: view.Images, CurrentNSDefault: true, SortColumns: []string{"podname", "container", "pull", "image", "tag"}},
+		{Name: "image-count", Summary: "Count image occurrences split by registry/image/tag across the cluster", Run: view.ImageCount, SortColumns: []string{"count", "registry", "image", "tag"}},
+		{Name: "on-node", Summary: "List pods scheduled on a given node", Run: view.OnNode, SortColumns: []string{"ns", "pod", "status", "node"}},
+		{Name: "pvc", Summary: "List PVCs bound to a pod and node in the current namespace (-A for all)", Run: view.Pvc, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "node", "pvc"}},
+		{Name: "default-sa", Summary: "List pods still using the default service account", Run: view.DefaultSA, SortColumns: []string{"ns", "pod"}},
+		{Name: "svc-fqdn", Summary: "Show in-cluster FQDN of services in the current namespace (-A for all)", Run: view.SvcFQDN, CurrentNSDefault: true, SortColumns: []string{"ns", "service", "fqdn"}},
 		{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler},
 		{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},
 	}
@@ -98,7 +104,14 @@ func (a App) Run(args []string) int {
 	fs.StringVar(&f.Namespace, "n", "", "namespace scope (shorthand)")
 	fs.BoolVar(&f.AllNamespaces, "all-namespaces", false, "list across all namespaces")
 	fs.BoolVar(&f.AllNamespaces, "A", false, "list across all namespaces (shorthand)")
+	if len(cmd.SortColumns) > 0 {
+		fs.StringVar(&f.Sort, "sort", "", "sort by column: "+strings.Join(cmd.SortColumns, "|"))
+	}
 	if err := fs.Parse(args[1:]); err != nil {
+		return 1
+	}
+	if f.Sort != "" && !contains(cmd.SortColumns, f.Sort) {
+		fmt.Fprintf(a.Err, "error: invalid --sort %q for %s (want %s)\n", f.Sort, cmd.Name, strings.Join(cmd.SortColumns, "|"))
 		return 1
 	}
 	client, err := a.NewClient(f)
@@ -121,9 +134,30 @@ func (a App) Run(args []string) int {
 	return 0
 }
 
+func contains(items []string, want string) bool {
+	for _, s := range items {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+// lookup resolves a subcommand by name, accepting singular or plural forms
+// (e.g. "image" and "images") by toggling a trailing "s".
 func lookup(name string) (Command, bool) {
-	for _, c := range commands() {
+	cmds := commands()
+	for _, c := range cmds {
 		if c.Name == name {
+			return c, true
+		}
+	}
+	alt := name + "s"
+	if strings.HasSuffix(name, "s") {
+		alt = strings.TrimSuffix(name, "s")
+	}
+	for _, c := range cmds {
+		if c.Name == alt {
 			return c, true
 		}
 	}
