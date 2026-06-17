@@ -16,26 +16,48 @@ import (
 func podImg(name, image string) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: image}}},
+		Spec: corev1.PodSpec{Containers: []corev1.Container{
+			{Name: "c", Image: image, ImagePullPolicy: corev1.PullIfNotPresent},
+		}},
 	}
 }
 
 func TestImages(t *testing.T) {
 	c := fake.NewClientset(
-		podImg("a", "nginx:1.25"),
-		podImg("b", "nginx:1.25"),
-		podImg("c", "redis:7"),
+		podImg("web-0", "haproxytech/kubernetes-ingress:3.1.2"),
+		podImg("cache-0", "redis:7"),
 	)
 	var buf bytes.Buffer
 	if err := Images(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "nginx:1.25") || !strings.Contains(out, "redis:7") {
-		t.Fatalf("missing images:\n%s", out)
+	for _, want := range []string{
+		"PODNAME", "CONTAINER", "PULL", "IMAGE", "TAG",
+		"web-0", "c", "IfNotPresent", "haproxytech/kubernetes-ingress", "3.1.2",
+		"redis", "7",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
 	}
-	// nginx (2) must sort before redis (1).
-	if strings.Index(out, "nginx:1.25") > strings.Index(out, "redis:7") {
-		t.Fatalf("nginx (2) should sort before redis (1):\n%s", out)
+}
+
+func TestSplitImageTag(t *testing.T) {
+	cases := []struct {
+		ref, name, tag string
+	}{
+		{"redis:7", "redis", "7"},
+		{"haproxytech/kubernetes-ingress:3.1.2", "haproxytech/kubernetes-ingress", "3.1.2"},
+		{"registry.k8s.io/pause:3.9", "registry.k8s.io/pause", "3.9"},
+		{"localhost:5000/app", "localhost:5000/app", "latest"},
+		{"nginx", "nginx", "latest"},
+		{"busybox@sha256:abc", "busybox", "sha256:abc"},
+	}
+	for _, tc := range cases {
+		name, tag := splitImageTag(tc.ref)
+		if name != tc.name || tag != tc.tag {
+			t.Errorf("splitImageTag(%q) = (%q, %q), want (%q, %q)", tc.ref, name, tag, tc.name, tc.tag)
+		}
 	}
 }
