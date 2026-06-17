@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`kubectl-klens` is a single-binary kubectl plugin (`kubectl klens`) bundling ~14
+`kubectl-klens` is a single-binary kubectl plugin (`kubectl klens`) bundling ~20
 read-only cluster-inspection shortcuts. Go 1.26, depends on `client-go`,
 `promptui` (interactive pickers), and `golang.org/x/term` (TTY detection). No
 cobra — dispatch is a hand-rolled flag-based switch.
@@ -30,12 +30,15 @@ Three packages under `internal/`, layered cli → view → kube:
 
 - **`internal/cli`** — the dispatcher. `App` holds injected `NewClient` and
   `Namespace` functions so `Run` is testable without a real cluster (see
-  `NewApp` for the production wiring). `commands()` is the single registry of
-  `Command` entries; `Run` parses global flags, builds the client, applies
-  namespace defaulting, then calls the command's `RunFunc`. A command that sets
-  `SortColumns` opts into `--sort <column>`: the dispatcher registers the flag,
-  validates the value against that list, and the value flows through
-  `kube.Flags.Sort`. `complete.go`
+  `NewApp` for the production wiring). `commands` (a package-level slice) is the
+  single registry of `Command` entries; `Run` parses global flags, builds the
+  client, applies namespace defaulting, then calls the command's `RunFunc`. A
+  command that sets `SortColumns` opts into `--sort <column>`: the dispatcher
+  registers the flag, validates the value against that list, and the value flows
+  through `kube.Flags.Sort`. Global flags (`-n`, `--context`, ...) live once in
+  the `globalFlags` table, which drives both FlagSet registration and the
+  `--help` listing so the two can't drift — add a global flag there, not in two
+  places. `complete.go`
   implements the cobra-compatible `__complete` protocol kubectl invokes via the
   `completion/kubectl_complete-klens` shim, plus `completion install` (writes
   the shim to krew's bin dir, needs no cluster).
@@ -43,8 +46,8 @@ Three packages under `internal/`, layered cli → view → kube:
   `func(ctx, kubernetes.Interface, kube.Flags, args []string, out io.Writer) error`.
   Shared node helpers live in `view.go`. `secret.go` is the only interactive
   command: `isTTY(out)` gates promptui pickers vs. plain piped listings.
-  Sortable views call `t.SortBy(f.Sort)` before `Flush`; `image-count` is the
-  exception, doing a bespoke count-descending sort in `imageCountLess`.
+  Sortable views call `t.SortBy(f.Sort)` before `Flush`; `image-count` and
+  `restarts` keep a bespoke count-descending default (overridden by `--sort`).
 - **`internal/kube`** — kubeconfig plumbing (`Client`, `CurrentNamespace`,
   `clientConfig` via deferred loading rules + context override), the `Flags`
   struct with `NamespaceScope()`, and the `Table` helper used for all columnar
@@ -56,16 +59,17 @@ Three packages under `internal/`, layered cli → view → kube:
 `Command.CurrentNSDefault` controls scoping. When `true` and the user passed
 neither `-n` nor `-A`, the dispatcher resolves the current kubeconfig namespace
 (kubens/kubectx) before running. When `false`, the command lists all namespaces
-by default. Today `reqlim`, `svc-fqdn`, `secret`, `pvc`, `images` are
-`CurrentNSDefault`; `TestCurrentNSDefaultFlags` in `cli_test.go` locks this set
-in — update it when you change a command's scoping.
+by default. The current `CurrentNSDefault` set (`reqlim`, `no-limits`,
+`no-requests`, `images`, `restarts`, `pvc`, `svc-fqdn`, `secret`, `privileged`)
+is locked in by `TestCurrentNSDefaultFlags` in `cli_test.go`, which is the
+authoritative list — update that map whenever you change a command's scoping.
 
 ## Adding a subcommand
 
 1. Create `internal/view/<name>.go` implementing the `RunFunc` signature; use
    `kube.NewTable`/`kube.Label` for output. Validate required positional args
    inside the func (see `OnNode` returning a "requires a node" error).
-2. Register it in `commands()` in `internal/cli/cli.go` (set `CurrentNSDefault`
+2. Register it in the `commands` slice in `internal/cli/cli.go` (set `CurrentNSDefault`
    if it should scope to the current namespace; set `SortColumns` to the
    lowercased headers to enable `--sort`, then call `t.SortBy(f.Sort)` in the
    view). `TestSortColumnsMatchHeaders` guards that those columns exist.
