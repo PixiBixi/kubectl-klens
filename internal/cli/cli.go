@@ -56,6 +56,32 @@ var commands = []Command{
 	{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},
 }
 
+// globalFlag is a flag shared by every subcommand. The globalFlags table is the
+// single source for both registration (Run) and the help listing (usage), so
+// adding a flag can't leave the two out of sync.
+type globalFlag struct {
+	usage    string // how it appears in --help, e.g. "-n, --namespace string"
+	help     string
+	register func(fs *flag.FlagSet, f *kube.Flags, help string)
+}
+
+var globalFlags = []globalFlag{
+	{"--kubeconfig string", "path to the kubeconfig file",
+		func(fs *flag.FlagSet, f *kube.Flags, h string) { fs.StringVar(&f.Kubeconfig, "kubeconfig", "", h) }},
+	{"--context string", "kubeconfig context to use",
+		func(fs *flag.FlagSet, f *kube.Flags, h string) { fs.StringVar(&f.Context, "context", "", h) }},
+	{"-n, --namespace string", "namespace scope (pod-based commands)",
+		func(fs *flag.FlagSet, f *kube.Flags, h string) {
+			fs.StringVar(&f.Namespace, "namespace", "", h)
+			fs.StringVar(&f.Namespace, "n", "", h)
+		}},
+	{"-A, --all-namespaces", "list across all namespaces",
+		func(fs *flag.FlagSet, f *kube.Flags, h string) {
+			fs.BoolVar(&f.AllNamespaces, "all-namespaces", false, h)
+			fs.BoolVar(&f.AllNamespaces, "A", false, h)
+		}},
+}
+
 // App wires dependencies so dispatch is testable with an injected client.
 type App struct {
 	Info      BuildInfo
@@ -98,12 +124,9 @@ func (a App) Run(args []string) int {
 	fs := flag.NewFlagSet("klens "+cmd.Name, flag.ContinueOnError)
 	fs.SetOutput(a.Err)
 	var f kube.Flags
-	fs.StringVar(&f.Kubeconfig, "kubeconfig", "", "path to the kubeconfig file")
-	fs.StringVar(&f.Context, "context", "", "kubeconfig context to use")
-	fs.StringVar(&f.Namespace, "namespace", "", "namespace scope (pod-based commands)")
-	fs.StringVar(&f.Namespace, "n", "", "namespace scope (shorthand)")
-	fs.BoolVar(&f.AllNamespaces, "all-namespaces", false, "list across all namespaces")
-	fs.BoolVar(&f.AllNamespaces, "A", false, "list across all namespaces (shorthand)")
+	for _, gf := range globalFlags {
+		gf.register(fs, &f, gf.help)
+	}
 	if len(cmd.SortColumns) > 0 {
 		fs.StringVar(&f.Sort, "sort", "", "sort by column: "+strings.Join(cmd.SortColumns, "|"))
 	}
@@ -176,15 +199,10 @@ Usage:
 		fmt.Fprintf(tw, "  %s\t%s\n", c.Name, c.Summary)
 	}
 	fmt.Fprintln(tw, "\nFlags:")
-	for _, fl := range []struct{ flag, help string }{
-		{"--kubeconfig string", "path to the kubeconfig file"},
-		{"--context string", "kubeconfig context to use"},
-		{"-n, --namespace string", "namespace scope (pod-based commands)"},
-		{"-A, --all-namespaces", "list across all namespaces"},
-		{"--version", "print version"},
-	} {
-		fmt.Fprintf(tw, "  %s\t%s\n", fl.flag, fl.help)
+	for _, gf := range globalFlags {
+		fmt.Fprintf(tw, "  %s\t%s\n", gf.usage, gf.help)
 	}
+	fmt.Fprintf(tw, "  %s\t%s\n", "--version", "print version")
 	fmt.Fprintln(tw, "\nOther:")
 	fmt.Fprintf(tw, "  %s\t%s\n", "completion install", "install the shell-completion shim on your PATH")
 	tw.Flush()
