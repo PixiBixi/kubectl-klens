@@ -5,18 +5,21 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/yaml"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
 // Autoscaler reads the cluster-autoscaler-status ConfigMap from kube-system and
-// renders a cluster-wide summary line plus a per-nodegroup table. If the status
-// field is not in the recognized legacy text format, it falls back to printing
-// the raw value verbatim.
+// renders a cluster-wide summary line plus a per-nodegroup table. It accepts
+// both the structured-YAML status (cluster-autoscaler 1.30+) and the older
+// legacy text status, falling back to printing the raw value verbatim when
+// neither format is recognized.
 func Autoscaler(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
 	cm, err := c.CoreV1().ConfigMaps("kube-system").Get(ctx, "cluster-autoscaler-status", metav1.GetOptions{})
 	if err != nil {
@@ -31,31 +34,23 @@ func Autoscaler(ctx context.Context, c kubernetes.Interface, f kube.Flags, args 
 }
 
 type caClusterWide struct {
-	health, scaleUp, scaleDown, ready, registered string
+	timestamp, health, scaleUp, scaleDown, ready, registered string
 }
 
 type caGroup struct {
 	name, health, ready, target, min, max, scaleUp, scaleDown string
 }
 
-var (
-	caReady      = regexp.MustCompile(`\bready=(\d+)`)
-	caTarget     = regexp.MustCompile(`\bcloudProviderTarget=(\d+)`)
-	caMinSize    = regexp.MustCompile(`\bminSize=(\d+)`)
-	caMaxSize    = regexp.MustCompile(`\bmaxSize=(\d+)`)
-	caRegistered = regexp.MustCompile(`\bregistered=(\d+)`)
-)
-
-// renderAutoscalerStatus parses the legacy text status and writes a summary
-// line and nodegroup table, or echoes the input verbatim when it parses to
-// nothing recognizable (e.g. the newer structured-YAML format).
+// renderAutoscalerStatus parses the status into a normalized model and writes a
+// summary line and nodegroup table, or echoes the input verbatim when neither
+// the YAML nor the legacy text format is recognized.
 func renderAutoscalerStatus(status string, out io.Writer) {
-	cw, groups := parseAutoscalerStatus(status)
-	if cw.health == "" && len(groups) == 0 {
+	cw, groups, ok := parseAutoscalerStatus(status)
+	if !ok {
 		fmt.Fprintln(out, status)
 		return
 	}
-	fmt.Fprintln(out, clusterWideSummary(cw, autoscalerTimestamp(status)))
+	fmt.Fprintln(out, clusterWideSummary(cw))
 	if len(groups) == 0 {
 		return
 	}
@@ -67,7 +62,7 @@ func renderAutoscalerStatus(status string, out io.Writer) {
 	t.Flush()
 }
 
-func clusterWideSummary(cw caClusterWide, timestamp string) string {
+func clusterWideSummary(cw caClusterWide) string {
 	var b strings.Builder
 	b.WriteString("Cluster-wide: ")
 	if cw.health != "" {
@@ -88,15 +83,109 @@ func clusterWideSummary(cw caClusterWide, timestamp string) string {
 		}
 		fmt.Fprintf(&b, "  (ready %s/%s)", cw.ready, registered)
 	}
-	if timestamp != "" {
-		b.WriteString("  @ " + timestamp)
+	if cw.timestamp != "" {
+		b.WriteString("  @ " + cw.timestamp)
 	}
 	return b.String()
 }
 
-// parseAutoscalerStatus splits the status into its Cluster-wide and NodeGroups
-// sections and extracts the health/scale states and counts from each.
-func parseAutoscalerStatus(status string) (caClusterWide, []caGroup) {
+// parseAutoscalerStatus tries the structured-YAML format first, then the legacy
+// text format. The bool reports whether either yielded something renderable.
+func parseAutoscalerStatus(status string) (caClusterWide, []caGroup, bool) {
+	if cw, groups, ok := parseYAMLStatus(status); ok {
+		return cw, groups, true
+	}
+	cw, groups := parseLegacyStatus(status)
+	return cw, groups, cw.health != "" || len(groups) > 0
+}
+
+// --- structured YAML format (cluster-autoscaler 1.30+) ---
+
+type caYAMLStatus struct {
+	Time             string        `json:"time"`
+	AutoscalerStatus string        `json:"autoscalerStatus"`
+	ClusterWide      caYAMLSection `json:"clusterWide"`
+	NodeGroups       []caYAMLGroup `json:"nodeGroups"`
+}
+
+type caYAMLSection struct {
+	Health    *caYAMLCondition `json:"health"`
+	ScaleUp   *caYAMLCondition `json:"scaleUp"`
+	ScaleDown *caYAMLCondition `json:"scaleDown"`
+}
+
+type caYAMLGroup struct {
+	Name      string           `json:"name"`
+	Health    *caYAMLCondition `json:"health"`
+	ScaleUp   *caYAMLCondition `json:"scaleUp"`
+	ScaleDown *caYAMLCondition `json:"scaleDown"`
+}
+
+type caYAMLCondition struct {
+	Status              string `json:"status"`
+	CloudProviderTarget int    `json:"cloudProviderTarget"`
+	MinSize             int    `json:"minSize"`
+	MaxSize             int    `json:"maxSize"`
+	NodeCounts          struct {
+		Registered struct {
+			Total int `json:"total"`
+			Ready int `json:"ready"`
+		} `json:"registered"`
+	} `json:"nodeCounts"`
+}
+
+func parseYAMLStatus(status string) (caClusterWide, []caGroup, bool) {
+	var s caYAMLStatus
+	if err := yaml.Unmarshal([]byte(status), &s); err != nil {
+		return caClusterWide{}, nil, false
+	}
+	if s.AutoscalerStatus == "" && s.ClusterWide.Health == nil && len(s.NodeGroups) == 0 {
+		return caClusterWide{}, nil, false
+	}
+	cw := caClusterWide{timestamp: s.Time}
+	if h := s.ClusterWide.Health; h != nil {
+		cw.health = h.Status
+		cw.ready = strconv.Itoa(h.NodeCounts.Registered.Ready)
+		cw.registered = strconv.Itoa(h.NodeCounts.Registered.Total)
+	}
+	if su := s.ClusterWide.ScaleUp; su != nil {
+		cw.scaleUp = su.Status
+	}
+	if sd := s.ClusterWide.ScaleDown; sd != nil {
+		cw.scaleDown = sd.Status
+	}
+	var groups []caGroup
+	for _, ng := range s.NodeGroups {
+		g := caGroup{name: shortName(ng.Name)}
+		if h := ng.Health; h != nil {
+			g.health = h.Status
+			g.ready = strconv.Itoa(h.NodeCounts.Registered.Ready)
+			g.target = strconv.Itoa(h.CloudProviderTarget)
+			g.min = strconv.Itoa(h.MinSize)
+			g.max = strconv.Itoa(h.MaxSize)
+		}
+		if su := ng.ScaleUp; su != nil {
+			g.scaleUp = su.Status
+		}
+		if sd := ng.ScaleDown; sd != nil {
+			g.scaleDown = sd.Status
+		}
+		groups = append(groups, g)
+	}
+	return cw, groups, true
+}
+
+// --- legacy text format ---
+
+var (
+	caReady      = regexp.MustCompile(`\bready=(\d+)`)
+	caTarget     = regexp.MustCompile(`\bcloudProviderTarget=(\d+)`)
+	caMinSize    = regexp.MustCompile(`\bminSize=(\d+)`)
+	caMaxSize    = regexp.MustCompile(`\bmaxSize=(\d+)`)
+	caRegistered = regexp.MustCompile(`\bregistered=(\d+)`)
+)
+
+func parseLegacyStatus(status string) (caClusterWide, []caGroup) {
 	lines := strings.Split(status, "\n")
 	cwStart, ngStart := -1, -1
 	for i, line := range lines {
@@ -113,16 +202,17 @@ func parseAutoscalerStatus(status string) (caClusterWide, []caGroup) {
 	}
 	var cw caClusterWide
 	if cwStart >= 0 {
-		cw = parseClusterWide(lines[cwStart:cwEnd])
+		cw = parseLegacyClusterWide(lines[cwStart:cwEnd])
 	}
+	cw.timestamp = autoscalerTimestamp(status)
 	var groups []caGroup
 	if ngStart >= 0 {
-		groups = parseNodeGroups(lines[ngStart+1:])
+		groups = parseLegacyNodeGroups(lines[ngStart+1:])
 	}
 	return cw, groups
 }
 
-func parseClusterWide(lines []string) caClusterWide {
+func parseLegacyClusterWide(lines []string) caClusterWide {
 	var cw caClusterWide
 	for _, line := range lines {
 		t := strings.TrimSpace(line)
@@ -140,7 +230,7 @@ func parseClusterWide(lines []string) caClusterWide {
 	return cw
 }
 
-func parseNodeGroups(lines []string) []caGroup {
+func parseLegacyNodeGroups(lines []string) []caGroup {
 	var groups []caGroup
 	var cur caGroup
 	started := false

@@ -34,6 +34,53 @@ NodeGroups:
   ScaleDown:   CandidatesPresent (candidates=2)
 `
 
+const yamlStatus = `time: 2026-06-18 13:06:59.723405459 +0000 UTC
+autoscalerStatus: Running
+clusterWide:
+  health:
+    status: Healthy
+    nodeCounts:
+      registered:
+        total: 35
+        ready: 35
+        notStarted: 0
+      longUnregistered: 0
+      unregistered: 0
+  scaleUp:
+    status: NoActivity
+  scaleDown:
+    status: NoCandidates
+nodeGroups:
+  - name: https://www.googleapis.com/compute/v1/projects/p/zones/europe-west1-b/instanceGroups/gke-prod-pool-1-abc123-grp
+    health:
+      status: Healthy
+      nodeCounts:
+        registered:
+          total: 3
+          ready: 3
+      cloudProviderTarget: 3
+      minSize: 1
+      maxSize: 10
+    scaleUp:
+      status: NoActivity
+    scaleDown:
+      status: NoCandidates
+  - name: gke-prod-spot-def456-grp
+    health:
+      status: Healthy
+      nodeCounts:
+        registered:
+          total: 7
+          ready: 7
+      cloudProviderTarget: 7
+      minSize: 0
+      maxSize: 20
+    scaleUp:
+      status: NoActivity
+    scaleDown:
+      status: CandidatesPresent
+`
+
 func autoscalerCM(status string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster-autoscaler-status", Namespace: "kube-system"},
@@ -52,25 +99,21 @@ func rowFields(out, name string) []string {
 	return nil
 }
 
-func TestAutoscalerLegacyFormat(t *testing.T) {
-	c := fake.NewClientset(autoscalerCM(legacyStatus))
+func renderTo(t *testing.T, status string) string {
+	t.Helper()
+	c := fake.NewClientset(autoscalerCM(status))
 	var buf bytes.Buffer
 	if err := Autoscaler(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
-	out := buf.String()
+	return buf.String()
+}
 
-	summary := strings.Split(out, "\n")[0]
-	for _, want := range []string{"Cluster-wide: Healthy", "scaleUp=NoActivity", "scaleDown=NoCandidates", "(ready 10/10)"} {
-		if !strings.Contains(summary, want) {
-			t.Fatalf("summary line missing %q:\n%s", want, summary)
-		}
-	}
-
+func assertNodeGroupTable(t *testing.T, out string) {
+	t.Helper()
 	if strings.Contains(out, "googleapis.com") {
 		t.Fatalf("nodegroup name should be shortened to its last path segment:\n%s", out)
 	}
-
 	pool := rowFields(out, "gke-prod-pool-1-abc123-grp")
 	want := []string{"gke-prod-pool-1-abc123-grp", "Healthy", "3", "3", "1", "10", "NoActivity", "NoCandidates"}
 	if len(pool) != len(want) {
@@ -81,24 +124,40 @@ func TestAutoscalerLegacyFormat(t *testing.T) {
 			t.Fatalf("pool row cell %d = %q, want %q (row %v)", i, pool[i], want[i], pool)
 		}
 	}
-
 	spot := rowFields(out, "gke-prod-spot-def456-grp")
-	if spot[3] != "7" || spot[4] != "0" || spot[5] != "20" || spot[7] != "CandidatesPresent" {
+	if len(spot) != 8 || spot[3] != "7" || spot[4] != "0" || spot[5] != "20" || spot[7] != "CandidatesPresent" {
 		t.Fatalf("unexpected spot row: %v", spot)
 	}
 }
 
-func TestAutoscalerFallsBackToVerbatim(t *testing.T) {
-	// A structured-YAML status has none of the legacy section markers, so it
-	// must be echoed verbatim rather than rendered as an empty table.
-	yamlStatus := "time: 2026-06-17T09:30:00Z\nautoscalerStatus: Running\nclusterWide:\n  health:\n    status: Healthy\n"
-	c := fake.NewClientset(autoscalerCM(yamlStatus))
-	var buf bytes.Buffer
-	if err := Autoscaler(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
-		t.Fatal(err)
+func TestAutoscalerYAMLFormat(t *testing.T) {
+	out := renderTo(t, yamlStatus)
+	summary := strings.Split(out, "\n")[0]
+	for _, want := range []string{"Cluster-wide: Healthy", "scaleUp=NoActivity", "scaleDown=NoCandidates", "(ready 35/35)", "2026-06-18"} {
+		if !strings.Contains(summary, want) {
+			t.Fatalf("summary line missing %q:\n%s", want, summary)
+		}
 	}
-	if !strings.Contains(buf.String(), "autoscalerStatus: Running") {
-		t.Fatalf("unrecognized format should be echoed verbatim:\n%s", buf.String())
+	assertNodeGroupTable(t, out)
+}
+
+func TestAutoscalerLegacyFormat(t *testing.T) {
+	out := renderTo(t, legacyStatus)
+	summary := strings.Split(out, "\n")[0]
+	for _, want := range []string{"Cluster-wide: Healthy", "scaleUp=NoActivity", "scaleDown=NoCandidates", "(ready 10/10)"} {
+		if !strings.Contains(summary, want) {
+			t.Fatalf("summary line missing %q:\n%s", want, summary)
+		}
+	}
+	assertNodeGroupTable(t, out)
+}
+
+func TestAutoscalerFallsBackToVerbatim(t *testing.T) {
+	// Neither valid structured YAML nor the legacy section markers: echo it.
+	raw := "Some unexpected status text\nfrom a future cluster-autoscaler\n"
+	out := renderTo(t, raw)
+	if !strings.Contains(out, "Some unexpected status text") {
+		t.Fatalf("unrecognized format should be echoed verbatim:\n%s", out)
 	}
 }
 

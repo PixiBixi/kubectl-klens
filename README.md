@@ -72,9 +72,10 @@ Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `no-requests`, and `privileged` default to the current kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
 namespaces and `-n` targets a specific one. The other pod-scoped commands
 (including `image-count`) default to all namespaces. `autoscaler` always reads
-from `kube-system` and ignores namespace flags; it parses the legacy text status
-into a cluster-wide summary plus a per-nodegroup table, falling back to the raw
-status when the format is unrecognized (e.g. the newer structured YAML).
+from `kube-system` and ignores namespace flags; it renders the
+cluster-autoscaler status (both the structured-YAML format from CA 1.30+ and the
+older legacy text) into a cluster-wide summary plus a per-nodegroup table,
+falling back to the raw status when neither format is recognized.
 
 ## Shell completion
 
