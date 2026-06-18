@@ -43,7 +43,7 @@ kubectl klens default-sa       # pods still using the default service account
 kubectl klens privileged       # containers with privileged/host security flags, current ns (-A for all)
 kubectl klens svc-fqdn         # in-cluster FQDN of services, current ns
 kubectl klens svc-fqdn -A      # ... across all namespaces
-kubectl klens autoscaler       # cluster-autoscaler status (kube-system)
+kubectl klens autoscaler       # cluster-autoscaler: cluster-wide summary + per-nodegroup table (kube-system)
 kubectl klens secret           # pick a secret, then a key (interactive)
 kubectl klens secret <name>    # pick a key of <name> (interactive)
 kubectl klens secret <name> <key>  # decode and print one key's value
@@ -72,7 +72,9 @@ Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `no-requests`, and `privileged` default to the current kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
 namespaces and `-n` targets a specific one. The other pod-scoped commands
 (including `image-count`) default to all namespaces. `autoscaler` always reads
-from `kube-system` and ignores namespace flags.
+from `kube-system` and ignores namespace flags; it parses the legacy text status
+into a cluster-wide summary plus a per-nodegroup table, falling back to the raw
+status when the format is unrecognized (e.g. the newer structured YAML).
 
 ## Shell completion
 
