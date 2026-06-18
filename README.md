@@ -75,7 +75,10 @@ namespaces and `-n` targets a specific one. The other pod-scoped commands
 from `kube-system` and ignores namespace flags; it renders the
 cluster-autoscaler status (both the structured-YAML format from CA 1.30+ and the
 older legacy text) into a cluster-wide summary plus a per-nodegroup table,
-falling back to the raw status when neither format is recognized.
+falling back to the raw status when neither format is recognized. The table's
+`LAST-CHANGE` column shows each nodegroup's most recent `lastTransitionTime`
+(across its health/scale-up/scale-down conditions), so a recent scaling event is
+easy to spot; it is only populated from the structured-YAML format.
 
 ## Shell completion
 

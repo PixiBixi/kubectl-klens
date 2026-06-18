@@ -61,10 +61,16 @@ nodeGroups:
       cloudProviderTarget: 3
       minSize: 1
       maxSize: 10
+      lastProbeTime: "2026-06-18T13:50:00Z"
+      lastTransitionTime: "2026-06-15T10:39:23Z"
     scaleUp:
       status: NoActivity
+      lastProbeTime: "2026-06-18T13:50:00Z"
+      lastTransitionTime: "2026-06-18T13:44:33Z"
     scaleDown:
       status: NoCandidates
+      lastProbeTime: "2026-06-18T13:50:00Z"
+      lastTransitionTime: "2026-06-18T13:49:24Z"
   - name: gke-prod-spot-def456-grp
     health:
       status: Healthy
@@ -79,6 +85,8 @@ nodeGroups:
       status: NoActivity
     scaleDown:
       status: CandidatesPresent
+      lastProbeTime: "2026-06-18T13:50:00Z"
+      lastTransitionTime: "2026-06-18T12:00:00Z"
 `
 
 func autoscalerCM(status string) *corev1.ConfigMap {
@@ -115,9 +123,11 @@ func assertNodeGroupTable(t *testing.T, out string) {
 		t.Fatalf("nodegroup name should be shortened to its last path segment:\n%s", out)
 	}
 	pool := rowFields(out, "gke-prod-pool-1-abc123-grp")
+	// Cells 0-7 are format-independent; cell 8 (LAST-CHANGE) is asserted per
+	// test since the legacy format does not carry per-condition transitions.
 	want := []string{"gke-prod-pool-1-abc123-grp", "Healthy", "3", "3", "1", "10", "NoActivity", "NoCandidates"}
-	if len(pool) != len(want) {
-		t.Fatalf("want %d cells for pool row, got %v", len(want), pool)
+	if len(pool) != 9 {
+		t.Fatalf("want 9 cells for pool row, got %v", pool)
 	}
 	for i := range want {
 		if pool[i] != want[i] {
@@ -125,7 +135,7 @@ func assertNodeGroupTable(t *testing.T, out string) {
 		}
 	}
 	spot := rowFields(out, "gke-prod-spot-def456-grp")
-	if len(spot) != 8 || spot[3] != "7" || spot[4] != "0" || spot[5] != "20" || spot[7] != "CandidatesPresent" {
+	if len(spot) != 9 || spot[3] != "7" || spot[4] != "0" || spot[5] != "20" || spot[7] != "CandidatesPresent" {
 		t.Fatalf("unexpected spot row: %v", spot)
 	}
 }
@@ -139,6 +149,14 @@ func TestAutoscalerYAMLFormat(t *testing.T) {
 		}
 	}
 	assertNodeGroupTable(t, out)
+	// LAST-CHANGE is the most recent lastTransitionTime across the group's
+	// conditions, not lastProbeTime (which is later in the fixture).
+	if got := rowFields(out, "gke-prod-pool-1-abc123-grp")[8]; got != "2026-06-18T13:49:24Z" {
+		t.Fatalf("pool LAST-CHANGE = %q, want 2026-06-18T13:49:24Z", got)
+	}
+	if got := rowFields(out, "gke-prod-spot-def456-grp")[8]; got != "2026-06-18T12:00:00Z" {
+		t.Fatalf("spot LAST-CHANGE = %q, want 2026-06-18T12:00:00Z", got)
+	}
 }
 
 func TestAutoscalerLegacyFormat(t *testing.T) {
@@ -150,6 +168,10 @@ func TestAutoscalerLegacyFormat(t *testing.T) {
 		}
 	}
 	assertNodeGroupTable(t, out)
+	// The legacy text format carries no per-condition transition times.
+	if got := rowFields(out, "gke-prod-pool-1-abc123-grp")[8]; got != "-" {
+		t.Fatalf("legacy pool LAST-CHANGE should be %q, got %q", "-", got)
+	}
 }
 
 func TestAutoscalerFallsBackToVerbatim(t *testing.T) {

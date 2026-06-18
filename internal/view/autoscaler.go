@@ -38,7 +38,7 @@ type caClusterWide struct {
 }
 
 type caGroup struct {
-	name, health, ready, target, min, max, scaleUp, scaleDown string
+	name, health, ready, target, min, max, scaleUp, scaleDown, lastChange string
 }
 
 // renderAutoscalerStatus parses the status into a normalized model and writes a
@@ -55,9 +55,9 @@ func renderAutoscalerStatus(status string, out io.Writer) {
 		return
 	}
 	fmt.Fprintln(out)
-	t := kube.NewTable(out, "NODEGROUP", "HEALTH", "READY", "TARGET", "MIN", "MAX", "SCALEUP", "SCALEDOWN")
+	t := kube.NewTable(out, "NODEGROUP", "HEALTH", "READY", "TARGET", "MIN", "MAX", "SCALEUP", "SCALEDOWN", "LAST-CHANGE")
 	for _, g := range groups {
-		t.Row(g.name, dash(g.health), dash(g.ready), dash(g.target), dash(g.min), dash(g.max), dash(g.scaleUp), dash(g.scaleDown))
+		t.Row(g.name, dash(g.health), dash(g.ready), dash(g.target), dash(g.min), dash(g.max), dash(g.scaleUp), dash(g.scaleDown), dash(g.lastChange))
 	}
 	t.Flush()
 }
@@ -123,6 +123,7 @@ type caYAMLGroup struct {
 
 type caYAMLCondition struct {
 	Status              string `json:"status"`
+	LastTransitionTime  string `json:"lastTransitionTime"`
 	CloudProviderTarget int    `json:"cloudProviderTarget"`
 	MinSize             int    `json:"minSize"`
 	MaxSize             int    `json:"maxSize"`
@@ -170,6 +171,7 @@ func parseYAMLStatus(status string) (caClusterWide, []caGroup, bool) {
 		if sd := ng.ScaleDown; sd != nil {
 			g.scaleDown = sd.Status
 		}
+		g.lastChange = latestTransition(ng.Health, ng.ScaleUp, ng.ScaleDown)
 		groups = append(groups, g)
 	}
 	return cw, groups, true
@@ -299,6 +301,22 @@ func shortName(name string) string {
 		return name[i+1:]
 	}
 	return name
+}
+
+// latestTransition returns the most recent lastTransitionTime among the given
+// conditions (nil and empty skipped). The values are RFC3339 UTC strings of
+// uniform shape, so lexical comparison orders them chronologically.
+func latestTransition(conds ...*caYAMLCondition) string {
+	var latest string
+	for _, c := range conds {
+		if c == nil || c.LastTransitionTime == "" {
+			continue
+		}
+		if c.LastTransitionTime > latest {
+			latest = c.LastTransitionTime
+		}
+	}
+	return latest
 }
 
 func dash(s string) string {
