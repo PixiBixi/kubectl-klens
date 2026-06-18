@@ -44,6 +44,7 @@ kubectl klens privileged       # containers with privileged/host security flags,
 kubectl klens svc-fqdn         # in-cluster FQDN of services, current ns
 kubectl klens svc-fqdn -A      # ... across all namespaces
 kubectl klens autoscaler       # cluster-autoscaler: cluster-wide summary + per-nodegroup table (kube-system)
+kubectl klens autoscaler --sort target   # sort the nodegroup table by a column: nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change
 kubectl klens secret           # pick a secret, then a key (interactive)
 kubectl klens secret <name>    # pick a key of <name> (interactive)
 kubectl klens secret <name> <key>  # decode and print one key's value
@@ -62,7 +63,8 @@ Most table commands accept `--sort <column>` to order rows by one of their
 columns (e.g. `kubectl klens zones --sort region`, `kubectl klens nodes --sort
 nodepool`). Sorting is ascending, with numeric columns ordered by value;
 `image-count` and `restarts` keep their count-descending default unless
-`--sort` is given.
+`--sort` is given, and `autoscaler` defaults to `LAST-CHANGE` descending (most
+recently changed nodegroup first) unless `--sort` is given.
 `<TAB>` completes the valid column names per command.
 
 Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,

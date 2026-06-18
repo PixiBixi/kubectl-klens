@@ -109,9 +109,14 @@ func rowFields(out, name string) []string {
 
 func renderTo(t *testing.T, status string) string {
 	t.Helper()
+	return renderToSorted(t, status, "")
+}
+
+func renderToSorted(t *testing.T, status, sortCol string) string {
+	t.Helper()
 	c := fake.NewClientset(autoscalerCM(status))
 	var buf bytes.Buffer
-	if err := Autoscaler(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Autoscaler(context.Background(), c, kube.Flags{Sort: sortCol}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	return buf.String()
@@ -171,6 +176,27 @@ func TestAutoscalerLegacyFormat(t *testing.T) {
 	// The legacy text format carries no per-condition transition times.
 	if got := rowFields(out, "gke-prod-pool-1-abc123-grp")[8]; got != "-" {
 		t.Fatalf("legacy pool LAST-CHANGE should be %q, got %q", "-", got)
+	}
+}
+
+func TestAutoscalerDefaultSortsByLastChangeDesc(t *testing.T) {
+	out := renderTo(t, yamlStatus)
+	// pool's last change (13:49:24) is newer than spot's (12:00:00), so pool
+	// must come first by default (most recent first).
+	pool := strings.Index(out, "gke-prod-pool-1-abc123-grp")
+	spot := strings.Index(out, "gke-prod-spot-def456-grp")
+	if pool < 0 || spot < 0 || pool > spot {
+		t.Fatalf("want pool before spot by default:\n%s", out)
+	}
+}
+
+func TestAutoscalerSortOverride(t *testing.T) {
+	// --sort min orders ascending by MIN: spot (0) before pool (1).
+	out := renderToSorted(t, yamlStatus, "min")
+	pool := strings.Index(out, "gke-prod-pool-1-abc123-grp")
+	spot := strings.Index(out, "gke-prod-spot-def456-grp")
+	if pool < 0 || spot < 0 || spot > pool {
+		t.Fatalf("want spot before pool when sorting by min:\n%s", out)
 	}
 }
 

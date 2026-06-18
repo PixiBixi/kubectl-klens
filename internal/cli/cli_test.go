@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -168,7 +170,9 @@ func TestRunPodCommandStaysClusterWide(t *testing.T) {
 // from a command's actual table headers.
 func TestSortColumnsMatchHeaders(t *testing.T) {
 	for _, c := range commands {
-		if len(c.SortColumns) == 0 {
+		if len(c.SortColumns) == 0 || c.Name == "autoscaler" {
+			// autoscaler needs a status ConfigMap and prints a summary line
+			// before its table: see TestAutoscalerSortColumnsMatchHeaders.
 			continue
 		}
 		var buf bytes.Buffer
@@ -176,16 +180,64 @@ func TestSortColumnsMatchHeaders(t *testing.T) {
 			t.Fatalf("%s: run failed: %v", c.Name, err)
 		}
 		header := strings.Split(buf.String(), "\n")[0]
-		got := map[string]bool{}
-		for _, h := range strings.Fields(strings.ToLower(header)) {
-			got[h] = true
-		}
-		for _, col := range c.SortColumns {
-			if !got[col] {
-				t.Errorf("%s: sort column %q not a header (%q)", c.Name, col, header)
-			}
+		assertSortColumnsInHeader(t, c.Name, c.SortColumns, header)
+	}
+}
+
+// assertSortColumnsInHeader checks every declared sort column appears as a
+// whitespace-separated token in the (case-insensitive) header line.
+func assertSortColumnsInHeader(t *testing.T, name string, cols []string, header string) {
+	t.Helper()
+	got := map[string]bool{}
+	for _, h := range strings.Fields(strings.ToLower(header)) {
+		got[h] = true
+	}
+	for _, col := range cols {
+		if !got[col] {
+			t.Errorf("%s: sort column %q not a header (%q)", name, col, header)
 		}
 	}
+}
+
+func autoscalerStatusCM(status string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: "cluster-autoscaler-status", Namespace: "kube-system"},
+		Data:       map[string]string{"status": status},
+	}
+}
+
+// TestAutoscalerSortColumnsMatchHeaders is the autoscaler-specific counterpart
+// to TestSortColumnsMatchHeaders: it backs the command with a status ConfigMap
+// and locates the table header beneath the cluster-wide summary.
+func TestAutoscalerSortColumnsMatchHeaders(t *testing.T) {
+	cmd, ok := lookup("autoscaler")
+	if !ok {
+		t.Fatal("autoscaler command not found")
+	}
+	const status = `autoscalerStatus: Running
+nodeGroups:
+  - name: grp-a
+    health:
+      status: Healthy
+      cloudProviderTarget: 1
+      minSize: 0
+      maxSize: 3
+`
+	var buf bytes.Buffer
+	if err := cmd.Run(context.Background(), fake.NewClientset(autoscalerStatusCM(status)), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+	var header string
+	for _, line := range strings.Split(buf.String(), "\n") {
+		if strings.HasPrefix(line, "NODEGROUP") {
+			header = line
+			break
+		}
+	}
+	if header == "" {
+		t.Fatalf("no nodegroup table header in output:\n%s", buf.String())
+	}
+	assertSortColumnsInHeader(t, "autoscaler", cmd.SortColumns, header)
 }
 
 func TestRunRejectsInvalidSort(t *testing.T) {
@@ -200,8 +252,8 @@ func TestRunRejectsInvalidSort(t *testing.T) {
 
 func TestRunRejectsSortOnNonSortable(t *testing.T) {
 	var out, errw bytes.Buffer
-	// autoscaler declares no SortColumns, so --sort is an unknown flag.
-	if code := testApp(&out, &errw).Run([]string{"autoscaler", "--sort", "name"}); code != 1 {
+	// secret declares no SortColumns, so --sort is an unknown flag.
+	if code := testApp(&out, &errw).Run([]string{"secret", "--sort", "name"}); code != 1 {
 		t.Fatalf("want exit 1, got %d", code)
 	}
 }

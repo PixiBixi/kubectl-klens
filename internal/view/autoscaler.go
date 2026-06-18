@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -29,7 +30,7 @@ func Autoscaler(ctx context.Context, c kubernetes.Interface, f kube.Flags, args 
 	if !ok {
 		return fmt.Errorf("configmap cluster-autoscaler-status has no \"status\" field")
 	}
-	renderAutoscalerStatus(status, out)
+	renderAutoscalerStatus(status, f.Sort, out)
 	return nil
 }
 
@@ -44,7 +45,7 @@ type caGroup struct {
 // renderAutoscalerStatus parses the status into a normalized model and writes a
 // summary line and nodegroup table, or echoes the input verbatim when neither
 // the YAML nor the legacy text format is recognized.
-func renderAutoscalerStatus(status string, out io.Writer) {
+func renderAutoscalerStatus(status, sortCol string, out io.Writer) {
 	cw, groups, ok := parseAutoscalerStatus(status)
 	if !ok {
 		fmt.Fprintln(out, status)
@@ -54,11 +55,20 @@ func renderAutoscalerStatus(status string, out io.Writer) {
 	if len(groups) == 0 {
 		return
 	}
+	// Default ordering: most recently changed nodegroup first. An explicit
+	// --sort (applied by SortBy at Flush) overrides this.
+	sort.SliceStable(groups, func(i, j int) bool {
+		if groups[i].lastChange != groups[j].lastChange {
+			return groups[i].lastChange > groups[j].lastChange
+		}
+		return groups[i].name < groups[j].name
+	})
 	fmt.Fprintln(out)
 	t := kube.NewTable(out, "NODEGROUP", "HEALTH", "READY", "TARGET", "MIN", "MAX", "SCALEUP", "SCALEDOWN", "LAST-CHANGE")
 	for _, g := range groups {
 		t.Row(g.name, dash(g.health), dash(g.ready), dash(g.target), dash(g.min), dash(g.max), dash(g.scaleUp), dash(g.scaleDown), dash(g.lastChange))
 	}
+	t.SortBy(sortCol)
 	t.Flush()
 }
 
