@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/manifoldco/promptui"
-	"golang.org/x/term"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/duration"
@@ -29,30 +27,31 @@ import (
 //	secret <name> <key>  print the decoded value of <key>
 //	secret <name> all    print all decoded key/value pairs
 func Secret(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+	paint := kube.NewPainter(f)
 	switch {
 	case len(args) >= 2:
 		s, err := getSecret(ctx, c, f.NamespaceScope(), args[0])
 		if err != nil {
 			return err
 		}
-		return emitValue(out, s, args[1])
+		return emitValue(out, paint, s, args[1])
 
 	case len(args) == 1 && args[0] != "":
 		s, err := getSecret(ctx, c, f.NamespaceScope(), args[0])
 		if err != nil {
 			return err
 		}
-		if !isTTY(out) {
-			return emitKeys(out, s)
+		if !kube.IsTTY(out) {
+			return emitKeys(out, paint, s)
 		}
 		key, err := pickKey(s)
 		if err != nil {
 			return err
 		}
-		return emitValue(out, s, key)
+		return emitValue(out, paint, s, key)
 
 	default:
-		if !isTTY(out) {
+		if !kube.IsTTY(out) {
 			return listSecrets(ctx, c, f, out)
 		}
 		s, err := pickSecret(ctx, c, f)
@@ -63,7 +62,7 @@ func Secret(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 		if err != nil {
 			return err
 		}
-		return emitValue(out, s, key)
+		return emitValue(out, paint, s, key)
 	}
 }
 
@@ -77,7 +76,7 @@ func listSecrets(ctx context.Context, c kubernetes.Interface, f kube.Flags, out 
 		return err
 	}
 	sortSecrets(list.Items)
-	t := kube.NewTable(out, "NS", "NAME", "TYPE", "KEYS", "AGE")
+	t := kube.NewTable(out, kube.NewPainter(f), "NS", "NAME", "TYPE", "KEYS", "AGE")
 	for _, s := range list.Items {
 		age := duration.HumanDuration(time.Since(s.CreationTimestamp.Time))
 		t.Row(s.Namespace, s.Name, string(s.Type), strconv.Itoa(len(s.Data)), age)
@@ -85,17 +84,17 @@ func listSecrets(ctx context.Context, c kubernetes.Interface, f kube.Flags, out 
 	return t.Flush()
 }
 
-func emitKeys(out io.Writer, s *corev1.Secret) error {
-	t := kube.NewTable(out, "KEY", "BYTES")
+func emitKeys(out io.Writer, paint kube.Painter, s *corev1.Secret) error {
+	t := kube.NewTable(out, paint, "KEY", "BYTES")
 	for _, k := range sortedKeys(s.Data) {
 		t.Row(k, strconv.Itoa(len(s.Data[k])))
 	}
 	return t.Flush()
 }
 
-func emitValue(out io.Writer, s *corev1.Secret, key string) error {
+func emitValue(out io.Writer, paint kube.Painter, s *corev1.Secret, key string) error {
 	if key == "all" {
-		t := kube.NewTable(out, "KEY", "VALUE")
+		t := kube.NewTable(out, paint, "KEY", "VALUE")
 		for _, k := range sortedKeys(s.Data) {
 			t.Row(k, string(s.Data[k]))
 		}
@@ -181,9 +180,4 @@ func sortedKeys(m map[string][]byte) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func isTTY(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	return ok && term.IsTerminal(int(f.Fd()))
 }

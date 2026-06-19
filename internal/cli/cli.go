@@ -86,6 +86,8 @@ var globalFlags = []globalFlag{
 			fs.BoolVar(&f.AllNamespaces, "all-namespaces", false, h)
 			fs.BoolVar(&f.AllNamespaces, "A", false, h)
 		}},
+	{"--color string", "colorize output: auto|always|never (default auto)",
+		func(fs *flag.FlagSet, f *kube.Flags, h string) { fs.StringVar(&f.ColorMode, "color", "", h) }},
 }
 
 // App wires dependencies so dispatch is testable with an injected client.
@@ -143,6 +145,13 @@ func (a App) Run(args []string) int {
 		fmt.Fprintf(a.Err, "error: invalid --sort %q for %s (want %s)\n", f.Sort, cmd.Name, strings.Join(cmd.SortColumns, "|"))
 		return 1
 	}
+	switch f.ColorMode {
+	case "", "auto", "always", "never":
+	default:
+		fmt.Fprintf(a.Err, "error: invalid --color %q (want auto|always|never)\n", f.ColorMode)
+		return 1
+	}
+	f.Color = kube.ResolveColor(f.ColorMode, a.Out)
 	client, err := a.NewClient(f)
 	if err != nil {
 		fmt.Fprintln(a.Err, "error: failed to build kubernetes client:", err)

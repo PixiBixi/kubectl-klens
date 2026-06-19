@@ -11,7 +11,7 @@ import (
 // completionFlags are the global flag tokens offered during shell completion.
 var completionFlags = []string{
 	"--kubeconfig", "--context", "--namespace", "-n",
-	"--all-namespaces", "-A", "--version", "--help", "-h",
+	"--all-namespaces", "-A", "--color", "--version", "--help", "-h",
 }
 
 // complete implements the cobra-compatible "__complete" protocol that kubectl
@@ -46,6 +46,9 @@ func completions(prior []string, toComplete string) []string {
 			return withPrefix(c.SortColumns, toComplete)
 		}
 		return nil
+	}
+	if len(prior) > 0 && prior[len(prior)-1] == "--color" {
+		return withPrefix([]string{"auto", "always", "never"}, toComplete)
 	}
 	if strings.HasPrefix(toComplete, "-") {
 		flags := completionFlags

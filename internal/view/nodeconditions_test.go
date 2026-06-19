@@ -41,3 +41,25 @@ func TestNodeConditions(t *testing.T) {
 		t.Fatalf("want Unknown for the unreported pid condition:\n%s", out)
 	}
 }
+
+func TestNodeConditionsColor(t *testing.T) {
+	c := fake.NewClientset(nodeConditions("node-a",
+		corev1.NodeCondition{Type: corev1.NodeReady, Status: corev1.ConditionTrue},
+		corev1.NodeCondition{Type: corev1.NodeMemoryPressure, Status: corev1.ConditionTrue},
+		corev1.NodeCondition{Type: corev1.NodeDiskPressure, Status: corev1.ConditionFalse},
+	))
+	var buf bytes.Buffer
+	if err := NodeConditions(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "\x1b[32mReady\x1b[0m") {
+		t.Fatalf("Ready not green:\n%s", out)
+	}
+	if !strings.Contains(out, "\x1b[31mTrue\x1b[0m") {
+		t.Fatalf("memory pressure True not red:\n%s", out)
+	}
+	if !strings.Contains(out, "\x1b[90mFalse\x1b[0m") {
+		t.Fatalf("disk pressure False not muted:\n%s", out)
+	}
+}

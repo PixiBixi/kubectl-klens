@@ -16,12 +16,13 @@ func Zones(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []str
 	if err != nil {
 		return err
 	}
-	t := kube.NewTable(out, "NAME", "REGION", "ZONE")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NAME", "REGION", "ZONE")
 	for _, n := range nodes.Items {
 		t.Row(
 			n.Name,
-			kube.Label(n.Labels, "topology.kubernetes.io/region"),
-			kube.Label(n.Labels, "topology.kubernetes.io/zone"),
+			kube.Label(paint, n.Labels, "topology.kubernetes.io/region"),
+			kube.Label(paint, n.Labels, "topology.kubernetes.io/zone"),
 		)
 	}
 	t.SortBy(f.Sort)

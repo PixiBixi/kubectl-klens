@@ -40,7 +40,8 @@ func PodsPerNode(ctx context.Context, c kubernetes.Interface, f kube.Flags, args
 		}
 		return list[i].node < list[j].node
 	})
-	t := kube.NewTable(out, "NODE", "PODS")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NODE", "PODS")
 	for _, e := range list {
 		t.Row(e.node, strconv.Itoa(e.n))
 	}

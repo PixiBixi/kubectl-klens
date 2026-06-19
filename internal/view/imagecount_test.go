@@ -37,6 +37,17 @@ func TestImageCount(t *testing.T) {
 	}
 }
 
+func TestImageCountColorLatest(t *testing.T) {
+	c := fake.NewClientset(podImg("p1", "nginx:latest"))
+	var buf bytes.Buffer
+	if err := ImageCount(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "\x1b[33mlatest\x1b[0m") {
+		t.Fatalf("latest tag not yellow:\n%s", buf.String())
+	}
+}
+
 func TestImageCountSortByTag(t *testing.T) {
 	c := fake.NewClientset(
 		podImg("a", "nginx:9"),

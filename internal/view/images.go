@@ -17,15 +17,24 @@ func Images(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 	if err != nil {
 		return err
 	}
-	t := kube.NewTable(out, "PODNAME", "CONTAINER", "PULL", "IMAGE", "TAG")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "PODNAME", "CONTAINER", "PULL", "IMAGE", "TAG")
 	for _, p := range pods.Items {
 		for _, ctr := range p.Spec.Containers {
 			image, tag := splitImageTag(ctr.Image)
-			t.Row(p.Name, ctr.Name, string(ctr.ImagePullPolicy), image, tag)
+			t.Row(p.Name, ctr.Name, string(ctr.ImagePullPolicy), image, latestTag(paint, tag))
 		}
 	}
 	t.SortBy(f.Sort)
 	return t.Flush()
+}
+
+// latestTag highlights a floating "latest" tag, an operational anti-pattern.
+func latestTag(paint kube.Painter, tag string) string {
+	if tag == "latest" {
+		return paint.Warn(tag)
+	}
+	return tag
 }
 
 // splitImageTag separates an image reference into its name (registry plus

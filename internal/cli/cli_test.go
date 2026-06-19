@@ -258,6 +258,26 @@ func TestRunRejectsSortOnNonSortable(t *testing.T) {
 	}
 }
 
+func TestRunRejectsInvalidColor(t *testing.T) {
+	var out, errw bytes.Buffer
+	if code := testApp(&out, &errw).Run([]string{"nodes", "--color", "bogus"}); code != 1 {
+		t.Fatalf("want exit 1, got %d", code)
+	}
+	if !strings.Contains(errw.String(), "invalid --color") {
+		t.Fatalf("want invalid --color error, got %q", errw.String())
+	}
+}
+
+func TestRunAcceptsColorNever(t *testing.T) {
+	var out, errw bytes.Buffer
+	if code := testApp(&out, &errw).Run([]string{"nodes", "--color", "never"}); code != 0 {
+		t.Fatalf("want exit 0, got %d (err=%q)", code, errw.String())
+	}
+	if strings.Contains(out.String(), "\x1b[") {
+		t.Fatalf("want no ANSI with --color never, got %q", out.String())
+	}
+}
+
 func TestRunAcceptsSingularAlias(t *testing.T) {
 	var out, errw bytes.Buffer
 	// "image" (singular) must resolve to the "images" command.

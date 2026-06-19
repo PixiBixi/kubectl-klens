@@ -17,7 +17,8 @@ func Reqlim(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 	if err != nil {
 		return err
 	}
-	t := kube.NewTable(out, "NS", "POD", "CONTAINER", "REQ_CPU", "LIM_CPU", "REQ_MEM", "LIM_MEM")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "REQ_CPU", "LIM_CPU", "REQ_MEM", "LIM_MEM")
 	for _, p := range pods.Items {
 		if p.Namespace == "kube-system" {
 			continue
@@ -26,10 +27,10 @@ func Reqlim(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 			req, lim := ctr.Resources.Requests, ctr.Resources.Limits
 			t.Row(
 				p.Namespace, p.Name, ctr.Name,
-				qtyOrNone(req, corev1.ResourceCPU),
-				qtyOrNone(lim, corev1.ResourceCPU),
-				qtyOrNone(req, corev1.ResourceMemory),
-				qtyOrNone(lim, corev1.ResourceMemory),
+				qtyOrNone(paint, req, corev1.ResourceCPU),
+				qtyOrNone(paint, lim, corev1.ResourceCPU),
+				qtyOrNone(paint, req, corev1.ResourceMemory),
+				qtyOrNone(paint, lim, corev1.ResourceMemory),
 			)
 		}
 	}

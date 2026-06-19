@@ -38,3 +38,42 @@ func TestNodes(t *testing.T) {
 		}
 	}
 }
+
+func TestNodesColor(t *testing.T) {
+	ready := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "ok"},
+		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}},
+	}
+	down := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "down"},
+		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}},
+	}
+	c := fake.NewClientset(ready, down)
+	var buf bytes.Buffer
+	if err := Nodes(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "\x1b[32mReady\x1b[0m") {
+		t.Fatalf("Ready not green:\n%s", out)
+	}
+	if !strings.Contains(out, "\x1b[31mNotReady\x1b[0m") {
+		t.Fatalf("NotReady not red:\n%s", out)
+	}
+}
+
+func TestNodesColorUnknownAndPlaceholders(t *testing.T) {
+	// Node with no Ready condition → status "Unknown"; no labels → muted <none>.
+	c := fake.NewClientset(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n"}})
+	var buf bytes.Buffer
+	if err := Nodes(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "\x1b[31mUnknown\x1b[0m") {
+		t.Fatalf("Unknown status not red:\n%s", out)
+	}
+	if !strings.Contains(out, "\x1b[90m<none>\x1b[0m") {
+		t.Fatalf("missing label not muted:\n%s", out)
+	}
+}

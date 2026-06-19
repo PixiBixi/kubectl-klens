@@ -81,6 +81,22 @@ func TestCompleteSortColumns(t *testing.T) {
 	}
 }
 
+func TestCompleteOffersColorFlag(t *testing.T) {
+	out := completeOut(t, "nodes", "--col")
+	if !strings.Contains(out, "--color") {
+		t.Errorf("want --color offered:\n%s", out)
+	}
+}
+
+func TestCompleteColorValues(t *testing.T) {
+	out := completeOut(t, "nodes", "--color", "")
+	for _, want := range []string{"auto", "always", "never"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("color-value completion missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestCompleteAfterSubcommandNoNames(t *testing.T) {
 	out := completeOut(t, "secret", "")
 	if strings.Contains(out, "nodes") {

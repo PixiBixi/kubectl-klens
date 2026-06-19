@@ -43,9 +43,10 @@ func Restarts(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []
 		}
 		return list[i].pod < list[j].pod
 	})
-	t := kube.NewTable(out, "NS", "POD", "CONTAINER", "RESTARTS", "STATE")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "RESTARTS", "STATE")
 	for _, e := range list {
-		t.Row(e.ns, e.pod, e.container, strconv.Itoa(int(e.restarts)), e.state)
+		t.Row(e.ns, e.pod, e.container, paint.Warn(strconv.Itoa(int(e.restarts))), paint.Status(e.state))
 	}
 	t.SortBy(f.Sort)
 	return t.Flush()

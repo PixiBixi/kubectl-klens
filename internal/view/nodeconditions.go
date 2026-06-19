@@ -18,14 +18,15 @@ func NodeConditions(ctx context.Context, c kubernetes.Interface, f kube.Flags, a
 	if err != nil {
 		return err
 	}
-	t := kube.NewTable(out, "NAME", "STATUS", "MEMORY", "DISK", "PID")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NAME", "STATUS", "MEMORY", "DISK", "PID")
 	for _, n := range nodes.Items {
 		t.Row(
 			n.Name,
-			nodeStatus(n),
-			conditionStatus(n, corev1.NodeMemoryPressure),
-			conditionStatus(n, corev1.NodeDiskPressure),
-			conditionStatus(n, corev1.NodePIDPressure),
+			paint.Status(nodeStatus(n)),
+			pressure(paint, conditionStatus(n, corev1.NodeMemoryPressure)),
+			pressure(paint, conditionStatus(n, corev1.NodeDiskPressure)),
+			pressure(paint, conditionStatus(n, corev1.NodePIDPressure)),
 		)
 	}
 	t.SortBy(f.Sort)
@@ -41,4 +42,16 @@ func conditionStatus(n corev1.Node, condType corev1.NodeConditionType) string {
 		}
 	}
 	return "Unknown"
+}
+
+// pressure colors a node pressure condition: under pressure (True) is bad,
+// no pressure (False) is muted, anything else (Unknown) is left plain.
+func pressure(paint kube.Painter, status string) string {
+	switch status {
+	case "True":
+		return paint.Bad(status)
+	case "False":
+		return paint.Muted(status)
+	}
+	return status
 }

@@ -209,6 +209,19 @@ func TestAutoscalerFallsBackToVerbatim(t *testing.T) {
 	}
 }
 
+func TestAutoscalerColor(t *testing.T) {
+	c := fake.NewClientset(autoscalerCM(yamlStatus))
+	var buf bytes.Buffer
+	if err := Autoscaler(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	// Cluster-wide health green in the summary line.
+	if !strings.Contains(out, "\x1b[32mHealthy\x1b[0m") {
+		t.Fatalf("cluster-wide Healthy not green:\n%s", out)
+	}
+}
+
 func TestAutoscalerMissingConfigMap(t *testing.T) {
 	c := fake.NewClientset()
 	var buf bytes.Buffer

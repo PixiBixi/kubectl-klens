@@ -24,12 +24,13 @@ func OnNode(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 	if err != nil {
 		return err
 	}
-	t := kube.NewTable(out, "NS", "POD", "STATUS", "NODE")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NS", "POD", "STATUS", "NODE")
 	for _, p := range pods.Items {
 		if p.Spec.NodeName != node {
 			continue // defensive: fake clientset ignores FieldSelector
 		}
-		t.Row(p.Namespace, p.Name, string(p.Status.Phase), p.Spec.NodeName)
+		t.Row(p.Namespace, p.Name, paint.Status(string(p.Status.Phase)), p.Spec.NodeName)
 	}
 	t.SortBy(f.Sort)
 	return t.Flush()

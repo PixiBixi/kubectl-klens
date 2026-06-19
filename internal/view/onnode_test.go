@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -35,5 +37,21 @@ func TestOnNodeFilters(t *testing.T) {
 	}
 	if strings.Contains(out, "\nb\t") || strings.Contains(out, " b ") {
 		t.Fatalf("pod b (on n2) must not be listed:\n%s", out)
+	}
+}
+
+func TestOnNodeColor(t *testing.T) {
+	running := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "ns"},
+		Spec:       corev1.PodSpec{NodeName: "node-a"},
+		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+	c := fake.NewClientset(running)
+	var buf bytes.Buffer
+	if err := OnNode(context.Background(), c, kube.Flags{Color: true, AllNamespaces: true}, []string{"node-a"}, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "\x1b[32mRunning\x1b[0m") {
+		t.Fatalf("Running phase not green:\n%s", buf.String())
 	}
 }

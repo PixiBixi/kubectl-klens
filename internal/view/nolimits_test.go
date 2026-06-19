@@ -53,3 +53,14 @@ func TestNoLimits(t *testing.T) {
 		t.Fatalf("want 'none' flagged as missing cpu,memory:\n%s", out)
 	}
 }
+
+func TestNoLimitsColor(t *testing.T) {
+	c := fake.NewClientset(podWithLimits("none", "team-a", nil)) // no limits at all
+	var buf bytes.Buffer
+	if err := NoLimits(context.Background(), c, kube.Flags{Color: true, AllNamespaces: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "\x1b[33mcpu,memory\x1b[0m") {
+		t.Fatalf("missing resources not yellow:\n%s", buf.String())
+	}
+}

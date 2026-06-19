@@ -44,6 +44,42 @@ func TestMaxPods(t *testing.T) {
 	}
 }
 
+func TestMaxPodsColorWhenFull(t *testing.T) {
+	// Node ceiling of 1 with one pod scheduled → FREE == 0.
+	c := fake.NewClientset(nodeMaxPods("node-a", 1), pod("p1", "ns", "node-a"))
+	var buf bytes.Buffer
+	if err := MaxPods(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "\x1b[31m0\x1b[0m") {
+		t.Fatalf("zero free slots not red:\n%s", buf.String())
+	}
+}
+
+func TestMaxPodsColorBySaturation(t *testing.T) {
+	// Healthy node: 110 ceiling, no pods → 110 free, green.
+	healthy := fake.NewClientset(nodeMaxPods("roomy", 110))
+	var buf bytes.Buffer
+	if err := MaxPods(context.Background(), healthy, kube.Flags{Color: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "\x1b[32m110\x1b[0m") {
+		t.Fatalf("healthy free slots not green:\n%s", buf.String())
+	}
+	// Near ceiling: 10 ceiling, 9 pods → 1 free (≤10% of max), yellow.
+	tight := fake.NewClientset(nodeMaxPods("tight", 10),
+		pod("a", "ns", "tight"), pod("b", "ns", "tight"), pod("c", "ns", "tight"),
+		pod("d", "ns", "tight"), pod("e", "ns", "tight"), pod("f", "ns", "tight"),
+		pod("g", "ns", "tight"), pod("h", "ns", "tight"), pod("i", "ns", "tight"))
+	buf.Reset()
+	if err := MaxPods(context.Background(), tight, kube.Flags{Color: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "\x1b[33m1\x1b[0m") {
+		t.Fatalf("near-ceiling free slots not yellow:\n%s", buf.String())
+	}
+}
+
 func TestMaxPodsUnknownAllocatable(t *testing.T) {
 	c := fake.NewClientset(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n1"}})
 	var buf bytes.Buffer

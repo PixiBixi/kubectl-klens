@@ -45,14 +45,20 @@ Three packages under `internal/`, layered cli → view → kube:
 - **`internal/view`** — one file per subcommand, each a `RunFunc`:
   `func(ctx, kubernetes.Interface, kube.Flags, args []string, out io.Writer) error`.
   Shared node helpers live in `view.go`. `secret.go` is the only interactive
-  command: `isTTY(out)` gates promptui pickers vs. plain piped listings.
+  command: `kube.IsTTY(out)` gates promptui pickers vs. plain piped listings.
   Sortable views call `t.SortBy(f.Sort)` before `Flush`; `image-count` and
   `restarts` keep a bespoke count-descending default (overridden by `--sort`).
+  Views colorize status cells by building `paint := kube.NewPainter(f)` and
+  wrapping cells (`paint.OK/Warn/Bad/Muted` or the `paint.Status` classifier).
 - **`internal/kube`** — kubeconfig plumbing (`Client`, `CurrentNamespace`,
   `clientConfig` via deferred loading rules + context override), the `Flags`
-  struct with `NamespaceScope()`, and the `Table` helper used for all columnar
-  output. `Table` buffers rows and, via `SortBy(column)`, sorts ascending by a
-  named header at `Flush` (numeric columns ordered by value).
+  struct with `NamespaceScope()`, the `Table` helper used for all columnar
+  output, and `color.go` (`Painter` + `ResolveColor` + `IsTTY`). `Table` buffers
+  rows and, via `SortBy(column)`, sorts ascending by a named header at `Flush`
+  (numeric columns ordered by value); it aligns on *visible* width (ANSI
+  stripped) so colored cells don't break columns, and bolds headers via the
+  `Painter` passed to `NewTable`. Color is resolved once in the dispatcher
+  (`--color` > `KLENS_COLOR` > `NO_COLOR` > TTY) into `Flags.Color`.
 
 ### Namespace defaulting (subtle, has a guard test)
 
@@ -75,7 +81,12 @@ authoritative list — update that map whenever you change a command's scoping.
    view). `TestSortColumnsMatchHeaders` guards that those columns exist.
 3. Add a `_test.go` next to it. Shell completion, `--help`, and dispatch are all
    registry-driven — no extra wiring.
-4. Update the README usage section (per repo convention, before committing).
+4. To color cells, build `paint := kube.NewPainter(f)`, wrap status cells
+   (`paint.OK/Warn/Bad/Muted` or the `paint.Status` classifier), and pass `paint`
+   to `kube.NewTable`. Name the painter `paint`, not `p`, to avoid shadowing the
+   `p` pod loop variable. Color is off in tests (they pass `kube.Flags{}`), so
+   plain-output assertions stay byte-identical — add new `...Color` tests instead.
+5. Update the README usage section (per repo convention, before committing).
 
 ## Testing pattern
 

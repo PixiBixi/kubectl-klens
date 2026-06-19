@@ -20,13 +20,14 @@ func Privileged(ctx context.Context, c kubernetes.Interface, f kube.Flags, args 
 	if err != nil {
 		return err
 	}
-	t := kube.NewTable(out, "NS", "POD", "CONTAINER", "FLAGS")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "FLAGS")
 	for _, p := range pods.Items {
 		podFlags := podSecurityFlags(p)
 		for _, ctr := range p.Spec.Containers {
 			flags := append(containerSecurityFlags(ctr, p), podFlags...)
 			if len(flags) > 0 {
-				t.Row(p.Namespace, p.Name, ctr.Name, strings.Join(flags, ","))
+				t.Row(p.Namespace, p.Name, ctr.Name, paint.Bad(strings.Join(flags, ",")))
 			}
 		}
 	}

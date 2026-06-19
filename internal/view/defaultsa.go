@@ -16,7 +16,8 @@ func DefaultSA(ctx context.Context, c kubernetes.Interface, f kube.Flags, args [
 	if err != nil {
 		return err
 	}
-	t := kube.NewTable(out, "NS", "POD")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NS", "POD")
 	for _, p := range pods.Items {
 		if p.Spec.ServiceAccountName != "default" {
 			continue

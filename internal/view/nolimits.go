@@ -27,14 +27,15 @@ func reportMissing(ctx context.Context, c kubernetes.Interface, f kube.Flags, ou
 	if err != nil {
 		return err
 	}
-	t := kube.NewTable(out, "NS", "POD", "CONTAINER", "MISSING")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "MISSING")
 	for _, p := range pods.Items {
 		if p.Namespace == "kube-system" {
 			continue
 		}
 		for _, ctr := range p.Spec.Containers {
 			if m := missingResources(pick(ctr)); m != "" {
-				t.Row(p.Namespace, p.Name, ctr.Name, m)
+				t.Row(p.Namespace, p.Name, ctr.Name, paint.Warn(m))
 			}
 		}
 	}

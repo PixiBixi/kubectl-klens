@@ -16,7 +16,8 @@ func Pvc(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 	if err != nil {
 		return err
 	}
-	t := kube.NewTable(out, "NS", "POD", "NODE", "PVC")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NS", "POD", "NODE", "PVC")
 	for _, p := range pods.Items {
 		for _, vol := range p.Spec.Volumes {
 			if vol.PersistentVolumeClaim != nil {

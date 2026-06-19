@@ -43,6 +43,17 @@ func TestImages(t *testing.T) {
 	}
 }
 
+func TestImagesColorLatest(t *testing.T) {
+	c := fake.NewClientset(podImg("p1", "nginx")) // implicit :latest
+	var buf bytes.Buffer
+	if err := Images(context.Background(), c, kube.Flags{Color: true, AllNamespaces: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "\x1b[33mlatest\x1b[0m") {
+		t.Fatalf("latest tag not yellow:\n%s", buf.String())
+	}
+}
+
 func TestSplitImageTag(t *testing.T) {
 	cases := []struct {
 		ref, name, tag string

@@ -30,7 +30,7 @@ func Autoscaler(ctx context.Context, c kubernetes.Interface, f kube.Flags, args 
 	if !ok {
 		return fmt.Errorf("configmap cluster-autoscaler-status has no \"status\" field")
 	}
-	renderAutoscalerStatus(status, f.Sort, out)
+	renderAutoscalerStatus(status, f.Sort, kube.NewPainter(f), out)
 	return nil
 }
 
@@ -45,13 +45,13 @@ type caGroup struct {
 // renderAutoscalerStatus parses the status into a normalized model and writes a
 // summary line and nodegroup table, or echoes the input verbatim when neither
 // the YAML nor the legacy text format is recognized.
-func renderAutoscalerStatus(status, sortCol string, out io.Writer) {
+func renderAutoscalerStatus(status, sortCol string, paint kube.Painter, out io.Writer) {
 	cw, groups, ok := parseAutoscalerStatus(status)
 	if !ok {
 		fmt.Fprintln(out, status)
 		return
 	}
-	fmt.Fprintln(out, clusterWideSummary(cw))
+	fmt.Fprintln(out, clusterWideSummary(cw, paint))
 	if len(groups) == 0 {
 		return
 	}
@@ -64,27 +64,28 @@ func renderAutoscalerStatus(status, sortCol string, out io.Writer) {
 		return groups[i].name < groups[j].name
 	})
 	fmt.Fprintln(out)
-	t := kube.NewTable(out, "NODEGROUP", "HEALTH", "READY", "TARGET", "MIN", "MAX", "SCALEUP", "SCALEDOWN", "LAST-CHANGE")
+	t := kube.NewTable(out, paint, "NODEGROUP", "HEALTH", "READY", "TARGET", "MIN", "MAX", "SCALEUP", "SCALEDOWN", "LAST-CHANGE")
 	for _, g := range groups {
-		t.Row(g.name, dash(g.health), dash(g.ready), dash(g.target), dash(g.min), dash(g.max), dash(g.scaleUp), dash(g.scaleDown), dash(g.lastChange))
+		t.Row(g.name, health(paint, dash(g.health)), dash(g.ready), dash(g.target), dash(g.min), dash(g.max),
+			scaleState(paint, dash(g.scaleUp)), scaleState(paint, dash(g.scaleDown)), paint.Muted(dash(g.lastChange)))
 	}
 	t.SortBy(sortCol)
 	t.Flush()
 }
 
-func clusterWideSummary(cw caClusterWide) string {
+func clusterWideSummary(cw caClusterWide, paint kube.Painter) string {
 	var b strings.Builder
 	b.WriteString("Cluster-wide: ")
 	if cw.health != "" {
-		b.WriteString(cw.health)
+		b.WriteString(health(paint, cw.health))
 	} else {
 		b.WriteString("Unknown")
 	}
 	if cw.scaleUp != "" {
-		b.WriteString("  scaleUp=" + cw.scaleUp)
+		b.WriteString("  scaleUp=" + scaleState(paint, cw.scaleUp))
 	}
 	if cw.scaleDown != "" {
-		b.WriteString("  scaleDown=" + cw.scaleDown)
+		b.WriteString("  scaleDown=" + scaleState(paint, cw.scaleDown))
 	}
 	if cw.ready != "" {
 		registered := cw.registered
@@ -334,4 +335,26 @@ func dash(s string) string {
 		return "-"
 	}
 	return s
+}
+
+// health colors a cluster-autoscaler health value: Healthy is good, anything
+// else non-empty (e.g. Unhealthy) is bad. "-" and "" pass through.
+func health(paint kube.Painter, status string) string {
+	switch status {
+	case "Healthy":
+		return paint.OK(status)
+	case "", "-":
+		return status
+	}
+	return paint.Bad(status)
+}
+
+// scaleState colors a scale-up/scale-down state: in-progress activity is a
+// warning; other states (NoActivity, NoCandidates, CandidatesPresent) are left
+// plain.
+func scaleState(paint kube.Painter, status string) string {
+	if status == "InProgress" {
+		return paint.Warn(status)
+	}
+	return status
 }

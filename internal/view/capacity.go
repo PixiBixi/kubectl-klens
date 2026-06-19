@@ -17,15 +17,16 @@ func Capacity(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []
 	if err != nil {
 		return err
 	}
-	t := kube.NewTable(out, "NAME", "CPU_CAP", "CPU_ALLOC", "MEM_CAP", "MEM_ALLOC")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NAME", "CPU_CAP", "CPU_ALLOC", "MEM_CAP", "MEM_ALLOC")
 	for _, n := range nodes.Items {
 		cap, alloc := n.Status.Capacity, n.Status.Allocatable
 		t.Row(
 			n.Name,
-			qtyOrNone(cap, corev1.ResourceCPU),
-			qtyOrNone(alloc, corev1.ResourceCPU),
-			qtyOrNone(cap, corev1.ResourceMemory),
-			qtyOrNone(alloc, corev1.ResourceMemory),
+			qtyOrNone(paint, cap, corev1.ResourceCPU),
+			qtyOrNone(paint, alloc, corev1.ResourceCPU),
+			qtyOrNone(paint, cap, corev1.ResourceMemory),
+			qtyOrNone(paint, alloc, corev1.ResourceMemory),
 		)
 	}
 	t.SortBy(f.Sort)

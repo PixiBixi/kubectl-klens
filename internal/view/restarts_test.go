@@ -46,3 +46,18 @@ func TestRestarts(t *testing.T) {
 		t.Fatalf("want worst (9) before flaky (3):\n%s", out)
 	}
 }
+
+func TestRestartsColor(t *testing.T) {
+	c := fake.NewClientset(podRestarts("flaky", "app", 5, "CrashLoopBackOff"))
+	var buf bytes.Buffer
+	if err := Restarts(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "\x1b[33m5\x1b[0m") {
+		t.Fatalf("restart count not yellow:\n%s", out)
+	}
+	if !strings.Contains(out, "\x1b[31mCrashLoopBackOff\x1b[0m") {
+		t.Fatalf("crash reason not red:\n%s", out)
+	}
+}

@@ -68,7 +68,7 @@ recently changed nodegroup first) unless `--sort` is given.
 `<TAB>` completes the valid column names per command.
 
 Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
-`--version`.
+`--color`, `--version`.
 
 `reqlim`, `svc-fqdn`, `secret`, `pvc`, `images`, `restarts`, `no-limits`,
 `no-requests`, and `privileged` default to the current kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
@@ -81,6 +81,24 @@ falling back to the raw status when neither format is recognized. The table's
 `LAST-CHANGE` column shows each nodegroup's most recent `lastTransitionTime`
 (across its health/scale-up/scale-down conditions), so a recent scaling event is
 easy to spot; it is only populated from the structured-YAML format.
+
+## Color
+
+klens colorizes its tables: green = good (Ready/Healthy/Bound/Running, roomy
+free pod slots), yellow = warning (Pending, high restart counts, floating
+`latest` tags, under 25% free pod slots, `NoSchedule` taints), red = bad
+(NotReady/Unknown/CrashLoopBackOff, node pressure, privileged flags, under 10%
+free pod slots, `NoExecute` taints), gray = muted placeholders (`<none>`/`none`,
+`PreferNoSchedule` taints), bold = headers.
+
+Control it with `--color=auto|always|never` (default `auto`, which colors only
+when stdout is a terminal). `NO_COLOR` disables color; `KLENS_COLOR` sets the
+default via the environment.
+
+Under kubecolor (`alias kubectl=kubecolor`) klens' stdout is a pipe, so `auto`
+turns color off. kubecolor passes plugin output through unchanged, so klens'
+own colors survive — force them on with `--color=always` or, once in your
+shell, `export KLENS_COLOR=always`.
 
 ## Shell completion
 

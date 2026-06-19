@@ -18,18 +18,34 @@ func Taints(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 	if err != nil {
 		return err
 	}
-	t := kube.NewTable(out, "NAME", "TAINTS")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NAME", "TAINTS")
 	for _, n := range nodes.Items {
 		var ts []string
 		for _, taint := range n.Spec.Taints {
-			ts = append(ts, fmt.Sprintf("%s=%s:%s", taint.Key, taint.Value, taint.Effect))
+			ts = append(ts, fmt.Sprintf("%s=%s:%s", taint.Key, taint.Value, taintEffect(paint, string(taint.Effect))))
 		}
 		val := strings.Join(ts, ",")
 		if val == "" {
-			val = "<none>"
+			val = paint.Muted("<none>")
 		}
 		t.Row(n.Name, val)
 	}
 	t.SortBy(f.Sort)
 	return t.Flush()
+}
+
+// taintEffect colors a taint's effect by how aggressively it repels pods:
+// NoExecute (evicts running pods) is bad, NoSchedule is a warning, and the soft
+// PreferNoSchedule is muted.
+func taintEffect(paint kube.Painter, effect string) string {
+	switch effect {
+	case "NoExecute":
+		return paint.Bad(effect)
+	case "NoSchedule":
+		return paint.Warn(effect)
+	case "PreferNoSchedule":
+		return paint.Muted(effect)
+	}
+	return effect
 }

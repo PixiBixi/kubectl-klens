@@ -16,13 +16,14 @@ func Nodes(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []str
 	if err != nil {
 		return err
 	}
-	t := kube.NewTable(out, "NAME", "STATUS", "NODEPOOL", "INSTANCE-TYPE")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "NAME", "STATUS", "NODEPOOL", "INSTANCE-TYPE")
 	for _, n := range nodes.Items {
 		t.Row(
 			n.Name,
-			nodeStatus(n),
-			kube.Label(n.Labels, "cloud.google.com/gke-nodepool"),
-			kube.Label(n.Labels, "node.kubernetes.io/instance-type"),
+			paint.Status(nodeStatus(n)),
+			kube.Label(paint, n.Labels, "cloud.google.com/gke-nodepool"),
+			kube.Label(paint, n.Labels, "node.kubernetes.io/instance-type"),
 		)
 	}
 	t.SortBy(f.Sort)

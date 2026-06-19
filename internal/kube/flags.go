@@ -10,6 +10,8 @@ type Flags struct {
 	Namespace     string
 	AllNamespaces bool
 	Sort          string // command-specific sort column (e.g. image-count)
+	ColorMode     string // raw --color value: "auto"|"always"|"never"|"" (unset)
+	Color         bool   // resolved: whether to emit ANSI color
 }
 
 // NamespaceScope returns the namespace to list in. Empty string means all

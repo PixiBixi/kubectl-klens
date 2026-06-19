@@ -44,9 +44,10 @@ func ImageCount(ctx context.Context, c kubernetes.Interface, f kube.Flags, args 
 		list = append(list, imageCount{k.registry, k.repo, k.tag, n})
 	}
 	sort.Slice(list, func(i, j int) bool { return less(list[i], list[j]) })
-	t := kube.NewTable(out, "COUNT", "REGISTRY", "IMAGE", "TAG")
+	paint := kube.NewPainter(f)
+	t := kube.NewTable(out, paint, "COUNT", "REGISTRY", "IMAGE", "TAG")
 	for _, e := range list {
-		t.Row(strconv.Itoa(e.n), e.registry, e.repo, e.tag)
+		t.Row(strconv.Itoa(e.n), e.registry, e.repo, latestTag(paint, e.tag))
 	}
 	return t.Flush()
 }
