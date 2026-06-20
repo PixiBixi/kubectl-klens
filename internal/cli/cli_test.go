@@ -304,6 +304,7 @@ func TestCurrentNSDefaultFlags(t *testing.T) {
 		"privileged":  true,
 		"pdb":         true,
 		"pending":     true,
+		"hpa":         true,
 	}
 	for _, c := range commands {
 		if got := c.CurrentNSDefault; got != want[c.Name] {
