@@ -11,7 +11,7 @@ On any machine:
 ```bash
 kubectl krew index add pixibixi https://github.com/PixiBixi/krew-index.git
 kubectl krew install pixibixi/klens
-kubectl krew upgrade pixibixi/klens   # later, to update
+kubectl krew upgrade klens   # later, to update
 ```
 
 Or download a release archive, extract `kubectl-klens` onto your `PATH`, and
