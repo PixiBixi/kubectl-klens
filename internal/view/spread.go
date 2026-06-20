@@ -17,7 +17,8 @@ import (
 // Spread groups a namespace's replicas by their owning workload and reports how
 // they are placed across nodes and zones, flagging single points of failure
 // (all replicas on one node, or one zone). It complements pdb's drain-safety
-// view with the placement side of availability. Rows default to risk-descending.
+// view with the placement side of availability. Rows default to VERDICT (risk)
+// order, riskiest at the bottom.
 func Spread(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
 	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -92,7 +93,8 @@ func Spread(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
-	t.SortBy(f.Sort)
+	t.SortRank("VERDICT", verdictRank("SPOF-NODE", "SPOF-ZONE", "MULTI-NODE", "SINGLE", "SPREAD"))
+	t.SortBy(orDefault(f.Sort, "verdict"))
 	return t.Flush()
 }
 

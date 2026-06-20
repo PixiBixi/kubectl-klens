@@ -15,7 +15,8 @@ import (
 
 // Pdb lists PodDisruptionBudgets with a computed drain-safety verdict, so a
 // stuck-drain or misconfigured PDB is readable at a glance instead of inferred
-// from raw status fields. Rows default to risk-descending order.
+// from raw status fields. Rows default to VERDICT (risk) order, riskiest at the
+// bottom.
 func Pdb(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
 	pdbs, err := c.PolicyV1().PodDisruptionBudgets(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -57,7 +58,8 @@ func Pdb(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
-	t.SortBy(f.Sort)
+	t.SortRank("VERDICT", verdictRank("NO-GUARD", "PERMABLOCK", "BLOCKED", "AT-FLOOR", "ORPHAN", "OK"))
+	t.SortBy(orDefault(f.Sort, "verdict"))
 	return t.Flush()
 }
 
@@ -117,6 +119,16 @@ func allowedCell(paint kube.Painter, n int32) string {
 	}
 }
 
+// orDefault returns sort when the user set --sort, else fallback. The verdict
+// commands default to sorting by their VERDICT column (risk order) so the
+// riskiest rows land at the bottom, nearest the prompt, without a flag.
+func orDefault(sort, fallback string) string {
+	if sort == "" {
+		return fallback
+	}
+	return sort
+}
+
 func sevRank(sev string) int {
 	switch sev {
 	case "bad":
@@ -140,5 +152,21 @@ func sevPaint(paint kube.Painter, sev string) func(string) string {
 		return paint.Muted
 	default:
 		return paint.OK
+	}
+}
+
+// verdictRank builds a Table.SortRank key for a VERDICT column from a command's
+// verdicts listed worst-first. Severity tiers (the cell colors) are too coarse
+// to order verdicts within a tier, so each command states its own risk order
+// explicitly. `--sort verdict` then lands the riskiest rows at the bottom,
+// nearest the shell prompt; verdicts absent from the list sort to the top.
+func verdictRank(orderedWorstFirst ...string) func(string) int {
+	n := len(orderedWorstFirst)
+	rank := make(map[string]int, n)
+	for i, v := range orderedWorstFirst {
+		rank[v] = n - i
+	}
+	return func(cell string) int {
+		return rank[cell] // unknown verdicts → 0 (top)
 	}
 }

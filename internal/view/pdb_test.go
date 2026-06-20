@@ -67,9 +67,10 @@ func TestPdb(t *testing.T) {
 			t.Fatalf("missing %q:\n%s", want, out)
 		}
 	}
-	// Risk-descending default: PERMABLOCK (kafka) ranks before OK (api).
-	if strings.Index(out, "kafka") > strings.Index(out, "api") {
-		t.Fatalf("expected risk-descending order (kafka before api):\n%s", out)
+	// Default verdict sort: least-risky first, so OK (api) ranks before
+	// PERMABLOCK (kafka), which sinks toward the prompt.
+	if strings.Index(out, "kafka") < strings.Index(out, "api") {
+		t.Fatalf("expected verdict-sort default (api before kafka):\n%s", out)
 	}
 }
 

@@ -72,9 +72,10 @@ func TestSpread(t *testing.T) {
 	if strings.Contains(out, "node-exp") || strings.Contains(out, "DaemonSet") {
 		t.Fatalf("DaemonSet workload must be excluded:\n%s", out)
 	}
-	// Risk-descending default: SPOF-NODE (db) before SPREAD (web).
-	if strings.Index(out, "/db") > strings.Index(out, "/web") {
-		t.Fatalf("expected risk-descending order (db before web):\n%s", out)
+	// Default verdict sort: least-risky first, so SPREAD (web) ranks before
+	// SPOF-NODE (db), which sinks toward the prompt.
+	if strings.Index(out, "/db") < strings.Index(out, "/web") {
+		t.Fatalf("expected verdict-sort default (web before db):\n%s", out)
 	}
 }
 

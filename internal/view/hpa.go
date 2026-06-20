@@ -16,7 +16,7 @@ import (
 
 // Hpa lists HorizontalPodAutoscalers with a computed autoscaling verdict, so a
 // maxed-out (no headroom) or metric-blind HPA is readable at a glance. Rows
-// default to risk-descending order.
+// default to VERDICT (risk) order, riskiest at the bottom.
 func Hpa(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
 	hpas, err := c.AutoscalingV2().HorizontalPodAutoscalers(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -61,7 +61,8 @@ func Hpa(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
-	t.SortBy(f.Sort)
+	t.SortRank("VERDICT", verdictRank("NO-METRICS", "MAXED", "SCALING", "AT-MIN", "OK"))
+	t.SortBy(orDefault(f.Sort, "verdict"))
 	return t.Flush()
 }
 
