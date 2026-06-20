@@ -93,17 +93,23 @@ Rules, in precedence order:
 | # | Verdict      | Condition                                            | Severity | Meaning                                                        |
 |---|--------------|------------------------------------------------------|----------|----------------------------------------------------------------|
 | 1 | `ORPHAN`     | `ExpectedPods == 0`                                  | muted    | PDB selects no pods — inert, but a sign of a stale selector.   |
-| 2 | `PERMABLOCK` | `DesiredHealthy >= ExpectedPods`                     | bad      | Floor ≥ population: a disruption can **never** be allowed. Misconfigured (e.g. `minAvailable: 100%`, or `minAvailable >= replicas`). |
-| 3 | `BLOCKED`    | `DisruptionsAllowed == 0 && CurrentHealthy < DesiredHealthy` | bad | Below floor *and* no disruptions allowed — a drain is stuck and pods are unhealthy. |
-| 4 | `AT-FLOOR`   | `DisruptionsAllowed == 0 && CurrentHealthy >= DesiredHealthy` | warn | At (or above) the floor with nothing to spare: healthy, but a drain will block until a replacement is ready. Expected steady state for tight PDBs. |
-| 5 | `OK`         | `DisruptionsAllowed >= 1`                            | ok       | At least one pod can be evicted now — drains proceed.          |
+| 2 | `NO-GUARD`   | `DesiredHealthy == 0 && ExpectedPods >= 2`           | bad      | Zero floor on a multi-replica workload: a drain can evict **every** replica at once — the PDB provides no protection (e.g. `minAvailable: 0`, or `maxUnavailable >= replicas`). |
+| 3 | `PERMABLOCK` | `DesiredHealthy >= ExpectedPods`                     | bad      | Floor ≥ population: a disruption can **never** be allowed. Misconfigured (e.g. `minAvailable: 100%`, or `minAvailable >= replicas`). |
+| 4 | `BLOCKED`    | `DisruptionsAllowed == 0 && CurrentHealthy < DesiredHealthy` | bad | Below floor *and* no disruptions allowed — a drain is stuck and pods are unhealthy. |
+| 5 | `AT-FLOOR`   | `DisruptionsAllowed == 0 && CurrentHealthy >= DesiredHealthy` | warn | At (or above) the floor with nothing to spare: healthy, but a drain will block until a replacement is ready. Expected steady state for tight PDBs. |
+| 6 | `OK`         | `DisruptionsAllowed >= 1`                            | ok       | At least one pod can be evicted now — drains proceed.          |
 
-Rules 3–5 cover every remaining `DisruptionsAllowed` value once ORPHAN and
-PERMABLOCK are excluded (`< floor` → BLOCKED, `>= floor` with 0 allowed →
-AT-FLOOR, `>= 1` allowed → OK), so the helper always returns a verdict.
+Rules 4–6 cover every remaining `DisruptionsAllowed` value once ORPHAN,
+NO-GUARD, and PERMABLOCK are excluded (`< floor` → BLOCKED, `>= floor` with 0
+allowed → AT-FLOOR, `>= 1` allowed → OK), so the helper always returns a verdict.
 
 Rationale for ordering:
 - ORPHAN first: with no pods, the other fields are meaningless.
+- NO-GUARD before PERMABLOCK: a zero floor (`DesiredHealthy == 0`) is the
+  opposite failure mode from PERMABLOCK — the PDB is toothless rather than
+  permanently blocking — and is only meaningful for a multi-replica workload, so
+  it is gated on `ExpectedPods >= 2` (a single replica with `minAvailable: 0` is
+  a deliberate opt-out, not a risk).
 - PERMABLOCK before BLOCKED: a permanent misconfiguration is a distinct, more
   actionable finding than a transient block, and its condition can overlap with
   BLOCKED's.
