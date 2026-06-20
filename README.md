@@ -47,6 +47,7 @@ kubectl klens pdb              # PodDisruptionBudgets + drain-safety verdict, cu
 kubectl klens pending          # Pending pods + synthesized blocking reason, current ns (-A for all)
 kubectl klens hpa              # HorizontalPodAutoscalers + autoscaling verdict, current ns (-A for all)
 kubectl klens spread           # replica placement across nodes/zones + SPOF verdict, current ns (-A for all)
+kubectl klens probes           # readiness/liveness/startup probes per container + reliability verdict, current ns (-A for all, excl kube-system)
 kubectl klens autoscaler       # cluster-autoscaler: cluster-wide summary + per-nodegroup table (kube-system)
 kubectl klens autoscaler --sort target   # sort the nodegroup table by a column: nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change
 kubectl klens secret           # pick a secret, then a key (interactive)
@@ -68,14 +69,17 @@ columns (e.g. `kubectl klens zones --sort region`, `kubectl klens nodes --sort
 nodepool`). Sorting is ascending, with numeric columns ordered by value;
 `image-count` and `restarts` keep their count-descending default unless
 `--sort` is given, and `autoscaler` defaults to `LAST-CHANGE` descending (most
-recently changed nodegroup first) unless `--sort` is given.
+recently changed nodegroup first) unless `--sort` is given. The verdict commands
+(`pdb`, `hpa`, `spread`, `probes`) default to sorting their `VERDICT` column by
+severity (rather than alphabetically), least-risky first, so the riskiest rows
+land at the bottom (nearest the prompt); pass `--sort <column>` to override.
 `<TAB>` completes the valid column names per command.
 
 Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `--color`, `--version`.
 
 `reqlim`, `svc-fqdn`, `secret`, `pvc`, `images`, `restarts`, `no-limits`,
-`no-requests`, `privileged`, `pdb`, `pending`, `hpa`, and `spread` default to the current kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
+`no-requests`, `privileged`, `pdb`, `pending`, `hpa`, `spread`, and `probes` default to the current kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
 namespaces and `-n` targets a specific one. The other pod-scoped commands
 (including `image-count`) default to all namespaces. `autoscaler` always reads
 from `kube-system` and ignores namespace flags; it renders the
@@ -100,7 +104,10 @@ free pod slots, `NoExecute` taints), gray = muted placeholders (`<none>`/`none`,
 at 0, yellow at 1, green above. `hpa` colors its `VERDICT` likewise: `OK` green,
 `SCALING` yellow, `MAXED`/`NO-METRICS` red, `AT-MIN` gray. `spread` colors its
 `VERDICT` by placement risk: `SPREAD` green, `SPOF-ZONE` yellow, `SPOF-NODE` red,
-`SINGLE`/`MULTI-NODE` gray.
+`SINGLE`/`MULTI-NODE` gray. `probes` colors its `VERDICT` by reliability:
+`OK` green, `NO-LIVENESS` yellow, `NO-READINESS`/`NO-PROBES` red; each probe cell
+shows the handler type (`http`/`grpc`/`tcp`/`exec`) green when set, a muted `-`
+when absent.
 
 Control it with `--color=auto|always|never` (default `auto`, which colors only
 when stdout is a terminal). `NO_COLOR` disables color; `KLENS_COLOR` sets the

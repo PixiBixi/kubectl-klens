@@ -62,6 +62,7 @@ var commands = []Command{
 	{Name: "pending", Summary: "List Pending pods with the synthesized blocking reason in the current namespace (-A for all)", Run: view.Pending, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "reason"}},
 	{Name: "hpa", Summary: "List HorizontalPodAutoscalers with an autoscaling verdict in the current namespace (-A for all)", Run: view.Hpa, CurrentNSDefault: true, SortColumns: []string{"ns", "name", "ref", "min", "max", "current", "desired", "verdict"}},
 	{Name: "spread", Summary: "Show replica placement across nodes/zones with a single-point-of-failure verdict in the current namespace (-A for all)", Run: view.Spread, CurrentNSDefault: true, SortColumns: []string{"ns", "workload", "replicas", "nodes", "zones", "verdict"}},
+	{Name: "probes", Summary: "List containers' readiness/liveness/startup probes with a reliability verdict in the current namespace (-A for all; excludes kube-system)", Run: view.Probes, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "readiness", "liveness", "startup", "verdict"}},
 	{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler, SortColumns: []string{"nodegroup", "health", "ready", "target", "min", "max", "scaleup", "scaledown", "last-change"}},
 	{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},
 }
