@@ -46,6 +46,7 @@ kubectl klens svc-fqdn -A      # ... across all namespaces
 kubectl klens pdb              # PodDisruptionBudgets + drain-safety verdict, current ns (-A for all)
 kubectl klens pending          # Pending pods + synthesized blocking reason, current ns (-A for all)
 kubectl klens hpa              # HorizontalPodAutoscalers + autoscaling verdict, current ns (-A for all)
+kubectl klens spread           # replica placement across nodes/zones + SPOF verdict, current ns (-A for all)
 kubectl klens autoscaler       # cluster-autoscaler: cluster-wide summary + per-nodegroup table (kube-system)
 kubectl klens autoscaler --sort target   # sort the nodegroup table by a column: nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change
 kubectl klens secret           # pick a secret, then a key (interactive)
@@ -74,7 +75,7 @@ Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `--color`, `--version`.
 
 `reqlim`, `svc-fqdn`, `secret`, `pvc`, `images`, `restarts`, `no-limits`,
-`no-requests`, `privileged`, `pdb`, `pending`, and `hpa` default to the current kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
+`no-requests`, `privileged`, `pdb`, `pending`, `hpa`, and `spread` default to the current kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
 namespaces and `-n` targets a specific one. The other pod-scoped commands
 (including `image-count`) default to all namespaces. `autoscaler` always reads
 from `kube-system` and ignores namespace flags; it renders the
@@ -97,7 +98,9 @@ free pod slots, `NoExecute` taints), gray = muted placeholders (`<none>`/`none`,
 `pdb` colors its `VERDICT` by drain-safety: `OK` green, `AT-FLOOR` yellow,
 `BLOCKED`/`PERMABLOCK`/`NO-GUARD` red, `ORPHAN` gray; the `ALLOWED` count is red
 at 0, yellow at 1, green above. `hpa` colors its `VERDICT` likewise: `OK` green,
-`SCALING` yellow, `MAXED`/`NO-METRICS` red, `AT-MIN` gray.
+`SCALING` yellow, `MAXED`/`NO-METRICS` red, `AT-MIN` gray. `spread` colors its
+`VERDICT` by placement risk: `SPREAD` green, `SPOF-ZONE` yellow, `SPOF-NODE` red,
+`SINGLE`/`MULTI-NODE` gray.
 
 Control it with `--color=auto|always|never` (default `auto`, which colors only
 when stdout is a terminal). `NO_COLOR` disables color; `KLENS_COLOR` sets the
