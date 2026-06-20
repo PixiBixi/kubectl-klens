@@ -99,8 +99,8 @@ inject a fake client + observable `Namespace` resolver and inspect
 ## Releasing
 
 Push a `v*` tag → `.github/workflows/release.yml` runs goreleaser, which builds
-cross-platform archives and regenerates `plugins/klens.yaml` (committed back to
-`master`). The repo doubles as a krew custom index, so that committed manifest is
-how users `kubectl krew upgrade pixibixi/klens`. Upstreaming to the central
-krew-index is wired but disabled (`if: false`). Version/commit/date are injected
-via `-X main.version=...` ldflags.
+cross-platform archives and pushes the regenerated `plugins/klens.yaml` to the
+central [PixiBixi/krew-index](https://github.com/PixiBixi/krew-index) repo (via
+the `krews` publisher, using the `KREW_INDEX_TOKEN` PAT secret for the cross-repo
+push). That is how users `kubectl krew upgrade pixibixi/klens`.
+Version/commit/date are injected via `-X main.version=...` ldflags.
