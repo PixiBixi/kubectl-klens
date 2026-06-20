@@ -67,6 +67,27 @@ func TestTableSortByColoredNumericColumn(t *testing.T) {
 	}
 }
 
+func TestTableSortByRankOverridesText(t *testing.T) {
+	var buf bytes.Buffer
+	tbl := NewTable(&buf, NewPainter(Flags{}), "NAME", "VERDICT")
+	tbl.Row("a", "OK")
+	tbl.Row("b", "NO-LIVENESS")
+	tbl.Row("c", "NO-PROBES")
+	// Worst-first ranking, not alphabetical (which would put NO-LIVENESS first).
+	rank := map[string]int{"NO-PROBES": 0, "NO-LIVENESS": 1, "OK": 2}
+	tbl.SortRank("verdict", func(cell string) int { return rank[cell] })
+	tbl.SortBy("verdict")
+	if err := tbl.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	rows := rowsOf(t, buf.String())
+	for i, want := range []string{"c", "b", "a"} {
+		if !strings.HasPrefix(rows[i], want) {
+			t.Fatalf("want rank order c(NO-PROBES),b(NO-LIVENESS),a(OK), got:\n%s", buf.String())
+		}
+	}
+}
+
 func TestTableSortNoColumnKeepsOrder(t *testing.T) {
 	var buf bytes.Buffer
 	tbl := NewTable(&buf, NewPainter(Flags{}), "NAME")

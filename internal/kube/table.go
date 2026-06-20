@@ -11,11 +11,12 @@ import (
 // escape codes are ignored when measuring), optionally sorted by a named
 // column. Headers are bolded when the painter is enabled.
 type Table struct {
-	out     io.Writer
-	painter Painter
-	headers []string
-	rows    [][]string
-	sortCol string
+	out       io.Writer
+	painter   Painter
+	headers   []string
+	rows      [][]string
+	sortCol   string
+	sortRanks map[string]func(string) int
 }
 
 // NewTable starts a table with the given painter and header row.
@@ -37,6 +38,17 @@ func (t *Table) SortBy(column string) {
 	t.sortCol = column
 }
 
+// SortRank registers a custom sort key for a column, overriding the default
+// text/numeric ordering when the table is sorted by it. Rows are ordered by the
+// returned key ascending. Used for severity columns (e.g. a VERDICT column)
+// where alphabetical order is meaningless and the rows should read worst-first.
+func (t *Table) SortRank(column string, key func(cell string) int) {
+	if t.sortRanks == nil {
+		t.sortRanks = map[string]func(string) int{}
+	}
+	t.sortRanks[strings.ToLower(column)] = key
+}
+
 const tableGap = 2
 
 // Flush renders the table, applying the sort column if one was set. Columns are
@@ -44,16 +56,22 @@ const tableGap = 2
 // padded (no trailing whitespace).
 func (t *Table) Flush() error {
 	if idx := t.columnIndex(t.sortCol); idx >= 0 {
-		numeric := columnIsNumeric(t.rows, idx)
-		sort.SliceStable(t.rows, func(i, j int) bool {
-			a, b := stripANSI(cell(t.rows[i], idx)), stripANSI(cell(t.rows[j], idx))
-			if numeric {
-				af, _ := strconv.ParseFloat(a, 64)
-				bf, _ := strconv.ParseFloat(b, 64)
-				return af < bf
-			}
-			return a < b
-		})
+		if key := t.sortRanks[strings.ToLower(t.sortCol)]; key != nil {
+			sort.SliceStable(t.rows, func(i, j int) bool {
+				return key(stripANSI(cell(t.rows[i], idx))) < key(stripANSI(cell(t.rows[j], idx)))
+			})
+		} else {
+			numeric := columnIsNumeric(t.rows, idx)
+			sort.SliceStable(t.rows, func(i, j int) bool {
+				a, b := stripANSI(cell(t.rows[i], idx)), stripANSI(cell(t.rows[j], idx))
+				if numeric {
+					af, _ := strconv.ParseFloat(a, 64)
+					bf, _ := strconv.ParseFloat(b, 64)
+					return af < bf
+				}
+				return a < b
+			})
+		}
 	}
 	widths := make([]int, len(t.headers))
 	for i, h := range t.headers {
