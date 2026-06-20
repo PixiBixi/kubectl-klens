@@ -37,8 +37,9 @@ krews:
     ids: [default]
     repository:
       owner: PixiBixi
-      name: kubectl-klens
-      branch: master
+      name: krew-index
+      branch: main
+      token: "{{ .Env.KREW_INDEX_TOKEN }}"
     homepage: "https://github.com/PixiBixi/kubectl-klens"
     short_description: "Quick read-only cluster inspection shortcuts"
     description: |

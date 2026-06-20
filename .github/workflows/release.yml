@@ -26,9 +26,4 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Phase 2 — upstream to krew-index. Disabled until we decide to publish.
-      # Enable by removing `if: false` and adding a KREW_RELEASE_BOT token if needed.
-      - name: Update krew-index
-        if: false
-        uses: rajatjindal/krew-release-bot@v0.0.46
+          KREW_INDEX_TOKEN: ${{ secrets.KREW_INDEX_TOKEN }}
