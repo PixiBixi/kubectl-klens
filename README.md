@@ -44,6 +44,7 @@ kubectl klens privileged       # containers with privileged/host security flags,
 kubectl klens svc-fqdn         # in-cluster FQDN of services, current ns
 kubectl klens svc-fqdn -A      # ... across all namespaces
 kubectl klens pdb              # PodDisruptionBudgets + drain-safety verdict, current ns (-A for all)
+kubectl klens pending          # Pending pods + synthesized blocking reason, current ns (-A for all)
 kubectl klens autoscaler       # cluster-autoscaler: cluster-wide summary + per-nodegroup table (kube-system)
 kubectl klens autoscaler --sort target   # sort the nodegroup table by a column: nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change
 kubectl klens secret           # pick a secret, then a key (interactive)
@@ -72,7 +73,7 @@ Flags: `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `--color`, `--version`.
 
 `reqlim`, `svc-fqdn`, `secret`, `pvc`, `images`, `restarts`, `no-limits`,
-`no-requests`, `privileged`, and `pdb` default to the current kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
+`no-requests`, `privileged`, `pdb`, and `pending` default to the current kubeconfig namespace (the one set by kubens/kubectx); `-A` widens to all
 namespaces and `-n` targets a specific one. The other pod-scoped commands
 (including `image-count`) default to all namespaces. `autoscaler` always reads
 from `kube-system` and ignores namespace flags; it renders the

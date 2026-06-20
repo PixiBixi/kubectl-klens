@@ -47,9 +47,10 @@ func (p Painter) Status(s string) string {
 	switch s {
 	case "Ready", "Healthy", "Bound", "Running", "Active", "Succeeded":
 		return p.OK(s)
-	case "Pending", "Progressing", "ContainerCreating":
+	case "Pending", "Progressing", "ContainerCreating", "PodInitializing":
 		return p.Warn(s)
-	case "NotReady", "CrashLoopBackOff", "Error", "OOMKilled", "Lost", "Failed", "Evicted", "Unknown":
+	case "NotReady", "CrashLoopBackOff", "Error", "OOMKilled", "Lost", "Failed", "Evicted", "Unknown",
+		"Unschedulable", "ImagePullBackOff", "ErrImagePull", "CreateContainerConfigError", "InvalidImageName":
 		return p.Bad(s)
 	}
 	return s
