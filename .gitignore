@@ -2,3 +2,4 @@
 /dist/
 *.tar.gz
 checksums.txt
+.claude
