@@ -16,19 +16,6 @@ func orDefault(sort, fallback string) string {
 	return sort
 }
 
-func sevRank(sev string) int {
-	switch sev {
-	case "bad":
-		return 3
-	case "warn":
-		return 2
-	case "muted":
-		return 1
-	default:
-		return 0
-	}
-}
-
 func sevPaint(paint kube.Painter, sev string) func(string) string {
 	switch sev {
 	case "bad":

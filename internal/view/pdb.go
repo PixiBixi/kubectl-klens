@@ -1,9 +1,10 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"io"
-	"sort"
+	"slices"
 	"strconv"
 
 	policyv1 "k8s.io/api/policy/v1"
@@ -34,14 +35,13 @@ func Pdb(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 		v, sev := pdbVerdict(p.Status)
 		list = append(list, entry{p, v, sev})
 	}
-	sort.SliceStable(list, func(i, j int) bool {
-		if ri, rj := sevRank(list[i].sev), sevRank(list[j].sev); ri != rj {
-			return ri > rj
-		}
-		if list[i].pdb.Namespace != list[j].pdb.Namespace {
-			return list[i].pdb.Namespace < list[j].pdb.Namespace
-		}
-		return list[i].pdb.Name < list[j].pdb.Name
+	// Deterministic tiebreak for rows with equal sort keys; the VERDICT sort
+	// applied at Flush is stable, so this order survives within each verdict.
+	slices.SortStableFunc(list, func(a, b entry) int {
+		return cmp.Or(
+			cmp.Compare(a.pdb.Namespace, b.pdb.Namespace),
+			cmp.Compare(a.pdb.Name, b.pdb.Name),
+		)
 	})
 
 	t := kube.NewTable(out, paint, "NS", "NAME", "POLICY", "EXPECTED", "DESIRED", "HEALTHY", "ALLOWED", "VERDICT")

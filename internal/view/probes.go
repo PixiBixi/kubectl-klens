@@ -1,9 +1,10 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"io"
-	"sort"
+	"slices"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -53,17 +54,14 @@ func Probes(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 			})
 		}
 	}
-	sort.SliceStable(list, func(i, j int) bool {
-		if ri, rj := sevRank(list[i].sev), sevRank(list[j].sev); ri != rj {
-			return ri > rj
-		}
-		if list[i].ns != list[j].ns {
-			return list[i].ns < list[j].ns
-		}
-		if list[i].pod != list[j].pod {
-			return list[i].pod < list[j].pod
-		}
-		return list[i].container < list[j].container
+	// Deterministic tiebreak for rows with equal sort keys; the VERDICT sort
+	// applied at Flush is stable, so this order survives within each verdict.
+	slices.SortStableFunc(list, func(a, b entry) int {
+		return cmp.Or(
+			cmp.Compare(a.ns, b.ns),
+			cmp.Compare(a.pod, b.pod),
+			cmp.Compare(a.container, b.container),
+		)
 	})
 
 	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "READINESS", "LIVENESS", "STARTUP", "VERDICT")

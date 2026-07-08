@@ -1,9 +1,10 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"io"
-	"sort"
+	"slices"
 	"strconv"
 
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -33,14 +34,13 @@ func Hpa(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 		v, sev := hpaVerdict(h.Spec, h.Status)
 		list = append(list, entry{h, v, sev})
 	}
-	sort.SliceStable(list, func(i, j int) bool {
-		if ri, rj := sevRank(list[i].sev), sevRank(list[j].sev); ri != rj {
-			return ri > rj
-		}
-		if list[i].hpa.Namespace != list[j].hpa.Namespace {
-			return list[i].hpa.Namespace < list[j].hpa.Namespace
-		}
-		return list[i].hpa.Name < list[j].hpa.Name
+	// Deterministic tiebreak for rows with equal sort keys; the VERDICT sort
+	// applied at Flush is stable, so this order survives within each verdict.
+	slices.SortStableFunc(list, func(a, b entry) int {
+		return cmp.Or(
+			cmp.Compare(a.hpa.Namespace, b.hpa.Namespace),
+			cmp.Compare(a.hpa.Name, b.hpa.Name),
+		)
 	})
 
 	t := kube.NewTable(out, paint, "NS", "NAME", "REF", "MIN", "MAX", "CURRENT", "DESIRED", "VERDICT")

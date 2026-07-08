@@ -1,9 +1,10 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"io"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -73,14 +74,13 @@ func Spread(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 		v, sev := spreadVerdict(g.replicas, len(g.nodes), len(g.zones))
 		list = append(list, entry{g, v, sev})
 	}
-	sort.SliceStable(list, func(i, j int) bool {
-		if ri, rj := sevRank(list[i].sev), sevRank(list[j].sev); ri != rj {
-			return ri > rj
-		}
-		if list[i].g.ns != list[j].g.ns {
-			return list[i].g.ns < list[j].g.ns
-		}
-		return list[i].g.workload < list[j].g.workload
+	// Deterministic tiebreak for rows with equal sort keys; the VERDICT sort
+	// applied at Flush is stable, so this order survives within each verdict.
+	slices.SortStableFunc(list, func(a, b entry) int {
+		return cmp.Or(
+			cmp.Compare(a.g.ns, b.g.ns),
+			cmp.Compare(a.g.workload, b.g.workload),
+		)
 	})
 
 	t := kube.NewTable(out, paint, "NS", "WORKLOAD", "REPLICAS", "NODES", "ZONES", "VERDICT")
