@@ -4,6 +4,8 @@ import (
 	"os"
 
 	"github.com/PixiBixi/kubectl-klens/internal/cli"
+
+	_ "k8s.io/client-go/plugin/pkg/client/auth" // register oidc/gcp/azure/exec auth providers
 )
 
 var (
