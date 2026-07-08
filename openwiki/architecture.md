@@ -143,7 +143,7 @@ context's namespace (defaulting to `default`).
    function returning `(verdict, severity)`. The rules are **total** (first match
    wins, a default catch-all), so a verdict is always produced.
 2. Severity is one of `ok`/`warn`/`bad`/`muted`, mapped to a `Painter` method by
-   `sevPaint` and to a numeric tier by `sevRank`.
+   `sevPaint`.
 3. The `VERDICT` cell is colored by severity; the table gets a `SortRank` on
    `VERDICT` via `verdictRank(worstFirst...)`, and `SortBy(orDefault(f.Sort,
    "verdict"))` defaults to risk order so the riskiest rows sit nearest the
@@ -154,9 +154,11 @@ protection must read as bad, not OK** — e.g. a PDB with `DesiredHealthy == 0` 
 a multi-replica workload is `NO-GUARD` (red), because a drain can evict every
 replica at once. See `pdbVerdict` for the canonical example.
 
-Shared helpers (`orDefault`, `sevRank`, `sevPaint`, `verdictRank`) live in
-`pdb.go`; the other verdict commands reuse them. Node helpers (`nodeStatus`,
-`qtyOrNone`) live in `view.go`.
+Shared helpers (`orDefault`, `sevPaint`, `verdictRank`) live in
+[`internal/view/verdict.go`](../internal/view/verdict.go); `pdb`, `hpa`,
+`spread`, and `probes` reuse them (`pending` renders a plain `REASON` column
+and only needs `SortBy`). Node helpers (`nodeStatus`, `qtyOrNone`) live in
+`view.go`.
 
 ## Adding a subcommand
 
