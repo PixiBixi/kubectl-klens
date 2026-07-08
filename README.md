@@ -25,7 +25,7 @@ kubectl klens taints           # taints per node
 kubectl klens capacity         # CPU/mem capacity + allocatable
 kubectl klens zones            # region/zone per node
 kubectl klens pods-per-node    # pod count per node
-kubectl klens max-pods         # pod ceiling (allocatable), current count, free slots per node
+kubectl klens max-pods         # pod ceiling (allocatable), non-terminated count, free slots per node
 kubectl klens node-conditions  # node readiness + memory/disk/pid pressure
 kubectl klens reqlim           # requests/limits per container, current ns (excl kube-system)
 kubectl klens reqlim -A        # ... across all namespaces

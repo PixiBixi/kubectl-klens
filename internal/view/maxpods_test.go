@@ -44,6 +44,38 @@ func TestMaxPods(t *testing.T) {
 	}
 }
 
+func TestMaxPodsIgnoresTerminatedPods(t *testing.T) {
+	// Two running pods and one Completed (Succeeded) pod on the node. The
+	// terminated pod no longer holds a kubelet slot, so USED must be 2, not 3.
+	terminated := pod("done", "ns", "n1")
+	terminated.Status.Phase = corev1.PodSucceeded
+	c := fake.NewClientset(
+		nodeMaxPods("n1", 10),
+		pod("a", "ns", "n1"),
+		pod("b", "ns", "n1"),
+		terminated,
+	)
+	var buf bytes.Buffer
+	if err := MaxPods(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	// n1: max 10, 2 non-terminated pods, 8 free.
+	fields := strings.Fields(buf.String())
+	// header (4) + row: NODE MAXPODS USED FREE → n1 10 2 8
+	for _, want := range []string{"n1", "10", "2", "8"} {
+		found := false
+		for _, f := range fields {
+			if f == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing %q (terminated pod should not be counted):\n%s", want, buf.String())
+		}
+	}
+}
+
 func TestMaxPodsColorWhenFull(t *testing.T) {
 	// Node ceiling of 1 with one pod scheduled → FREE == 0.
 	c := fake.NewClientset(nodeMaxPods("node-a", 1), pod("p1", "ns", "node-a"))
