@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -146,7 +147,7 @@ func (a App) Run(args []string) int {
 	if err := fs.Parse(args[1:]); err != nil {
 		return 1
 	}
-	if f.Sort != "" && !contains(cmd.SortColumns, f.Sort) {
+	if f.Sort != "" && !slices.Contains(cmd.SortColumns, f.Sort) {
 		fmt.Fprintf(a.Err, "error: invalid --sort %q for %s (want %s)\n", f.Sort, cmd.Name, strings.Join(cmd.SortColumns, "|"))
 		return 1
 	}
@@ -175,15 +176,6 @@ func (a App) Run(args []string) int {
 		return 1
 	}
 	return 0
-}
-
-func contains(items []string, want string) bool {
-	for _, s := range items {
-		if s == want {
-			return true
-		}
-	}
-	return false
 }
 
 // lookup resolves a subcommand by name, accepting singular or plural forms

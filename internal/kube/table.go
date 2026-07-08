@@ -1,8 +1,9 @@
 package kube
 
 import (
+	"cmp"
 	"io"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -57,19 +58,19 @@ const tableGap = 2
 func (t *Table) Flush() error {
 	if idx := t.columnIndex(t.sortCol); idx >= 0 {
 		if key := t.sortRanks[strings.ToLower(t.sortCol)]; key != nil {
-			sort.SliceStable(t.rows, func(i, j int) bool {
-				return key(stripANSI(cell(t.rows[i], idx))) < key(stripANSI(cell(t.rows[j], idx)))
+			slices.SortStableFunc(t.rows, func(a, b []string) int {
+				return cmp.Compare(key(stripANSI(cell(a, idx))), key(stripANSI(cell(b, idx))))
 			})
 		} else {
 			numeric := columnIsNumeric(t.rows, idx)
-			sort.SliceStable(t.rows, func(i, j int) bool {
-				a, b := stripANSI(cell(t.rows[i], idx)), stripANSI(cell(t.rows[j], idx))
+			slices.SortStableFunc(t.rows, func(a, b []string) int {
+				av, bv := stripANSI(cell(a, idx)), stripANSI(cell(b, idx))
 				if numeric {
-					af, _ := strconv.ParseFloat(a, 64)
-					bf, _ := strconv.ParseFloat(b, 64)
-					return af < bf
+					af, _ := strconv.ParseFloat(av, 64)
+					bf, _ := strconv.ParseFloat(bv, 64)
+					return cmp.Compare(af, bf)
 				}
-				return a < b
+				return cmp.Compare(av, bv)
 			})
 		}
 	}

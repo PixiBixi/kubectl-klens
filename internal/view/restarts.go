@@ -1,9 +1,10 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"io"
-	"sort"
+	"slices"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
@@ -34,14 +35,12 @@ func Restarts(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []
 			list = append(list, entry{p.Namespace, p.Name, cs.Name, containerState(cs), cs.RestartCount})
 		}
 	}
-	sort.Slice(list, func(i, j int) bool {
-		if list[i].restarts != list[j].restarts {
-			return list[i].restarts > list[j].restarts
-		}
-		if list[i].ns != list[j].ns {
-			return list[i].ns < list[j].ns
-		}
-		return list[i].pod < list[j].pod
+	slices.SortFunc(list, func(a, b entry) int {
+		return cmp.Or(
+			cmp.Compare(b.restarts, a.restarts), // most restarts first
+			cmp.Compare(a.ns, b.ns),
+			cmp.Compare(a.pod, b.pod),
+		)
 	})
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "RESTARTS", "STATE")

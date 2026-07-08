@@ -1,10 +1,12 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
-	"sort"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -165,19 +167,14 @@ func substringSearcher(items []string) func(input string, index int) bool {
 }
 
 func sortSecrets(items []corev1.Secret) {
-	sort.Slice(items, func(i, j int) bool {
-		if items[i].Namespace != items[j].Namespace {
-			return items[i].Namespace < items[j].Namespace
-		}
-		return items[i].Name < items[j].Name
+	slices.SortFunc(items, func(a, b corev1.Secret) int {
+		return cmp.Or(
+			cmp.Compare(a.Namespace, b.Namespace),
+			cmp.Compare(a.Name, b.Name),
+		)
 	})
 }
 
 func sortedKeys(m map[string][]byte) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
+	return slices.Sorted(maps.Keys(m))
 }

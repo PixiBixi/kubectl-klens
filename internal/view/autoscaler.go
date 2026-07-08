@@ -1,11 +1,12 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -57,11 +58,11 @@ func renderAutoscalerStatus(status, sortCol string, paint kube.Painter, out io.W
 	}
 	// Default ordering: most recently changed nodegroup first. An explicit
 	// --sort (applied by SortBy at Flush) overrides this.
-	sort.SliceStable(groups, func(i, j int) bool {
-		if groups[i].lastChange != groups[j].lastChange {
-			return groups[i].lastChange > groups[j].lastChange
-		}
-		return groups[i].name < groups[j].name
+	slices.SortStableFunc(groups, func(a, b caGroup) int {
+		return cmp.Or(
+			cmp.Compare(b.lastChange, a.lastChange), // most recent first
+			cmp.Compare(a.name, b.name),
+		)
 	})
 	fmt.Fprintln(out)
 	t := kube.NewTable(out, paint, "NODEGROUP", "HEALTH", "READY", "TARGET", "MIN", "MAX", "SCALEUP", "SCALEDOWN", "LAST-CHANGE")

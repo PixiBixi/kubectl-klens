@@ -1,10 +1,11 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -23,7 +24,7 @@ type imageCount struct {
 // reference into registry, repository, and tag. The --sort column selects the
 // primary order (count desc by default, the others ascending).
 func ImageCount(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	less, err := imageCountLess(f.Sort)
+	compare, err := imageCountCmp(f.Sort)
 	if err != nil {
 		return err
 	}
@@ -43,7 +44,7 @@ func ImageCount(ctx context.Context, c kubernetes.Interface, f kube.Flags, args 
 	for k, n := range counts {
 		list = append(list, imageCount{k.registry, k.repo, k.tag, n})
 	}
-	sort.Slice(list, func(i, j int) bool { return less(list[i], list[j]) })
+	slices.SortFunc(list, compare)
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "COUNT", "REGISTRY", "IMAGE", "TAG")
 	for _, e := range list {
@@ -52,21 +53,17 @@ func ImageCount(ctx context.Context, c kubernetes.Interface, f kube.Flags, args 
 	return t.Flush()
 }
 
-// imageCountLess returns the comparison for the given --sort column. Empty
+// imageCountCmp returns the comparison for the given --sort column. Empty
 // defaults to "count". Every order falls back to count desc then the remaining
 // columns so output stays deterministic.
-func imageCountLess(column string) (func(a, b imageCount) bool, error) {
-	byCount := func(a, b imageCount) bool {
-		if a.n != b.n {
-			return a.n > b.n
-		}
-		if a.registry != b.registry {
-			return a.registry < b.registry
-		}
-		if a.repo != b.repo {
-			return a.repo < b.repo
-		}
-		return a.tag < b.tag
+func imageCountCmp(column string) (func(a, b imageCount) int, error) {
+	byCount := func(a, b imageCount) int {
+		return cmp.Or(
+			cmp.Compare(b.n, a.n), // count desc
+			cmp.Compare(a.registry, b.registry),
+			cmp.Compare(a.repo, b.repo),
+			cmp.Compare(a.tag, b.tag),
+		)
 	}
 	switch column {
 	case "", "count":
@@ -83,12 +80,9 @@ func imageCountLess(column string) (func(a, b imageCount) bool, error) {
 }
 
 // field orders ascending by the extracted string, falling back to tie when equal.
-func field(get func(imageCount) string, tie func(a, b imageCount) bool) func(a, b imageCount) bool {
-	return func(a, b imageCount) bool {
-		if get(a) != get(b) {
-			return get(a) < get(b)
-		}
-		return tie(a, b)
+func field(get func(imageCount) string, tie func(a, b imageCount) int) func(a, b imageCount) int {
+	return func(a, b imageCount) int {
+		return cmp.Or(cmp.Compare(get(a), get(b)), tie(a, b))
 	}
 }
 

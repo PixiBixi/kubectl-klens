@@ -1,9 +1,10 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"io"
-	"sort"
+	"slices"
 	"strconv"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,11 +35,11 @@ func PodsPerNode(ctx context.Context, c kubernetes.Interface, f kube.Flags, args
 	for node, n := range counts {
 		list = append(list, entry{node, n})
 	}
-	sort.Slice(list, func(i, j int) bool {
-		if list[i].n != list[j].n {
-			return list[i].n > list[j].n
-		}
-		return list[i].node < list[j].node
+	slices.SortFunc(list, func(a, b entry) int {
+		return cmp.Or(
+			cmp.Compare(b.n, a.n), // busiest node first
+			cmp.Compare(a.node, b.node),
+		)
 	})
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NODE", "PODS")

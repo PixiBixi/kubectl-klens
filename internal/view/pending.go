@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -40,8 +40,8 @@ func Pending(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []s
 		reason, detail := pendingReason(p)
 		list = append(list, entry{p, reason, detail})
 	}
-	sort.SliceStable(list, func(i, j int) bool {
-		return list[i].pod.CreationTimestamp.Before(&list[j].pod.CreationTimestamp)
+	slices.SortStableFunc(list, func(a, b entry) int {
+		return a.pod.CreationTimestamp.Time.Compare(b.pod.CreationTimestamp.Time)
 	})
 
 	t := kube.NewTable(out, paint, "NS", "POD", "AGE", "REASON", "DETAIL")
