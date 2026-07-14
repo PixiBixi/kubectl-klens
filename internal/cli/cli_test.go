@@ -189,7 +189,7 @@ func TestSortColumnsMatchHeaders(t *testing.T) {
 func assertSortColumnsInHeader(t *testing.T, name string, cols []string, header string) {
 	t.Helper()
 	got := map[string]bool{}
-	for _, h := range strings.Fields(strings.ToLower(header)) {
+	for h := range strings.FieldsSeq(strings.ToLower(header)) {
 		got[h] = true
 	}
 	for _, col := range cols {
@@ -228,7 +228,7 @@ nodeGroups:
 		t.Fatalf("run failed: %v", err)
 	}
 	var header string
-	for _, line := range strings.Split(buf.String(), "\n") {
+	for line := range strings.SplitSeq(buf.String(), "\n") {
 		if strings.HasPrefix(line, "NODEGROUP") {
 			header = line
 			break

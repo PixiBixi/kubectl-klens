@@ -3,6 +3,7 @@ package view
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -116,7 +117,7 @@ func pickSecret(ctx context.Context, c kubernetes.Interface, f kube.Flags) (*cor
 		return nil, err
 	}
 	if len(list.Items) == 0 {
-		return nil, fmt.Errorf("no secrets found in the current scope")
+		return nil, errors.New("no secrets found in the current scope")
 	}
 	sortSecrets(list.Items)
 	allNS := f.NamespaceScope() == ""

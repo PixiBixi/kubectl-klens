@@ -3,6 +3,7 @@ package view
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -63,13 +64,7 @@ func TestMaxPodsIgnoresTerminatedPods(t *testing.T) {
 	fields := strings.Fields(buf.String())
 	// header (4) + row: NODE MAXPODS USED FREE → n1 10 2 8
 	for _, want := range []string{"n1", "10", "2", "8"} {
-		found := false
-		for _, f := range fields {
-			if f == want {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(fields, want)
 		if !found {
 			t.Fatalf("missing %q (terminated pod should not be counted):\n%s", want, buf.String())
 		}

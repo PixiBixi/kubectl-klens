@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -120,10 +121,12 @@ func (a App) completionInstall(args []string) int {
 		return 1
 	}
 	path := filepath.Join(target, "kubectl_complete-klens")
+	//nolint:gosec // G306: the shim is an executable kubectl plugin, it must be 0755
 	if err := os.WriteFile(path, []byte(completionShim), 0o755); err != nil {
 		fmt.Fprintln(a.Err, "error: failed to write shim:", err)
 		return 1
 	}
+	//nolint:gosec // G302: same, the shim must carry the executable bit
 	if err := os.Chmod(path, 0o755); err != nil {
 		fmt.Fprintln(a.Err, "error: failed to set exec bit:", err)
 		return 1
@@ -147,13 +150,13 @@ func completionDir(override string) (string, error) {
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("cannot locate home dir; pass --dir <dir on your PATH>")
+		return "", errors.New("cannot locate home dir; pass --dir <dir on your PATH>")
 	}
 	krew := filepath.Join(home, ".krew", "bin")
 	if fi, err := os.Stat(krew); err == nil && fi.IsDir() {
 		return krew, nil
 	}
-	return "", fmt.Errorf("no krew bin dir found; pass --dir <dir on your PATH>")
+	return "", errors.New("no krew bin dir found; pass --dir <dir on your PATH>")
 }
 
 func dirOnPath(dir string) bool {
