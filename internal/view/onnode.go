@@ -2,7 +2,7 @@ package view
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +15,7 @@ import (
 // OnNode lists pods scheduled on the given node.
 func OnNode(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
 	if len(args) < 1 || args[0] == "" {
-		return fmt.Errorf("on-node requires a node name: kubectl klens on-node <node>")
+		return errors.New("on-node requires a node name: kubectl klens on-node <node>")
 	}
 	node := args[0]
 	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{

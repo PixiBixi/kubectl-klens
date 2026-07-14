@@ -93,10 +93,10 @@ func field(get func(imageCount) string, tie func(a, b imageCount) int) func(a, b
 func parseImageRef(ref string) (registry, repo, tag string) {
 	name, tag := splitImageTag(ref)
 	registry, repo = "docker.io", name
-	if slash := strings.Index(name, "/"); slash >= 0 {
-		first := name[:slash]
+	if before, after, ok := strings.Cut(name, "/"); ok {
+		first := before
 		if strings.ContainsAny(first, ".:") || first == "localhost" {
-			registry, repo = first, name[slash+1:]
+			registry, repo = first, after
 		}
 	}
 	return registry, repo, tag

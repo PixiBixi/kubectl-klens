@@ -41,7 +41,7 @@ func Pending(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []s
 		list = append(list, entry{p, reason, detail})
 	}
 	slices.SortStableFunc(list, func(a, b entry) int {
-		return a.pod.CreationTimestamp.Time.Compare(b.pod.CreationTimestamp.Time)
+		return a.pod.CreationTimestamp.Compare(b.pod.CreationTimestamp.Time)
 	})
 
 	t := kube.NewTable(out, paint, "NS", "POD", "AGE", "REASON", "DETAIL")
@@ -103,18 +103,18 @@ func containerImage(p corev1.Pod, name string) string {
 // the result is never empty.
 func schedulerCause(msg string) string {
 	const marker = "available: "
-	i := strings.Index(msg, marker)
-	if i < 0 {
+	_, after, ok := strings.Cut(msg, marker)
+	if !ok {
 		return trimSentence(msg)
 	}
-	tail := msg[i+len(marker):]
+	tail := after
 	if j := strings.Index(tail, ". "); j >= 0 {
 		tail = tail[:j] // drop the trailing "preemption: ..." sentence
 	}
 	tail = strings.TrimRight(tail, ".")
 
 	bestPhrase, bestCount := "", -1
-	for _, clause := range strings.Split(tail, ", ") {
+	for clause := range strings.SplitSeq(tail, ", ") {
 		count, phrase := splitLeadingCount(strings.TrimSpace(clause))
 		if k := strings.Index(phrase, " {"); k >= 0 {
 			phrase = phrase[:k] // strip the " {key: value}" blob

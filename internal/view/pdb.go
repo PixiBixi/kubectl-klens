@@ -109,10 +109,10 @@ func expectedCell(paint kube.Painter, n int32) string {
 // warning, more is healthy slack.
 func allowedCell(paint kube.Painter, n int32) string {
 	s := strconv.Itoa(int(n))
-	switch {
-	case n == 0:
+	switch n {
+	case 0:
 		return paint.Bad(s)
-	case n == 1:
+	case 1:
 		return paint.Warn(s)
 	default:
 		return paint.OK(s)

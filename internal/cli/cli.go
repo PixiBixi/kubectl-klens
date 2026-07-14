@@ -187,8 +187,8 @@ func lookup(name string) (Command, bool) {
 		}
 	}
 	alt := name + "s"
-	if strings.HasSuffix(name, "s") {
-		alt = strings.TrimSuffix(name, "s")
+	if before, ok := strings.CutSuffix(name, "s"); ok {
+		alt = before
 	}
 	for _, c := range commands {
 		if c.Name == alt {

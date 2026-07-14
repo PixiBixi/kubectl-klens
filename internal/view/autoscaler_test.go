@@ -99,7 +99,7 @@ func autoscalerCM(status string) *corev1.ConfigMap {
 // rowFields returns the whitespace-split cells of the table row whose first
 // cell is name, or nil if no such row was printed.
 func rowFields(out, name string) []string {
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if f := strings.Fields(line); len(f) > 0 && f[0] == name {
 			return f
 		}

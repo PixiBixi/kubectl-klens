@@ -3,6 +3,7 @@ package view
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -29,10 +30,9 @@ func Autoscaler(ctx context.Context, c kubernetes.Interface, f kube.Flags, args 
 	}
 	status, ok := cm.Data["status"]
 	if !ok {
-		return fmt.Errorf("configmap cluster-autoscaler-status has no \"status\" field")
+		return errors.New("configmap cluster-autoscaler-status has no \"status\" field")
 	}
-	renderAutoscalerStatus(status, f.Sort, kube.NewPainter(f), out)
-	return nil
+	return renderAutoscalerStatus(status, f.Sort, kube.NewPainter(f), out)
 }
 
 type caClusterWide struct {
@@ -46,15 +46,15 @@ type caGroup struct {
 // renderAutoscalerStatus parses the status into a normalized model and writes a
 // summary line and nodegroup table, or echoes the input verbatim when neither
 // the YAML nor the legacy text format is recognized.
-func renderAutoscalerStatus(status, sortCol string, paint kube.Painter, out io.Writer) {
+func renderAutoscalerStatus(status, sortCol string, paint kube.Painter, out io.Writer) error {
 	cw, groups, ok := parseAutoscalerStatus(status)
 	if !ok {
 		fmt.Fprintln(out, status)
-		return
+		return nil
 	}
 	fmt.Fprintln(out, clusterWideSummary(cw, paint))
 	if len(groups) == 0 {
-		return
+		return nil
 	}
 	// Default ordering: most recently changed nodegroup first. An explicit
 	// --sort (applied by SortBy at Flush) overrides this.
@@ -71,7 +71,7 @@ func renderAutoscalerStatus(status, sortCol string, paint kube.Painter, out io.W
 			scaleState(paint, dash(g.scaleUp)), scaleState(paint, dash(g.scaleDown)), paint.Muted(dash(g.lastChange)))
 	}
 	t.SortBy(sortCol)
-	t.Flush()
+	return t.Flush()
 }
 
 func clusterWideSummary(cw caClusterWide, paint kube.Painter) string {
@@ -282,9 +282,9 @@ func parseLegacyNodeGroups(lines []string) []caGroup {
 // <time>:" header line, if present.
 func autoscalerTimestamp(status string) string {
 	const marker = "status at "
-	for _, line := range strings.Split(status, "\n") {
-		if i := strings.Index(line, marker); i >= 0 {
-			return strings.TrimSuffix(strings.TrimSpace(line[i+len(marker):]), ":")
+	for line := range strings.SplitSeq(status, "\n") {
+		if _, after, ok := strings.Cut(line, marker); ok {
+			return strings.TrimSuffix(strings.TrimSpace(after), ":")
 		}
 	}
 	return ""

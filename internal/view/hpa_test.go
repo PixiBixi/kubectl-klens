@@ -14,7 +14,7 @@ import (
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
-func ptr32(n int32) *int32 { return &n }
+func ptr32(n int32) *int32 { return new(n) }
 
 func TestHpaVerdict(t *testing.T) {
 	blind := []autoscalingv2.HorizontalPodAutoscalerCondition{{Type: autoscalingv2.ScalingActive, Status: corev1.ConditionFalse}}
