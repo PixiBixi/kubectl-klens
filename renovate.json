@@ -5,6 +5,7 @@
   ],
   "labels": ["dependencies"],
   "assignees": ["PixiBixi"],
+  "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
     {
       "description": "Group all GitHub Actions updates",
@@ -18,6 +19,12 @@
       "matchManagers": ["gomod"],
       "matchDepTypes": ["golang"],
       "groupName": "go-toolchain"
+    },
+    {
+      "description": "Kubernetes modules share a v0.x release train and must move in lockstep; batch them into one PR",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["k8s.io/**", "sigs.k8s.io/**"],
+      "groupName": "kubernetes"
     }
   ]
 }
