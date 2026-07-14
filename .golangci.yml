@@ -1,0 +1,52 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # govet, staticcheck, errcheck, ineffassign, unused
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - durationcheck
+    - errorlint
+    - forcetypeassert
+    - gosec
+    - misspell
+    - modernize
+    - nilerr
+    - noctx
+    - perfsprint
+    - revive
+    - unconvert
+    - usestdlibvars
+  settings:
+    errcheck:
+      # Output writers: a failed write to stdout/pipe is not actionable here.
+      exclude-functions:
+        - (*text/tabwriter.Writer).Flush
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    gosec:
+      excludes:
+        - G104 # unhandled errors: fully overlaps errcheck, which is tuned above
+    revive:
+      rules:
+        # Style rules inappropriate for this internal, non-published codebase.
+        - name: package-comments
+          disabled: true
+        - name: exported # internal/ packages are not a public API
+          disabled: true
+        - name: redefines-builtin-id # min/max/cap as local names is readable here
+          disabled: true
+        - name: unused-parameter # views share a fixed RunFunc signature
+          disabled: true
+  exclusions:
+    rules:
+      # gosec on tests is noisy (file perms, variable file inclusion) and not
+      # a runtime concern.
+      - path: _test\.go
+        linters:
+          - gosec
