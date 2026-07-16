@@ -137,9 +137,13 @@ make snapshot   # goreleaser --snapshot --clean (dry-run)
 go test -race ./internal/view -run TestNodes    # single test
 ```
 
-`Taskfile.yml` mirrors the Makefile (`task build`, `task test`, ...). CI runs
-`go mod verify`, build, `go vet`, `staticcheck`, and `go test -race`;
-**staticcheck must pass**.
+`Taskfile.yml` mirrors the Makefile (`task build`, `task test`, ...). `make lint`
+runs **golangci-lint** (`.github/workflows/lint.yml`, config in `.golangci.yml`),
+the same linter CI enforces. The
+`ci.yml` Test job runs `go mod verify`, build, and `go test -race`. Separate
+hardening workflows add `govulncheck` (dependency CVEs), `zizmor` (GitHub Actions
+security), goimports formatting, and markdownlint; Renovate keeps dependencies
+current.
 
 ## Release
 
