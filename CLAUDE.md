@@ -25,15 +25,17 @@ cobra — dispatch is a hand-rolled flag-based switch.
 ```bash
 make build      # go build -ldflags "-s -w" -o kubectl-klens .
 make test       # go test -race ./...
-make lint       # go vet ./... && staticcheck ./...
+make lint       # golangci-lint run (config: .golangci.yml)
 make snapshot   # goreleaser release --snapshot --clean (dry-run)
 
 go test -race ./internal/view -run TestNodes   # single test
 ```
 
-`Taskfile.yml` mirrors the Makefile (`task build`, `task test`, ...). CI runs
-`go mod verify`, build, `go vet`, `staticcheck`, and `go test -race`; staticcheck
-must pass.
+`Taskfile.yml` mirrors the Makefile (`task build`, `task test`, ...). `make lint`
+runs **golangci-lint** (`.golangci.yml`, `version: "2"`) — the same linter the
+`Lint` CI job enforces. CI is split across `.github/workflows/`: `ci.yml`
+(`go mod verify`, build, `go test -race`), `lint.yml` (golangci-lint), plus
+`go-format`, `govulncheck`, `github-actions`, and `markdownlint` workflows.
 
 ## Architecture
 

@@ -149,7 +149,7 @@ Then `kubectl klens <TAB>` completes subcommands and flags.
 
 ```bash
 make test      # go test -race ./...
-make lint      # go vet + staticcheck
+make lint      # golangci-lint run
 make build     # local binary
 make snapshot  # goreleaser dry-run
 ```

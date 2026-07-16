@@ -7,10 +7,9 @@ tasks:
       - go build -ldflags "-s -w" -o kubectl-klens .
 
   lint:
-    desc: Run go vet and staticcheck
+    desc: Run golangci-lint (config: .golangci.yml)
     cmds:
-      - go vet ./...
-      - staticcheck ./...
+      - golangci-lint run
 
   test:
     desc: Run tests with the race detector

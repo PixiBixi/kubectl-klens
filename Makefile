@@ -4,9 +4,8 @@
 build: ## Build the local kubectl-klens binary
 	go build -ldflags "-s -w" -o kubectl-klens .
 
-lint: ## Run go vet and staticcheck
-	go vet ./...
-	staticcheck ./...
+lint: ## Run golangci-lint (config: .golangci.yml)
+	golangci-lint run
 
 test: ## Run tests with the race detector
 	go test -race ./...
