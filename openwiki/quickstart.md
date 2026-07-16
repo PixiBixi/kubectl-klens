@@ -1,7 +1,7 @@
 # kubectl-klens — Quickstart
 
 `kubectl-klens` is a single-binary **kubectl plugin** (`kubectl klens`) bundling
-~24 read-only cluster-inspection shortcuts behind one dispatcher. It is the
+~25 read-only cluster-inspection shortcuts behind one dispatcher. It is the
 codified form of a pile of "quick look at the cluster" one-liners: nodes,
 capacity, requests/limits, images, restarts, PVCs, and a set of *verdict*
 commands (`pdb`, `hpa`, `spread`, `probes`, `pending`) that classify a
@@ -131,7 +131,7 @@ Load kubectl's own completion first, e.g. `source <(kubectl completion zsh)`.
 ```bash
 make build      # go build -ldflags "-s -w" -o kubectl-klens .
 make test       # go test -race ./...
-make lint       # go vet ./... && staticcheck ./...
+make lint       # golangci-lint run (config: .golangci.yml)
 make snapshot   # goreleaser --snapshot --clean (dry-run)
 
 go test -race ./internal/view -run TestNodes    # single test
