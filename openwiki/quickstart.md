@@ -52,7 +52,7 @@ The authoritative list is the `commands` slice in
 - `no-limits` / `no-requests` — containers missing limits / requests
 - `images` — image per container per pod
 - `image-count` — image occurrence counts split registry/image/tag (cluster-wide)
-- `restarts` — restarted containers + crash reason
+- `restarts` — restarted containers + crash reason + last exit code (137/143 = SIGKILL/SIGTERM)
 - `pvc` — PVCs bound to pod + node
 - `default-sa` — pods still on the default service account
 - `privileged` — containers with privileged/host security flags
