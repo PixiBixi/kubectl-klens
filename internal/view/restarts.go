@@ -16,7 +16,8 @@ import (
 
 // Restarts lists containers that have restarted, most restarts first, with the
 // reason behind the current or last termination (e.g. CrashLoopBackOff,
-// OOMKilled). Containers with zero restarts are omitted.
+// OOMKilled) and its exit code (137/143 = SIGKILL/SIGTERM). Containers with zero
+// restarts are omitted.
 func Restarts(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
 	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -25,6 +26,8 @@ func Restarts(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []
 	type entry struct {
 		ns, pod, container, state string
 		restarts                  int32
+		exit                      int32
+		hasExit                   bool
 	}
 	var list []entry
 	for _, p := range pods.Items {
@@ -32,7 +35,8 @@ func Restarts(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []
 			if cs.RestartCount == 0 {
 				continue
 			}
-			list = append(list, entry{p.Namespace, p.Name, cs.Name, containerState(cs), cs.RestartCount})
+			exit, hasExit := lastExitCode(cs)
+			list = append(list, entry{p.Namespace, p.Name, cs.Name, containerState(cs), cs.RestartCount, exit, hasExit})
 		}
 	}
 	slices.SortFunc(list, func(a, b entry) int {
@@ -43,12 +47,52 @@ func Restarts(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []
 		)
 	})
 	paint := kube.NewPainter(f)
-	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "RESTARTS", "STATE")
+	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "RESTARTS", "STATE", "EXIT")
+	t.SortRank("EXIT", exitRank)
 	for _, e := range list {
-		t.Row(e.ns, e.pod, e.container, paint.Warn(strconv.Itoa(int(e.restarts))), paint.Status(e.state))
+		t.Row(e.ns, e.pod, e.container, paint.Warn(strconv.Itoa(int(e.restarts))), paint.Status(e.state), exitCell(paint, e.exit, e.hasExit))
 	}
 	t.SortBy(f.Sort)
 	return t.Flush()
+}
+
+// lastExitCode reports the exit code of the container's most recent termination:
+// the current terminated state if present, else the last termination. The bool
+// is false when the container has no recorded termination (e.g. only ever
+// Waiting/CrashLoopBackOff without a completed run).
+func lastExitCode(cs corev1.ContainerStatus) (int32, bool) {
+	switch {
+	case cs.State.Terminated != nil:
+		return cs.State.Terminated.ExitCode, true
+	case cs.LastTerminationState.Terminated != nil:
+		return cs.LastTerminationState.Terminated.ExitCode, true
+	default:
+		return 0, false
+	}
+}
+
+// exitCell renders the EXIT column: green for a clean exit (0), red for any
+// non-zero code (137/143 = SIGKILL/SIGTERM from OOM or eviction, else an app
+// error), muted "-" when no termination is recorded.
+func exitCell(paint kube.Painter, code int32, ok bool) string {
+	if !ok {
+		return paint.Muted("-")
+	}
+	s := strconv.Itoa(int(code))
+	if code == 0 {
+		return paint.OK(s)
+	}
+	return paint.Bad(s)
+}
+
+// exitRank orders the EXIT column numerically when sorted, keeping the muted "-"
+// placeholder ahead of real codes instead of falling back to text ordering.
+func exitRank(cell string) int {
+	if cell == "-" {
+		return -1
+	}
+	n, _ := strconv.Atoi(cell)
+	return n
 }
 
 // containerState reports why a container is or was last down: the current

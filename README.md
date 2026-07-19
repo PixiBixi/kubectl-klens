@@ -36,7 +36,7 @@ kubectl klens images -A        # ... across all namespaces
 kubectl klens image-count      # image occurrence counts, split registry/image/tag (cluster-wide)
 kubectl klens image-count --sort registry   # sort by a column: count|registry|image|tag
 kubectl klens on-node <node>   # pods on a node
-kubectl klens restarts         # restarted containers + crash reason, current ns (-A for all)
+kubectl klens restarts         # restarted containers + crash reason + last exit code, current ns (-A for all)
 kubectl klens pvc              # PVCs bound to pod + node, current ns
 kubectl klens pvc -A           # ... across all namespaces
 kubectl klens default-sa       # pods still using the default service account
