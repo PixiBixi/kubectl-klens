@@ -112,9 +112,23 @@ inject a fake client + observable `Namespace` resolver and inspect
 
 ## Releasing
 
-Push a `v*` tag → `.github/workflows/release.yml` runs goreleaser, which builds
-cross-platform archives and pushes the regenerated `plugins/klens.yaml` to the
-central [PixiBixi/krew-index](https://github.com/PixiBixi/krew-index) repo (via
-the `krews` publisher, using the `KREW_INDEX_TOKEN` PAT secret for the cross-repo
-push). That is how users `kubectl krew upgrade pixibixi/klens`.
-Version/commit/date are injected via `-X main.version=...` ldflags.
+Releases are **automatic** on push to `master`. `.github/workflows/release.yml`
+runs `mathieudutour/github-tag-action` to compute the next `vX.Y.Z` from
+conventional commits since the last tag (`feat` → minor, `fix` → patch,
+`default_bump: false` so non-releasable commits produce nothing), pushes the tag,
+then runs goreleaser in the same job — no separate PAT needed because a
+`GITHUB_TOKEN`-pushed tag would not re-trigger a workflow. Pushing a `v*` tag by
+hand still works as a manual escape hatch (the job's goreleaser steps also fire on
+`ref_type == 'tag'`).
+
+goreleaser builds cross-platform archives and pushes the regenerated
+`plugins/klens.yaml` to the central
+[PixiBixi/krew-index](https://github.com/PixiBixi/krew-index) repo (via the `krews`
+publisher, using the `KREW_INDEX_TOKEN` PAT secret for the cross-repo push). That
+is how users `kubectl krew upgrade pixibixi/klens`. Version/commit/date are
+injected via `-X main.version=...` ldflags.
+
+Renovate drives the version bumps: `renovate.json` maps minor Go-module updates to
+`feat(deps):` (minor release) and patch/digest to `fix(deps):` (patch release);
+GitHub Actions updates stay `chore(deps):` (automerged, **no** release — they don't
+ship in the binary). All minor/patch/digest updates automerge via PR once CI passes.
