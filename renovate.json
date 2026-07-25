@@ -5,14 +5,32 @@
   ],
   "labels": ["dependencies"],
   "assignees": ["PixiBixi"],
+  "semanticCommits": "enabled",
   "postUpdateOptions": ["gomodTidy"],
   "packageRules": [
     {
-      "description": "Group all GitHub Actions updates",
-      "matchManagers": ["github-actions"],
-      "groupName": "github-actions",
+      "description": "Automerge all safe updates (minor/patch/digest) via PR once CI passes",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
       "automerge": true,
       "automergeType": "pr"
+    },
+    {
+      "description": "Minor Go module bumps ship in the binary -> cut a minor release",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor"],
+      "semanticCommitType": "feat"
+    },
+    {
+      "description": "Patch/digest Go module bumps ship in the binary -> cut a patch release",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["patch", "digest"],
+      "semanticCommitType": "fix"
+    },
+    {
+      "description": "GitHub Actions updates do not ship in the binary -> no release",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions",
+      "semanticCommitType": "chore"
     },
     {
       "description": "Go toolchain updates",
