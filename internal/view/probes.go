@@ -31,11 +31,12 @@ func Probes(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 		verdict, sev                 string
 	}
 	var list []entry
-	for _, p := range pods.Items {
-		if p.Namespace == "kube-system" {
+	for i := range pods.Items {
+		p := &pods.Items[i]
+		if skipNamespace(f, p.Namespace) {
 			continue
 		}
-		if ref := metav1.GetControllerOf(&p); ref != nil && ref.Kind == "Job" {
+		if ref := metav1.GetControllerOf(p); ref != nil && ref.Kind == "Job" {
 			continue
 		}
 		for _, ctr := range p.Spec.Containers {

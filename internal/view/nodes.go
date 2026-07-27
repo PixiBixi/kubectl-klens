@@ -18,7 +18,8 @@ func Nodes(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []str
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NAME", "STATUS", "NODEPOOL", "INSTANCE-TYPE")
-	for _, n := range nodes.Items {
+	for i := range nodes.Items {
+		n := &nodes.Items[i]
 		t.Row(
 			n.Name,
 			paint.Status(nodeStatus(n)),

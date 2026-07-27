@@ -38,11 +38,17 @@ cluster-scoped. See [Namespace scope](#namespace-scope) for details.
 | `node-conditions` | node readiness + memory/disk/pid pressure |
 | `on-node <node>` | pods on a node |
 
+The `STATUS` column of `nodes` and `node-conditions` separates the two ways a
+node can be unhealthy: `NotReady` is a kubelet that is answering and reporting
+itself unready, while `Unknown` is a kubelet that has **stopped reporting
+altogether** — the state that starts the eviction clock once the `unreachable`
+toleration expires. Both are red.
+
 ### Workloads & resources
 
 | Command | Shows |
 | --- | --- |
-| `reqlim` † | requests/limits per container (excl. kube-system) |
+| `reqlim` † | requests/limits per container (`-A` excl. kube-system) |
 | `no-limits` † | containers missing CPU/mem limits |
 | `no-requests` † | containers missing CPU/mem requests |
 | `images` † | image per container per pod |
@@ -71,7 +77,9 @@ cluster-scoped. See [Namespace scope](#namespace-scope) for details.
 | `pending` † | Pending pods + synthesized blocking reason |
 | `hpa` † | HorizontalPodAutoscalers + autoscaling verdict |
 | `spread` † | replica placement across nodes/zones + SPOF verdict |
-| `probes` † | readiness/liveness/startup probes + verdict (excl kube-system) |
+| `probes` † | readiness/liveness/startup probes + verdict |
+
+`probes` skips kube-system in the `-A` view, like `reqlim` and `no-limits`.
 
 ### Cluster autoscaler
 
@@ -113,6 +121,46 @@ recognized. The table's `LAST-CHANGE` column shows each nodegroup's most recent
 `lastTransitionTime` (across its health/scale-up/scale-down conditions), so a
 recent scaling event is easy to spot — it is only populated from the
 structured-YAML format.
+
+## Container kinds
+
+`reqlim`, `no-limits`, `no-requests`, `images`, `restarts` and `privileged`
+report **every** container of a pod, not just the app ones, and name the role in
+a `KIND` column:
+
+| KIND | Container |
+| --- | --- |
+| `app` | a regular `spec.containers` entry |
+| `init` | a `spec.initContainers` entry (including native sidecars) |
+| `eph` | an ephemeral debug container (`kubectl debug`) |
+
+This matters because init containers are not second-class: their requests count
+toward the pod's scheduling footprint and toward `ResourceQuota`, their images
+are pulled and executed on the node, a privileged one escalates exactly as far
+as an app container, and one looping in `CrashLoopBackOff` wedges the whole pod.
+Rows are emitted in startup order (init, then app, then ephemeral) and the
+container name is printed verbatim, so it can be pasted straight into
+`kubectl logs -c <name>`. `--sort kind` groups by role. `image-count` folds all
+three kinds into its totals (it has no per-container column).
+
+## Security flags
+
+`privileged` reports these tokens in its `FLAGS` column:
+
+| Flag | Meaning |
+| --- | --- |
+| `privileged` | `securityContext.privileged: true` |
+| `privesc` | `allowPrivilegeEscalation: true`, set explicitly |
+| `privesc-default` | `allowPrivilegeEscalation` unset — resolved to **true** |
+| `caps=A+B` | added host-level capabilities (`SYS_ADMIN`, `BPF`, …) |
+| `root` | `runAsUser: 0`, from the container or pod security context |
+| `hostPort` | a container port bound on the node |
+| `hostNetwork`, `hostPID`, `hostIPC` | pod sharing that host namespace |
+| `hostPath` | pod mounting a host directory |
+
+`privesc-default` is only ever reported **alongside** another finding, never on
+its own: nearly every container in a normal cluster leaves the field unset, so
+triggering a row on it would bury the real findings instead of surfacing them.
 
 ## Sorting
 

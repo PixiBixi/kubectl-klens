@@ -13,29 +13,34 @@ import (
 )
 
 // NoLimits lists containers missing CPU and/or memory limits (kube-system
-// excluded), the usual source of noisy-neighbour and eviction surprises.
+// excluded from the -A view), the usual source of noisy-neighbour and eviction
+// surprises.
 func NoLimits(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	return reportMissing(ctx, c, f, out, func(ctr corev1.Container) corev1.ResourceList {
+	return reportMissing(ctx, c, f, out, func(ctr *corev1.Container) corev1.ResourceList {
 		return ctr.Resources.Limits
 	})
 }
 
 // reportMissing lists containers whose selected resource list is missing cpu
-// and/or memory, with a MISSING column naming the gaps. kube-system is skipped.
-func reportMissing(ctx context.Context, c kubernetes.Interface, f kube.Flags, out io.Writer, pick func(corev1.Container) corev1.ResourceList) error {
+// and/or memory, with a MISSING column naming the gaps. Init and ephemeral
+// containers are checked too: LimitRange and ResourceQuota admission apply to
+// them as well, so an unbounded init container is a real gap, not a detail.
+// kube-system is skipped only when listing across all namespaces.
+func reportMissing(ctx context.Context, c kubernetes.Interface, f kube.Flags, out io.Writer, pick func(*corev1.Container) corev1.ResourceList) error {
 	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
-	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "MISSING")
-	for _, p := range pods.Items {
-		if p.Namespace == "kube-system" {
+	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "KIND", "MISSING")
+	for i := range pods.Items {
+		p := &pods.Items[i]
+		if skipNamespace(f, p.Namespace) {
 			continue
 		}
-		for _, ctr := range p.Spec.Containers {
-			if m := missingResources(pick(ctr)); m != "" {
-				t.Row(p.Namespace, p.Name, ctr.Name, paint.Warn(m))
+		for _, pc := range podContainers(p) {
+			if m := missingResources(pick(pc.Spec)); m != "" {
+				t.Row(p.Namespace, p.Name, pc.Spec.Name, pc.Kind, paint.Warn(m))
 			}
 		}
 	}

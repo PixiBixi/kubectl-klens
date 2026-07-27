@@ -16,27 +16,31 @@ import (
 
 // Restarts lists containers that have restarted, most restarts first, with the
 // reason behind the current or last termination (e.g. CrashLoopBackOff,
-// OOMKilled) and its exit code (137/143 = SIGKILL/SIGTERM). Containers with zero
-// restarts are omitted.
+// OOMKilled) and its exit code (137/143 = SIGKILL/SIGTERM). Init and ephemeral
+// containers are included — an init container looping in CrashLoopBackOff is a
+// classic cause of a pod that never starts, and it used to be invisible here.
+// Containers with zero restarts are omitted.
 func Restarts(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
 	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	type entry struct {
-		ns, pod, container, state string
-		restarts                  int32
-		exit                      int32
-		hasExit                   bool
+		ns, pod, container, kind, state string
+		restarts                        int32
+		exit                            int32
+		hasExit                         bool
 	}
 	var list []entry
-	for _, p := range pods.Items {
-		for _, cs := range p.Status.ContainerStatuses {
+	for i := range pods.Items {
+		p := &pods.Items[i]
+		for _, pcs := range podContainerStatuses(p) {
+			cs := pcs.Status
 			if cs.RestartCount == 0 {
 				continue
 			}
 			exit, hasExit := lastExitCode(cs)
-			list = append(list, entry{p.Namespace, p.Name, cs.Name, containerState(cs), cs.RestartCount, exit, hasExit})
+			list = append(list, entry{p.Namespace, p.Name, cs.Name, pcs.Kind, containerState(cs), cs.RestartCount, exit, hasExit})
 		}
 	}
 	slices.SortFunc(list, func(a, b entry) int {
@@ -47,10 +51,10 @@ func Restarts(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []
 		)
 	})
 	paint := kube.NewPainter(f)
-	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "RESTARTS", "STATE", "EXIT")
+	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "KIND", "RESTARTS", "STATE", "EXIT")
 	t.SortRank("EXIT", exitRank)
 	for _, e := range list {
-		t.Row(e.ns, e.pod, e.container, paint.Warn(strconv.Itoa(int(e.restarts))), paint.Status(e.state), exitCell(paint, e.exit, e.hasExit))
+		t.Row(e.ns, e.pod, e.container, e.kind, paint.Warn(strconv.Itoa(int(e.restarts))), paint.Status(e.state), exitCell(paint, e.exit, e.hasExit))
 	}
 	t.SortBy(f.Sort)
 	return t.Flush()
@@ -60,7 +64,7 @@ func Restarts(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []
 // the current terminated state if present, else the last termination. The bool
 // is false when the container has no recorded termination (e.g. only ever
 // Waiting/CrashLoopBackOff without a completed run).
-func lastExitCode(cs corev1.ContainerStatus) (int32, bool) {
+func lastExitCode(cs *corev1.ContainerStatus) (int32, bool) {
 	switch {
 	case cs.State.Terminated != nil:
 		return cs.State.Terminated.ExitCode, true
@@ -97,7 +101,7 @@ func exitRank(cell string) int {
 
 // containerState reports why a container is or was last down: the current
 // waiting reason, else the current/last termination reason, else its run state.
-func containerState(cs corev1.ContainerStatus) string {
+func containerState(cs *corev1.ContainerStatus) string {
 	switch {
 	case cs.State.Waiting != nil && cs.State.Waiting.Reason != "":
 		return cs.State.Waiting.Reason

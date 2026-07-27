@@ -20,7 +20,8 @@ func NodeConditions(ctx context.Context, c kubernetes.Interface, f kube.Flags, a
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NAME", "STATUS", "MEMORY", "DISK", "PID")
-	for _, n := range nodes.Items {
+	for i := range nodes.Items {
+		n := &nodes.Items[i]
 		t.Row(
 			n.Name,
 			paint.Status(nodeStatus(n)),
@@ -35,7 +36,7 @@ func NodeConditions(ctx context.Context, c kubernetes.Interface, f kube.Flags, a
 
 // conditionStatus returns the status (True/False/Unknown) of a node condition,
 // or "Unknown" when the node does not report it.
-func conditionStatus(n corev1.Node, condType corev1.NodeConditionType) string {
+func conditionStatus(n *corev1.Node, condType corev1.NodeConditionType) string {
 	for _, cond := range n.Status.Conditions {
 		if cond.Type == condType {
 			return string(cond.Status)
