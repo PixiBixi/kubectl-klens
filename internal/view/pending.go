@@ -11,6 +11,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/duration"
 	"k8s.io/client-go/kubernetes"
 
@@ -21,8 +22,14 @@ import (
 // scheduler's dominant rejection cause, or the container waiting reason (image
 // pull / config errors). Everything is read from the pod object, so no events
 // or extra API calls are needed. Oldest (most-stuck) pods sort first.
+//
+// The phase filter is pushed down to the apiserver. It is the difference between
+// transferring three pods and transferring every pod in the cluster, since the
+// interesting answer here is almost always a handful of rows.
 func Pending(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector("status.phase", string(corev1.PodPending)).String(),
+	})
 	if err != nil {
 		return err
 	}
@@ -32,11 +39,8 @@ func Pending(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []s
 		pod            corev1.Pod
 		reason, detail string
 	}
-	var list []entry
-	for _, p := range pods.Items {
-		if p.Status.Phase != corev1.PodPending {
-			continue
-		}
+	list := make([]entry, 0, len(pods))
+	for _, p := range pods {
 		reason, detail := pendingReason(p)
 		list = append(list, entry{p, reason, detail})
 	}
@@ -136,9 +140,10 @@ func schedulerCause(msg string) string {
 // splitLeadingCount splits a leading integer off "3 Insufficient cpu" → (3,
 // "Insufficient cpu"); returns (-1, s) when there is no leading count.
 func splitLeadingCount(s string) (int, string) {
-	if fields := strings.SplitN(s, " ", 2); len(fields) == 2 {
-		if n, err := strconv.Atoi(fields[0]); err == nil {
-			return n, fields[1]
+	// Named parts, not fields: this file imports the fields package now.
+	if parts := strings.SplitN(s, " ", 2); len(parts) == 2 {
+		if n, err := strconv.Atoi(parts[0]); err == nil {
+			return n, parts[1]
 		}
 	}
 	return -1, s

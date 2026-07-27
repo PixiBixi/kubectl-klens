@@ -16,14 +16,14 @@ import (
 // scheduling footprint and toward ResourceQuota, so leaving them out
 // understated the real cost. kube-system is excluded from the -A view only.
 func Reqlim(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "KIND", "REQ_CPU", "LIM_CPU", "REQ_MEM", "LIM_MEM")
-	for i := range pods.Items {
-		p := &pods.Items[i]
+	for i := range pods {
+		p := &pods[i]
 		if skipNamespace(f, p.Namespace) {
 			continue
 		}

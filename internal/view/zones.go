@@ -12,13 +12,13 @@ import (
 
 // Zones shows the region and zone topology labels per node.
 func Zones(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	nodes, err := c.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NAME", "REGION", "ZONE")
-	for _, n := range nodes.Items {
+	for _, n := range nodes {
 		t.Row(
 			n.Name,
 			kube.Label(paint, n.Labels, "topology.kubernetes.io/region"),

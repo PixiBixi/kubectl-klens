@@ -18,7 +18,7 @@ func OnNode(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 		return errors.New("on-node requires a node name: kubectl klens on-node <node>")
 	}
 	node := args[0]
-	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{
+	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{
 		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", node).String(),
 	})
 	if err != nil {
@@ -26,10 +26,7 @@ func OnNode(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NS", "POD", "STATUS", "NODE")
-	for _, p := range pods.Items {
-		if p.Spec.NodeName != node {
-			continue // defensive: fake clientset ignores FieldSelector
-		}
+	for _, p := range pods {
 		t.Row(p.Namespace, p.Name, paint.Status(string(p.Status.Phase)), p.Spec.NodeName)
 	}
 	t.SortBy(f.Sort)

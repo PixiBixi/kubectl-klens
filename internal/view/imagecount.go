@@ -30,14 +30,14 @@ func ImageCount(ctx context.Context, c kubernetes.Interface, f kube.Flags, args 
 	if err != nil {
 		return err
 	}
-	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	type key struct{ registry, repo, tag string }
 	counts := map[key]int{}
-	for i := range pods.Items {
-		for _, pc := range podContainers(&pods.Items[i]) {
+	for i := range pods {
+		for _, pc := range podContainers(&pods[i]) {
 			registry, repo, tag := parseImageRef(pc.Spec.Image)
 			counts[key{registry, repo, tag}]++
 		}

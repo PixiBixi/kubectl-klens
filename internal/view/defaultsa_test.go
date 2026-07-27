@@ -8,13 +8,14 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
 func TestDefaultSAFilters(t *testing.T) {
-	c := fake.NewClientset(
+	// The SA match is pushed down, so the fake has to apply the field selector for
+	// the custom-SA pod to be excluded the way a real apiserver excludes it.
+	c := newClientsetWithFieldSelectors(
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Name: "pod-default", Namespace: "default"},
 			Spec:       corev1.PodSpec{ServiceAccountName: "default"},
@@ -35,4 +36,5 @@ func TestDefaultSAFilters(t *testing.T) {
 	if strings.Contains(out, "pod-custom") {
 		t.Fatalf("pod-custom (SA=custom-sa) must not be listed:\n%s", out)
 	}
+	assertPodFieldSelector(t, c, "spec.serviceAccountName=default")
 }

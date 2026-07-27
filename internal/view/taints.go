@@ -14,13 +14,13 @@ import (
 
 // Taints lists each node's taints as key=value:effect, comma-joined.
 func Taints(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	nodes, err := c.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NAME", "TAINTS")
-	for _, n := range nodes.Items {
+	for _, n := range nodes {
 		var ts []string
 		for _, taint := range n.Spec.Taints {
 			ts = append(ts, fmt.Sprintf("%s=%s:%s", taint.Key, taint.Value, taintEffect(paint, string(taint.Effect))))

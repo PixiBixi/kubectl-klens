@@ -23,7 +23,9 @@ func TestOnNodeRequiresArg(t *testing.T) {
 }
 
 func TestOnNodeFilters(t *testing.T) {
-	c := fake.NewClientset(
+	// on-node relies entirely on the apiserver's field selector now that the
+	// redundant client-side check is gone, so the fake must apply it.
+	c := newClientsetWithFieldSelectors(
 		pod("a", "default", "n1"),
 		pod("b", "default", "n2"),
 	)
@@ -38,6 +40,7 @@ func TestOnNodeFilters(t *testing.T) {
 	if strings.Contains(out, "\nb\t") || strings.Contains(out, " b ") {
 		t.Fatalf("pod b (on n2) must not be listed:\n%s", out)
 	}
+	assertPodFieldSelector(t, c, "spec.nodeName=n1")
 }
 
 func TestOnNodeColor(t *testing.T) {

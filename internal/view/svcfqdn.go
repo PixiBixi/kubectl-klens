@@ -13,13 +13,13 @@ import (
 
 // SvcFQDN lists services and prints their in-cluster FQDN.
 func SvcFQDN(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	services, err := c.CoreV1().Services(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	services, err := kube.ListServices(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NS", "SERVICE", "FQDN")
-	for _, s := range services.Items {
+	for _, s := range services {
 		fqdn := fmt.Sprintf("%s.%s.svc.cluster.local", s.Name, s.Namespace)
 		t.Row(s.Namespace, s.Name, fqdn)
 	}

@@ -77,7 +77,9 @@ func TestPending(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "live", Namespace: "default"},
 		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
 	}
-	c := fake.NewClientset(unsched, badimg, running)
+	// The phase filter is pushed down, so the fake has to honour field selectors
+	// for the Running pod to be excluded the way a real apiserver excludes it.
+	c := newClientsetWithFieldSelectors(unsched, badimg, running)
 
 	var buf bytes.Buffer
 	if err := Pending(context.Background(), c, kube.Flags{Namespace: "default"}, nil, &buf); err != nil {
@@ -92,6 +94,7 @@ func TestPending(t *testing.T) {
 	if strings.Contains(out, "live") {
 		t.Fatalf("running pod must be excluded:\n%s", out)
 	}
+	assertPodFieldSelector(t, c, "status.phase=Pending")
 }
 
 func TestPendingColor(t *testing.T) {

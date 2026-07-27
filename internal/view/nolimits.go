@@ -27,14 +27,14 @@ func NoLimits(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []
 // them as well, so an unbounded init container is a real gap, not a detail.
 // kube-system is skipped only when listing across all namespaces.
 func reportMissing(ctx context.Context, c kubernetes.Interface, f kube.Flags, out io.Writer, pick func(*corev1.Container) corev1.ResourceList) error {
-	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "KIND", "MISSING")
-	for i := range pods.Items {
-		p := &pods.Items[i]
+	for i := range pods {
+		p := &pods[i]
 		if skipNamespace(f, p.Namespace) {
 			continue
 		}
