@@ -1,6 +1,9 @@
 package view
 
 import (
+	"cmp"
+	"sync"
+
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -87,6 +90,25 @@ func podContainerStatuses(p *corev1.Pod) []podContainerStatus {
 		out = append(out, podContainerStatus{&st.EphemeralContainerStatuses[i], kindEph})
 	}
 	return out
+}
+
+// bothLists runs two independent list calls concurrently and returns the first
+// error if either fails. The two are separate apiserver round trips with no
+// dependency between them, so running them in sequence just adds the smaller
+// one's latency to the total.
+func bothLists[A, B any](listA func() (A, error), listB func() (B, error)) (A, B, error) {
+	var (
+		a    A
+		b    B
+		errA error
+		errB error
+		wg   sync.WaitGroup
+	)
+	wg.Add(2)
+	go func() { defer wg.Done(); a, errA = listA() }()
+	go func() { defer wg.Done(); b, errB = listB() }()
+	wg.Wait()
+	return a, b, cmp.Or(errA, errB)
 }
 
 // skipNamespace reports whether a pod's namespace should be dropped from a

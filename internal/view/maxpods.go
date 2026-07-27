@@ -16,11 +16,10 @@ import (
 // pod count and the remaining free slots. Pods are counted cluster-wide since
 // node saturation is independent of namespace.
 func MaxPods(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
-	pods, err := kube.ListPods(ctx, c, "", metav1.ListOptions{})
+	nodes, pods, err := bothLists(
+		func() ([]corev1.Node, error) { return kube.ListNodes(ctx, c, metav1.ListOptions{}) },
+		func() ([]corev1.Pod, error) { return kube.ListPods(ctx, c, "", metav1.ListOptions{}) },
+	)
 	if err != nil {
 		return err
 	}
