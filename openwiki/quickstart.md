@@ -147,12 +147,24 @@ current.
 
 ## Release
 
-Push a `v*` tag → `.github/workflows/release.yml` runs goreleaser, which builds
-cross-platform archives and pushes the regenerated `plugins/klens.yaml` to the
-central [PixiBixi/krew-index](https://github.com/PixiBixi/krew-index) repo (the
-`krews` publisher, using the `KREW_INDEX_TOKEN` PAT for the cross-repo push).
-Version/commit/date are injected via `-X main.version=...` ldflags. Convention:
-push a fresh `vX.Y.Z` tag after every functional change to `master`.
+Releases are **automatic on push to `master`**. `.github/workflows/release.yml`
+runs `mathieudutour/github-tag-action` to compute the next `vX.Y.Z` from the
+conventional commits since the last tag (`feat` → minor, `fix` → patch,
+`default_bump: false` so non-releasable commits produce no release), pushes the
+tag, then runs goreleaser in the same job. So you release by writing the right
+commit type, not by tagging. Pushing a `v*` tag by hand still works as an escape
+hatch (the goreleaser steps also fire on `ref_type == 'tag'`).
+
+goreleaser builds cross-platform archives and pushes the regenerated
+`plugins/klens.yaml` to the central
+[PixiBixi/krew-index](https://github.com/PixiBixi/krew-index) repo (the `krews`
+publisher, using the `KREW_INDEX_TOKEN` PAT for the cross-repo push).
+Version/commit/date are injected via `-X main.version=...` ldflags.
+
+Renovate drives the version bumps (`renovate.json`): minor Go-module updates map
+to `feat(deps)` (minor release), patch/digest to `fix(deps)` (patch release),
+and GitHub-Actions updates stay `chore(deps)` (**no** release — they don't ship
+in the binary). All minor/patch/digest updates automerge via PR once CI passes.
 
 ## Where to go next
 
