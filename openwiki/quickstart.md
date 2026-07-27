@@ -58,6 +58,16 @@ The authoritative list is the `commands` slice in
 - `privileged` — containers with privileged/host security flags
 - `svc-fqdn` — in-cluster FQDN of services
 
+`reqlim`, `no-limits`, `no-requests`, `images`, `restarts` and `privileged`
+report **every** container of a pod — init and ephemeral ones included — and name
+the role in a `KIND` column (`app`/`init`/`eph`), because an init container's
+requests, images and security context count exactly as much as an app
+container's. `reqlim`, `no-limits`, `no-requests` and `probes` drop kube-system
+from the `-A` view only; an explicit `-n kube-system` still returns its rows. The
+README's [Container kinds](../README.md#container-kinds) and
+[Security flags](../README.md#security-flags) sections are the reference for the
+`KIND` and `FLAGS` values.
+
 **Verdict commands** (compute a health classification, default-sorted worst-last)
 - `pdb` — PodDisruptionBudget drain-safety verdict
 - `pending` — Pending pods with a synthesized blocking reason
@@ -76,7 +86,7 @@ registry, so it can't drift). Subcommands accept singular/plural aliases
 
 ## Cross-cutting behaviour
 
-These four behaviours apply across commands — learn them once.
+These five behaviours apply across commands — learn them once.
 
 ### Namespace defaulting
 Some commands default to the **current kubeconfig namespace** (the one set by
@@ -112,6 +122,22 @@ muted placeholders, bold = headers. Control with
 Under kubecolor, klens' stdout is a pipe so `auto` turns color off; force it
 with `--color=always` or `export KLENS_COLOR=always` (kubecolor passes plugin
 output through unchanged).
+
+### Request bounds and interruption
+Every apiserver request is bounded by `--request-timeout` (default `1m0s`;
+`--request-timeout=0` removes the bound). It is a safety net against an
+unresponsive control plane, not a budget — the heaviest command measured on a
+6500-pod cluster takes about four seconds. If you do hit it, the error names the
+flag rather than failing opaquely:
+
+```console
+$ kubectl klens reqlim -A --request-timeout 300ms
+error: request timed out after 300ms; raise it or pass --request-timeout=0 to disable
+```
+
+`Ctrl-C` (SIGINT) and SIGTERM cancel in-flight requests and exit `130` with a
+plain `canceled`, so a cluster-wide listing stops when asked instead of first
+running to completion.
 
 ### Shell completion
 `kubectl klens <TAB>` uses kubectl's plugin-completion mechanism (kubectl 1.26+):
@@ -169,5 +195,6 @@ in the binary). All minor/patch/digest updates automerge via PR once CI passes.
 ## Where to go next
 
 - **[architecture.md](architecture.md)** — the cli→view→kube layering, the
-  `RunFunc` contract, the `Table`/`Painter` output mechanics, the
-  verdict-command pattern, and a step-by-step guide to adding a subcommand.
+  `RunFunc` contract, the paged/pushed-down listing layer, the `Table`/`Painter`
+  output mechanics, the shared view helpers, the verdict-command pattern, and a
+  step-by-step guide to adding a subcommand.

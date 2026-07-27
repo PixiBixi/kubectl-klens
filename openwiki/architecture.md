@@ -28,8 +28,12 @@ subcommand. `App.Run` (`cli.go`):
    `SortColumns`, then parses args.
 4. Validates `--sort` against the command's columns and `--color` against
    `auto|always|never`, resolves `Flags.Color` once via `kube.ResolveColor`.
-5. Builds the client, applies **namespace defaulting** (below), then calls
-   `cmd.Run`.
+5. Builds the client, applies **namespace defaulting** (below), wraps the context
+   in `signal.NotifyContext` (SIGINT/SIGTERM), then calls `cmd.Run`.
+6. Maps the outcome to an exit code: `0` on success; `130` with a plain
+   `canceled` when the context was cancelled (an interrupt is not a failure); a
+   message naming `--request-timeout` when the error is a deadline or a transport
+   timeout; `1` otherwise.
 
 ### The Command registry entry
 
@@ -49,9 +53,14 @@ shell completion candidates all read the same slice, so they cannot drift.
 ### Global flags — one source of truth
 
 Global flags (`--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
-`--color`) live once in the `globalFlags` table in `cli.go`. That table drives
-**both** FlagSet registration and the `--help` listing, so the two can't
-diverge. Add a global flag there, not in two places.
+`--color`, `--request-timeout`) live once in the `globalFlags` table in `cli.go`.
+That table drives **both** FlagSet registration and the `--help` listing, so the
+two can't diverge. Add a global flag there, not in two places.
+
+One list does sit outside it: `completionFlags` in `complete.go`, the tokens
+offered during shell completion. `TestCompletionOffersEveryGlobalFlag` pins it to
+`globalFlags`, because a new global flag would otherwise be registered and
+documented but silently uncompletable.
 
 ### The RunFunc contract
 
@@ -92,7 +101,34 @@ The authoritative set of `CurrentNSDefault: true` commands is locked by
 you change a command's scoping** — it is the source of truth, and CI fails if
 the registry and the map disagree.
 
-## Output: the `kube` package
+## The `kube` package
+
+### Listing: paging and pushdown (`internal/kube/list.go`)
+
+**Views never call the clientset's `List` directly.** They go through
+`kube.ListPods` / `ListNodes` / `ListSecrets` / `ListServices` /
+`ListPodDisruptionBudgets` / `ListHorizontalPodAutoscalers`, thin wrappers over
+a generic `listAll` that sets `Limit = ChunkSize` (500, the same chunk kubectl
+uses) and follows the server's `continue` token until it stops handing one out.
+An unlimited `List` makes the apiserver materialize the whole collection in one
+response, which spikes memory on both ends on a cluster with tens of thousands
+of pods. Paging stays an implementation detail: callers get the full slice, and
+a single-page collection is returned as the server's own slice with no copy.
+
+On top of paging, three views push their filter **down to the apiserver** with a
+field selector instead of listing everything and filtering in the loop:
+
+| View | Field selector |
+|---|---|
+| `on-node` | `spec.nodeName=<node>` |
+| `pending` | `status.phase=Pending` |
+| `default-sa` | `spec.serviceAccountName=default` |
+
+Pushdown only works for the [field selectors the apiserver actually supports for
+pods](../internal/view/fake_test.go) (`podFields` mirrors that set); an
+unsupported field matches nothing rather than everything, so it fails silently —
+verify against a real cluster, and see the Testing section for the fake that
+honors selectors.
 
 ### `Table` (`internal/kube/table.go`)
 
@@ -125,8 +161,18 @@ detection. `IsTTY` checks whether the writer is a terminal.
 
 `clientConfig` builds a deferred-loading `clientcmd.ClientConfig` from the
 default loading rules plus the explicit `--kubeconfig` path and `--context`
-override. `Client` builds the clientset; `CurrentNamespace` reads the active
-context's namespace (defaulting to `default`).
+override. `Client` builds the clientset and sets `rest.Config.Timeout` from
+`Flags.RequestTimeout` (`--request-timeout`, default 1m0s, `0` disables) — without
+it, a hung control plane hangs the command indefinitely, since nothing else sets
+a deadline. `CurrentNamespace` reads the active context's namespace (defaulting
+to `default`).
+
+> **Protobuf is already the default — do not "optimise" it.** Setting
+> `ContentType`/`AcceptContentTypes` to protobuf on the config is a **no-op**: the
+> typed clientset negotiates it on its own. Measured over every pod on a 6300-pod
+> cluster, the default transfers 85.7 MiB in 3.0s and the response comes back as
+> `application/vnd.kubernetes.protobuf`, versus 116.5 MiB in 5.4s with JSON
+> forced. `client.go` carries a comment with these numbers for the same reason.
 
 > **client-go auth providers.** `main.go` blank-imports
 > `k8s.io/client-go/plugin/pkg/client/auth` to register the non-static auth
@@ -157,14 +203,38 @@ replica at once. See `pdbVerdict` for the canonical example.
 Shared helpers (`orDefault`, `sevPaint`, `verdictRank`) live in
 [`internal/view/verdict.go`](../internal/view/verdict.go); `pdb`, `hpa`,
 `spread`, and `probes` reuse them (`pending` renders a plain `REASON` column
-and only needs `SortBy`). Node helpers (`nodeStatus`, `qtyOrNone`) live in
-`view.go`.
+and only needs `SortBy`).
+
+## Shared view helpers (`internal/view/view.go`)
+
+- `podContainers(p)` / `podContainerStatuses(p)` enumerate a pod's containers in
+  startup order — **init, then app, then ephemeral** — each tagged with its kind
+  (`app`/`init`/`eph`, surfaced as the `KIND` column). Pod views must use these
+  rather than walking `p.Spec.Containers`: init containers carry the same
+  security context, images and resource requests as app containers, and walking
+  only `spec.containers` is exactly the blind spot that made `privileged` report
+  "clean" on a privileged init container.
+- `skipNamespace(f, ns)` drops kube-system **only from the cluster-wide (`-A`)
+  listing**. An explicit `-n kube-system` must still return rows — filtering it
+  out regardless of scope silently answers a different question than the one
+  asked.
+- `nodeStatus(n)` returns `Ready` / `NotReady` / `Unknown`. `Unknown` is kept
+  distinct on purpose: it means the kubelet stopped reporting altogether (the
+  state that starts the eviction clock), not a kubelet answering unready.
+- `bothLists(listA, listB)` runs two independent list calls concurrently and
+  returns the first error. `max-pods` and `spread` each need nodes *and* pods with
+  no dependency between them; issued in sequence, the smaller list's latency is
+  pure addition (measured ~14% and ~10% of total on a 6300-pod cluster).
+- `qtyOrNone(paint, rl, name)` renders a resource quantity or a muted `none`.
 
 ## Adding a subcommand
 
 1. Create `internal/view/<name>.go` implementing the `RunFunc` signature; build
    output with `kube.NewTable`/`kube.Label`. Validate required positional args
-   inside the func.
+   inside the func. Fetch through the `kube.List*` helpers (never the clientset
+   directly, or you lose paging), push any filter the apiserver can evaluate
+   into the `ListOptions` field selector, and enumerate containers via
+   `podContainers`/`podContainerStatuses`.
 2. Register it in the `commands` slice in `internal/cli/cli.go`:
    - set `CurrentNSDefault: true` if it should scope to the current namespace
      (and update `TestCurrentNSDefaultFlags`);
@@ -190,6 +260,14 @@ inspect `clientset.Actions()` to assert the namespace a list was scoped to
 `kube.Flags{}`, plain-output assertions are byte-stable across the color
 feature.
 
+`fake.NewClientset` **ignores field selectors** — it returns every object
+regardless — so a view that pushes filtering down would pass its test no matter
+what it asked for. `internal/view/fake_test.go` supplies both halves of that
+contract: `newClientsetWithFieldSelectors` installs a list reactor that applies
+the selector the way the apiserver would, and `assertPodFieldSelector` asserts
+the view issued exactly one pod list carrying the expected selector. Use both
+when adding or changing a pushdown view.
+
 ## Where to change what
 
 | You want to… | Touch |
@@ -197,8 +275,10 @@ feature.
 | Add/rename a command | `commands` slice in `internal/cli/cli.go` (+ its view file + test) |
 | Add a global flag | `globalFlags` table in `cli.go` (drives registration *and* help) |
 | Change a command's namespace scope | `CurrentNSDefault` in the registry + `TestCurrentNSDefaultFlags` |
+| Fetch a new resource kind / change paging | `internal/kube/list.go` |
 | Change table alignment/sorting | `internal/kube/table.go` |
 | Change colors / color precedence | `internal/kube/color.go` |
 | Change kubeconfig/context resolution | `internal/kube/client.go` |
+| Change request bounds / interrupts | `cfg.Timeout` in `client.go` + the exit-code switch in `cli.go` |
 | Add/adjust a health verdict | the command's `xVerdict` in `internal/view/<name>.go` |
 | Change completion behaviour | `internal/cli/complete.go` |
