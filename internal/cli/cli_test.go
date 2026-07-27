@@ -5,11 +5,14 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -311,6 +314,101 @@ func TestCurrentNSDefaultFlags(t *testing.T) {
 	for _, c := range commands {
 		if got := c.CurrentNSDefault; got != want[c.Name] {
 			t.Errorf("%s: CurrentNSDefault = %v, want %v", c.Name, got, want[c.Name])
+		}
+	}
+}
+
+// TestRequestTimeoutReachesClient checks the flag is wired through to the client
+// builder: the timeout only protects anything if kube.Client sees it.
+func TestRequestTimeoutReachesClient(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want time.Duration
+	}{
+		{"default applies", []string{"nodes"}, kube.DefaultRequestTimeout},
+		{"explicit value", []string{"nodes", "--request-timeout", "5s"}, 5 * time.Second},
+		{"zero disables", []string{"nodes", "--request-timeout", "0"}, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got time.Duration
+			var out, errw bytes.Buffer
+			app := testApp(&out, &errw)
+			app.NewClient = func(f kube.Flags) (kubernetes.Interface, error) {
+				got = f.RequestTimeout
+				return fake.NewClientset(), nil
+			}
+			if code := app.Run(tc.args); code != 0 {
+				t.Fatalf("exit %d: %s", code, errw.String())
+			}
+			if got != tc.want {
+				t.Fatalf("RequestTimeout = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestRequestTimeoutRejectsGarbage keeps the flag from silently falling back to
+// the default when the value is unparseable.
+func TestRequestTimeoutRejectsGarbage(t *testing.T) {
+	var out, errw bytes.Buffer
+	if code := testApp(&out, &errw).Run([]string{"nodes", "--request-timeout", "soon"}); code != 1 {
+		t.Fatalf("want exit 1 for an invalid duration, got %d", code)
+	}
+}
+
+// TestRequestTimeoutInHelp guards that the flag is listed, since globalFlags
+// drives both registration and the help text.
+func TestRequestTimeoutInHelp(t *testing.T) {
+	var out, errw bytes.Buffer
+	testApp(&out, &errw).Run([]string{"--help"})
+	if !strings.Contains(out.String(), "--request-timeout") {
+		t.Fatalf("--request-timeout missing from help:\n%s", out.String())
+	}
+}
+
+// TestCanceledContextExits130 pins the interrupt path: a command that stops
+// because the user hit Ctrl-C is not a failure, and should report the
+// conventional SIGINT exit code rather than a generic error.
+func TestCanceledContextExits130(t *testing.T) {
+	var out, errw bytes.Buffer
+	app := testApp(&out, &errw)
+	app.NewClient = func(kube.Flags) (kubernetes.Interface, error) {
+		c := fake.NewClientset()
+		c.PrependReactor("list", "nodes", func(k8stesting.Action) (bool, runtime.Object, error) {
+			// Stand in for the signal arriving mid-request.
+			return true, nil, context.Canceled
+		})
+		return c, nil
+	}
+	code := app.Run([]string{"nodes"})
+	if code != 130 {
+		t.Fatalf("want exit 130 on cancellation, got %d (stderr: %s)", code, errw.String())
+	}
+	if !strings.Contains(errw.String(), "canceled") {
+		t.Fatalf("want a 'canceled' notice, got %q", errw.String())
+	}
+}
+
+// TestTimeoutErrorNamesTheFlag guards that hitting the default bound produces an
+// actionable message: a default timeout with an opaque error would be a trap.
+func TestTimeoutErrorNamesTheFlag(t *testing.T) {
+	var out, errw bytes.Buffer
+	app := testApp(&out, &errw)
+	app.NewClient = func(kube.Flags) (kubernetes.Interface, error) {
+		c := fake.NewClientset()
+		c.PrependReactor("list", "nodes", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, context.DeadlineExceeded
+		})
+		return c, nil
+	}
+	if code := app.Run([]string{"nodes", "--request-timeout", "3s"}); code != 1 {
+		t.Fatalf("want exit 1 on timeout, got %d", code)
+	}
+	for _, want := range []string{"timed out after 3s", "--request-timeout"} {
+		if !strings.Contains(errw.String(), want) {
+			t.Fatalf("want %q in stderr, got %q", want, errw.String())
 		}
 	}
 }

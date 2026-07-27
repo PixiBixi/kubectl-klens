@@ -104,7 +104,16 @@ single key skips the key picker and decodes that key directly.
 ## Flags
 
 `--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`, `--color`,
-`--version`.
+`--request-timeout`, `--version`.
+
+`--request-timeout` bounds each apiserver request (default `1m0s`) so an
+unresponsive control plane can't hang the command forever. It is a safety net,
+not a budget: the heaviest command measured on a 6500-pod cluster takes about
+four seconds. Pass `--request-timeout=0` to remove the bound; if you hit it, the
+error names the flag.
+
+`Ctrl-C` cancels in-flight requests and exits `130`, so a cluster-wide listing
+stops as soon as you ask rather than running to completion first.
 
 ## Namespace scope
 

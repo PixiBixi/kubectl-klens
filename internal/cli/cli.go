@@ -2,12 +2,15 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"slices"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 
 	"k8s.io/client-go/kubernetes"
@@ -94,6 +97,10 @@ var globalFlags = []globalFlag{
 		}},
 	{"--color string", "colorize output: auto|always|never (default auto)",
 		func(fs *flag.FlagSet, f *kube.Flags, h string) { fs.StringVar(&f.ColorMode, "color", "", h) }},
+	{"--request-timeout duration", "per-request timeout, 0 for none (default 1m0s)",
+		func(fs *flag.FlagSet, f *kube.Flags, h string) {
+			fs.DurationVar(&f.RequestTimeout, "request-timeout", kube.DefaultRequestTimeout, h)
+		}},
 }
 
 // App wires dependencies so dispatch is testable with an injected client.
@@ -171,11 +178,34 @@ func (a App) Run(args []string) int {
 		}
 		f.Namespace = ns
 	}
-	if err := cmd.Run(context.Background(), client, f, fs.Args(), a.Out); err != nil {
+	// Ctrl-C cancels in-flight requests instead of leaving them to be reaped by
+	// process exit, so a long cluster-wide list stops the moment the user asks.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	err = cmd.Run(ctx, client, f, fs.Args(), a.Out)
+	var timeout interface{ Timeout() bool }
+	switch {
+	case err == nil:
+		return 0
+
+	// Only our own signal handler cancels this context, so a cancellation means
+	// the user interrupted: not a failure, and worth the conventional SIGINT exit
+	// code rather than a generic one.
+	case ctx.Err() != nil || errors.Is(err, context.Canceled):
+		fmt.Fprintln(a.Err, "canceled")
+		return 130
+
+	// A timeout has to name itself and its escape hatch. --request-timeout
+	// defaults to a bound, so a user on a cluster big enough to hit it would
+	// otherwise get an opaque failure with no hint that a flag controls it.
+	case errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &timeout) && timeout.Timeout()):
+		fmt.Fprintf(a.Err, "error: request timed out after %s; raise it or pass --request-timeout=0 to disable\n", f.RequestTimeout)
+		return 1
+
+	default:
 		fmt.Fprintln(a.Err, "error:", err)
 		return 1
 	}
-	return 0
 }
 
 // lookup resolves a subcommand by name, accepting singular or plural forms

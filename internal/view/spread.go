@@ -21,11 +21,10 @@ import (
 // view with the placement side of availability. Rows default to VERDICT (risk)
 // order, riskiest at the bottom.
 func Spread(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
-	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
+	pods, nodes, err := bothLists(
+		func() ([]corev1.Pod, error) { return kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{}) },
+		func() ([]corev1.Node, error) { return kube.ListNodes(ctx, c, metav1.ListOptions{}) },
+	)
 	if err != nil {
 		return err
 	}

@@ -10,9 +10,12 @@ import (
 )
 
 // completionFlags are the global flag tokens offered during shell completion.
+// TestCompletionOffersEveryGlobalFlag checks this stays in step with the
+// globalFlags table, which is the source of truth for registration and --help.
 var completionFlags = []string{
 	"--kubeconfig", "--context", "--namespace", "-n",
-	"--all-namespaces", "-A", "--color", "--version", "--help", "-h",
+	"--all-namespaces", "-A", "--color", "--request-timeout",
+	"--version", "--help", "-h",
 }
 
 // complete implements the cobra-compatible "__complete" protocol that kubectl

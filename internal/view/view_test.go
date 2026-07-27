@@ -1,7 +1,9 @@
 package view
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -107,5 +109,60 @@ func TestSkipNamespace(t *testing.T) {
 				t.Fatalf("skipNamespace(%+v, %q) = %v, want %v", tc.f, tc.ns, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestBothListsReturnsBothResults(t *testing.T) {
+	a, b, err := bothLists(
+		func() ([]int, error) { return []int{1, 2}, nil },
+		func() (string, error) { return "ok", nil },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(a) != 2 || b != "ok" {
+		t.Fatalf("got (%v, %q), want ([1 2], \"ok\")", a, b)
+	}
+}
+
+func TestBothListsPropagatesEitherError(t *testing.T) {
+	boom := errors.New("boom")
+	ok := func() (int, error) { return 1, nil }
+	bad := func() (int, error) { return 0, boom }
+	for _, tc := range []struct {
+		name string
+		a, b func() (int, error)
+	}{
+		{"first fails", bad, ok},
+		{"second fails", ok, bad},
+		{"both fail", bad, bad},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, _, err := bothLists(tc.a, tc.b); !errors.Is(err, boom) {
+				t.Fatalf("err = %v, want %v", err, boom)
+			}
+		})
+	}
+}
+
+// TestBothListsRunsConcurrently proves overlap rather than merely allowing it:
+// the two calls rendezvous, so if bothLists ran them one after the other the
+// first would block forever waiting for a partner that has not started.
+func TestBothListsRunsConcurrently(t *testing.T) {
+	first, second := make(chan struct{}), make(chan struct{})
+	a := func() (int, error) { close(first); <-second; return 1, nil }
+	b := func() (int, error) { <-first; close(second); return 2, nil }
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if x, y, err := bothLists(a, b); x != 1 || y != 2 || err != nil {
+			t.Errorf("got (%d, %d, %v), want (1, 2, nil)", x, y, err)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("bothLists ran its two calls sequentially")
 	}
 }
