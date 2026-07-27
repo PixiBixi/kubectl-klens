@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -34,6 +36,28 @@ func TestImageCount(t *testing.T) {
 	// nginx (2) must sort before pause (1).
 	if strings.Index(out, "nginx") > strings.Index(out, "pause") {
 		t.Fatalf("nginx (2) should sort before pause (1):\n%s", out)
+	}
+}
+
+// TestImageCountCountsInitImages guards that init images are counted: they are
+// real pulls against the registry, so leaving them out understated usage.
+func TestImageCountCountsInitImages(t *testing.T) {
+	c := fake.NewClientset(&corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "app", Namespace: "default"},
+		Spec: corev1.PodSpec{
+			InitContainers: []corev1.Container{{Name: "wait", Image: "busybox:1.36"}},
+			Containers:     []corev1.Container{{Name: "api", Image: "nginx:1.25"}},
+		},
+	})
+	var buf bytes.Buffer
+	if err := ImageCount(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"busybox", "1.36", "nginx", "1.25"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
 	}
 }
 

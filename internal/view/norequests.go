@@ -11,10 +11,10 @@ import (
 )
 
 // NoRequests lists containers missing CPU and/or memory requests (kube-system
-// excluded); without requests the scheduler cannot bin-pack or reserve for
-// them, hurting both packing efficiency and reliability.
+// excluded from the -A view); without requests the scheduler cannot bin-pack or
+// reserve for them, hurting both packing efficiency and reliability.
 func NoRequests(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	return reportMissing(ctx, c, f, out, func(ctr corev1.Container) corev1.ResourceList {
+	return reportMissing(ctx, c, f, out, func(ctr *corev1.Container) corev1.ResourceList {
 		return ctr.Resources.Requests
 	})
 }

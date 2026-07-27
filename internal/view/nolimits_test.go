@@ -54,6 +54,48 @@ func TestNoLimits(t *testing.T) {
 	}
 }
 
+// TestNoLimitsInitContainer guards the FinOps blind spot: an init container's
+// resources are enforced by LimitRange/ResourceQuota like any other, so an
+// unbounded one must not read as clean.
+func TestNoLimitsInitContainer(t *testing.T) {
+	c := fake.NewClientset(&corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "app", Namespace: "default"},
+		Spec: corev1.PodSpec{
+			InitContainers: []corev1.Container{{Name: "migrate"}}, // no limits
+			Containers: []corev1.Container{{Name: "api", Resources: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("1Gi"),
+				},
+			}}},
+		},
+	})
+	var buf bytes.Buffer
+	if err := NoLimits(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "migrate") || !strings.Contains(out, kindInit) {
+		t.Fatalf("want unbounded init container flagged:\n%s", out)
+	}
+	if strings.Contains(out, "api") {
+		t.Fatalf("fully bounded app container must be omitted:\n%s", out)
+	}
+}
+
+// TestNoLimitsExplicitKubeSystem guards the regression where asking for
+// kube-system by name printed nothing at all.
+func TestNoLimitsExplicitKubeSystem(t *testing.T) {
+	c := fake.NewClientset(podWithLimits("coredns", "kube-system", nil))
+	var buf bytes.Buffer
+	if err := NoLimits(context.Background(), c, kube.Flags{Namespace: "kube-system"}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "coredns") {
+		t.Fatalf("-n kube-system must list its own pods:\n%s", buf.String())
+	}
+}
+
 func TestNoLimitsColor(t *testing.T) {
 	c := fake.NewClientset(podWithLimits("none", "team-a", nil)) // no limits at all
 	var buf bytes.Buffer

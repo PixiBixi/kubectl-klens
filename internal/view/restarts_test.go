@@ -24,6 +24,36 @@ func podRestarts(name, container string, restarts int32, waitingReason string) *
 	}
 }
 
+// TestRestartsInitContainer guards the blind spot that mattered most for
+// debugging: an init container looping in CrashLoopBackOff wedges the whole pod
+// and used to be invisible here.
+func TestRestartsInitContainer(t *testing.T) {
+	c := fake.NewClientset(&corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "wedged", Namespace: "default"},
+		Status: corev1.PodStatus{
+			InitContainerStatuses: []corev1.ContainerStatus{{
+				Name:         "migrate",
+				RestartCount: 42,
+				State:        corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}},
+				LastTerminationState: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 1},
+				},
+			}},
+			ContainerStatuses: []corev1.ContainerStatus{{Name: "api", RestartCount: 0}},
+		},
+	})
+	var buf bytes.Buffer
+	if err := Restarts(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"migrate", kindInit, "42", "CrashLoopBackOff"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("want %q in output:\n%s", want, out)
+		}
+	}
+}
+
 func TestRestarts(t *testing.T) {
 	c := fake.NewClientset(
 		podRestarts("calm", "app", 0, ""),
