@@ -80,7 +80,8 @@ func listSecrets(ctx context.Context, c kubernetes.Interface, f kube.Flags, out 
 	}
 	sortSecrets(list)
 	t := kube.NewTable(out, kube.NewPainter(f), "NS", "NAME", "TYPE", "KEYS", "AGE")
-	for _, s := range list {
+	for i := range list {
+		s := &list[i]
 		age := duration.HumanDuration(time.Since(s.CreationTimestamp.Time))
 		t.Row(s.Namespace, s.Name, string(s.Type), strconv.Itoa(len(s.Data)), age)
 	}
@@ -122,7 +123,8 @@ func pickSecret(ctx context.Context, c kubernetes.Interface, f kube.Flags) (*cor
 	sortSecrets(list)
 	allNS := f.NamespaceScope() == ""
 	items := make([]string, len(list))
-	for i, s := range list {
+	for i := range list {
+		s := &list[i]
 		if allNS {
 			items[i] = s.Namespace + "/" + s.Name
 		} else {

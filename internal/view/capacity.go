@@ -19,7 +19,8 @@ func Capacity(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NAME", "CPU_CAP", "CPU_ALLOC", "MEM_CAP", "MEM_ALLOC")
-	for _, n := range nodes {
+	for i := range nodes {
+		n := &nodes[i]
 		cap, alloc := n.Status.Capacity, n.Status.Allocatable
 		t.Row(
 			n.Name,

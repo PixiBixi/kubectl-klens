@@ -44,9 +44,10 @@ func newClientsetWithFieldSelectors(objs ...runtime.Object) *fake.Clientset {
 			return true, nil, nil
 		}
 		kept := make([]corev1.Pod, 0, len(podList.Items))
-		for _, p := range podList.Items {
-			if selector.Matches(podFields(&p)) {
-				kept = append(kept, p)
+		for i := range podList.Items {
+			p := &podList.Items[i]
+			if selector.Matches(podFields(p)) {
+				kept = append(kept, *p)
 			}
 		}
 		podList.Items = kept

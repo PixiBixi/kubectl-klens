@@ -35,12 +35,16 @@ func Pending(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []s
 	}
 	paint := kube.NewPainter(f)
 
+	// pod is a pointer into pods: the entry only needs the namespace, name and
+	// creation timestamp, so carrying the whole 1.2 kB object by value copied it
+	// twice over (once out of the range, once into the slice).
 	type entry struct {
-		pod            corev1.Pod
+		pod            *corev1.Pod
 		reason, detail string
 	}
 	list := make([]entry, 0, len(pods))
-	for _, p := range pods {
+	for i := range pods {
+		p := &pods[i]
 		reason, detail := pendingReason(p)
 		list = append(list, entry{p, reason, detail})
 	}
@@ -49,7 +53,8 @@ func Pending(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []s
 	})
 
 	t := kube.NewTable(out, paint, "NS", "POD", "AGE", "REASON", "DETAIL")
-	for _, e := range list {
+	for i := range list {
+		e := &list[i]
 		detail := e.detail
 		if detail == "" || detail == "-" {
 			detail = paint.Muted("-")
@@ -63,7 +68,7 @@ func Pending(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []s
 // pendingReason derives a Pending pod's blocking reason and a compact detail.
 // Scheduling failure (PodScheduled=False) takes precedence over container
 // waiting states (image pulls, config errors).
-func pendingReason(p corev1.Pod) (reason, detail string) {
+func pendingReason(p *corev1.Pod) (reason, detail string) {
 	for _, cond := range p.Status.Conditions {
 		if cond.Type == corev1.PodScheduled && cond.Status == corev1.ConditionFalse {
 			r := cond.Reason
@@ -74,7 +79,8 @@ func pendingReason(p corev1.Pod) (reason, detail string) {
 		}
 	}
 	for _, css := range [][]corev1.ContainerStatus{p.Status.ContainerStatuses, p.Status.InitContainerStatuses} {
-		for _, cs := range css {
+		for j := range css {
+			cs := &css[j]
 			if cs.State.Waiting != nil && cs.State.Waiting.Reason != "" {
 				reason = cs.State.Waiting.Reason
 				switch reason {
@@ -90,9 +96,10 @@ func pendingReason(p corev1.Pod) (reason, detail string) {
 }
 
 // containerImage returns the configured image for the named (init) container.
-func containerImage(p corev1.Pod, name string) string {
+func containerImage(p *corev1.Pod, name string) string {
 	for _, css := range [][]corev1.Container{p.Spec.Containers, p.Spec.InitContainers} {
-		for _, c := range css {
+		for j := range css {
+			c := &css[j]
 			if c.Name == name {
 				return c.Image
 			}

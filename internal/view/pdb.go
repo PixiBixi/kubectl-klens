@@ -26,12 +26,13 @@ func Pdb(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 	paint := kube.NewPainter(f)
 
 	type entry struct {
-		pdb     policyv1.PodDisruptionBudget
+		pdb     *policyv1.PodDisruptionBudget
 		verdict string
 		sev     string
 	}
 	list := make([]entry, 0, len(pdbs))
-	for _, p := range pdbs {
+	for i := range pdbs {
+		p := &pdbs[i]
 		v, sev := pdbVerdict(p.Status)
 		list = append(list, entry{p, v, sev})
 	}
@@ -45,7 +46,8 @@ func Pdb(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 	})
 
 	t := kube.NewTable(out, paint, "NS", "NAME", "POLICY", "EXPECTED", "DESIRED", "HEALTHY", "ALLOWED", "VERDICT")
-	for _, e := range list {
+	for i := range list {
+		e := &list[i]
 		st := e.pdb.Status
 		t.Row(
 			e.pdb.Namespace,

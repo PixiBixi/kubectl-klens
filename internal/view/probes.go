@@ -39,7 +39,8 @@ func Probes(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 		if ref := metav1.GetControllerOf(p); ref != nil && ref.Kind == "Job" {
 			continue
 		}
-		for _, ctr := range p.Spec.Containers {
+		for i := range p.Spec.Containers {
+			ctr := &p.Spec.Containers[i]
 			hasR := ctr.ReadinessProbe != nil
 			hasL := ctr.LivenessProbe != nil
 			v, sev := probesVerdict(hasR, hasL)
@@ -66,7 +67,8 @@ func Probes(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 	})
 
 	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "READINESS", "LIVENESS", "STARTUP", "VERDICT")
-	for _, e := range list {
+	for i := range list {
+		e := &list[i]
 		t.Row(
 			e.ns, e.pod, e.container,
 			probeCell(paint, e.readiness),

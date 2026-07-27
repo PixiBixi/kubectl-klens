@@ -18,8 +18,10 @@ func Pvc(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NS", "POD", "NODE", "PVC")
-	for _, p := range pods {
-		for _, vol := range p.Spec.Volumes {
+	for i := range pods {
+		p := &pods[i]
+		for i := range p.Spec.Volumes {
+			vol := &p.Spec.Volumes[i]
 			if vol.PersistentVolumeClaim != nil {
 				t.Row(p.Namespace, p.Name, p.Spec.NodeName, vol.PersistentVolumeClaim.ClaimName)
 			}

@@ -84,7 +84,8 @@ func podSecurityFlags(p *corev1.Pod) []string {
 	if p.Spec.HostIPC {
 		flags = append(flags, "hostIPC")
 	}
-	for _, v := range p.Spec.Volumes {
+	for i := range p.Spec.Volumes {
+		v := &p.Spec.Volumes[i]
 		if v.HostPath != nil {
 			flags = append(flags, "hostPath")
 			break
