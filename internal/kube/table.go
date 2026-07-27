@@ -57,22 +57,7 @@ const tableGap = 2
 // padded (no trailing whitespace).
 func (t *Table) Flush() error {
 	if idx := t.columnIndex(t.sortCol); idx >= 0 {
-		if key := t.sortRanks[strings.ToLower(t.sortCol)]; key != nil {
-			slices.SortStableFunc(t.rows, func(a, b []string) int {
-				return cmp.Compare(key(stripANSI(cell(a, idx))), key(stripANSI(cell(b, idx))))
-			})
-		} else {
-			numeric := columnIsNumeric(t.rows, idx)
-			slices.SortStableFunc(t.rows, func(a, b []string) int {
-				av, bv := stripANSI(cell(a, idx)), stripANSI(cell(b, idx))
-				if numeric {
-					af, _ := strconv.ParseFloat(av, 64)
-					bf, _ := strconv.ParseFloat(bv, 64)
-					return cmp.Compare(af, bf)
-				}
-				return cmp.Compare(av, bv)
-			})
-		}
+		t.sortRows(idx)
 	}
 	widths := make([]int, len(t.headers))
 	for i, h := range t.headers {
@@ -111,6 +96,58 @@ func (t *Table) writeLine(b *strings.Builder, widths []int, cells []string, head
 	b.WriteByte('\n')
 }
 
+// sortRows orders rows ascending by column idx: a registered SortRank key if the
+// column has one, else by numeric value when every cell parses as a number, else
+// lexically.
+//
+// Keys are extracted once per row instead of inside the comparator. A comparator
+// runs O(n log n) times and each call used to strip ANSI from two cells, so a
+// 20k-row table paid ~570k string allocations to sort; this pays n.
+func (t *Table) sortRows(idx int) {
+	keys := make([]sortKey, len(t.rows))
+	for i, r := range t.rows {
+		keys[i] = sortKey{row: r, text: stripANSI(cell(r, idx))}
+	}
+	if rank := t.sortRanks[strings.ToLower(t.sortCol)]; rank != nil {
+		for i := range keys {
+			keys[i].num = float64(rank(keys[i].text))
+		}
+		slices.SortStableFunc(keys, byNum)
+	} else if t.parseNumeric(keys) {
+		slices.SortStableFunc(keys, byNum)
+	} else {
+		slices.SortStableFunc(keys, func(a, b sortKey) int { return cmp.Compare(a.text, b.text) })
+	}
+	for i := range keys {
+		t.rows[i] = keys[i].row
+	}
+}
+
+// sortKey is a row paired with its extracted sort key.
+type sortKey struct {
+	row  []string
+	text string
+	num  float64
+}
+
+func byNum(a, b sortKey) int { return cmp.Compare(a.num, b.num) }
+
+// parseNumeric fills in each key's num and reports whether every cell parsed, so
+// counts order by value rather than as text. An empty table is not numeric.
+func (t *Table) parseNumeric(keys []sortKey) bool {
+	if len(keys) == 0 {
+		return false
+	}
+	for i := range keys {
+		f, err := strconv.ParseFloat(keys[i].text, 64)
+		if err != nil {
+			return false
+		}
+		keys[i].num = f
+	}
+	return true
+}
+
 func (t *Table) columnIndex(column string) int {
 	if column == "" {
 		return -1
@@ -128,19 +165,6 @@ func cell(row []string, idx int) string {
 		return row[idx]
 	}
 	return ""
-}
-
-// columnIsNumeric reports whether every cell in the column parses as a number.
-func columnIsNumeric(rows [][]string, idx int) bool {
-	if len(rows) == 0 {
-		return false
-	}
-	for _, r := range rows {
-		if _, err := strconv.ParseFloat(stripANSI(cell(r, idx)), 64); err != nil {
-			return false
-		}
-	}
-	return true
 }
 
 // Label returns the value of key in labels, or a muted "<none>" when

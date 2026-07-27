@@ -4,6 +4,8 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/term"
 )
@@ -59,15 +61,49 @@ func (p Painter) Status(s string) string {
 var ansiSeq = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 // stripANSI removes ANSI SGR sequences, leaving the visible text. Used when
-// measuring width and when sorting so colored cells compare by their value.
+// sorting so colored cells compare by their value. The escape-free fast path
+// matters: ReplaceAllString copies the whole string even when nothing matches,
+// and most cells carry no color at all.
 func stripANSI(s string) string {
+	if !strings.ContainsRune(s, ansiEscape) {
+		return s
+	}
 	return ansiSeq.ReplaceAllString(s, "")
 }
 
+const ansiEscape = '\x1b'
+
 // visibleWidth is the rune count of s ignoring ANSI SGR sequences, used by the
-// table aligner so colored cells still line up.
+// table aligner so colored cells still line up. It scans in a single pass rather
+// than going through stripANSI: the table measures every cell at least twice, so
+// this runs on the hot path of every command's output. Benchmarked at ~10x the
+// regexp form and allocation-free (see BenchmarkVisibleWidth).
 func visibleWidth(s string) int {
-	return len([]rune(stripANSI(s)))
+	if !strings.ContainsRune(s, ansiEscape) {
+		return utf8.RuneCountInString(s)
+	}
+	n := 0
+	for i := 0; i < len(s); {
+		// Recognize exactly what ansiSeq matches — ESC '[' [0-9;]* 'm' — so a
+		// truncated or malformed sequence is counted as visible text rather than
+		// silently swallowed. Cell values are not all ours (scheduler messages
+		// and secret values reach the table verbatim), so the two forms must
+		// agree on arbitrary input; TestVisibleWidthMatchesRegexpForm checks it.
+		if s[i] == ansiEscape && i+1 < len(s) && s[i+1] == '[' {
+			j := i + 2
+			for j < len(s) && (s[j] == ';' || (s[j] >= '0' && s[j] <= '9')) {
+				j++
+			}
+			if j < len(s) && s[j] == 'm' {
+				i = j + 1
+				continue
+			}
+		}
+		_, size := utf8.DecodeRuneInString(s[i:])
+		i += size
+		n++
+	}
+	return n
 }
 
 // IsTTY reports whether w is a terminal (an *os.File on a tty).

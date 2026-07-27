@@ -2,6 +2,8 @@ package kube
 
 import (
 	"bytes"
+	"io"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -148,5 +150,51 @@ func TestTableHeaderBoldWhenEnabled(t *testing.T) {
 	}
 	if !strings.HasPrefix(buf.String(), "\x1b[1mNAME\x1b[0m") {
 		t.Fatalf("header not bold: %q", buf.String())
+	}
+}
+
+// benchRows builds the shape of `klens reqlim -A` on a mid-size cluster: 20k
+// container rows over 8 columns, with the resource cells colored.
+func benchRows(n int) [][]string {
+	rows := make([][]string, n)
+	for i := range rows {
+		rows[i] = []string{
+			"namespace-" + strconv.Itoa(i%200),
+			"deployment-abcdef-" + strconv.Itoa(i),
+			"container", "app",
+			"\x1b[32m100m\x1b[0m", "500m",
+			"\x1b[33m128Mi\x1b[0m", "512Mi",
+		}
+	}
+	return rows
+}
+
+func BenchmarkVisibleWidth(b *testing.B) {
+	rows := benchRows(20000)
+	b.ReportAllocs()
+	for b.Loop() {
+		total := 0
+		for _, r := range rows {
+			for _, c := range r {
+				total += visibleWidth(c)
+			}
+		}
+		_ = total
+	}
+}
+
+func BenchmarkTableFlush(b *testing.B) {
+	rows := benchRows(20000)
+	b.ReportAllocs()
+	for b.Loop() {
+		t := NewTable(io.Discard, Painter{enabled: true},
+			"NS", "POD", "CONTAINER", "KIND", "REQ_CPU", "LIM_CPU", "REQ_MEM", "LIM_MEM")
+		for _, r := range rows {
+			t.Row(r...)
+		}
+		t.SortBy("pod")
+		if err := t.Flush(); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
