@@ -18,14 +18,14 @@ import (
 // host paths. Init and ephemeral containers are covered too — a privileged init
 // container escalates exactly as far as an app one. Only flagged rows are shown.
 func Privileged(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "KIND", "FLAGS")
-	for i := range pods.Items {
-		p := &pods.Items[i]
+	for i := range pods {
+		p := &pods[i]
 		podFlags := podSecurityFlags(p)
 		for _, pc := range podContainers(p) {
 			flags := containerSecurityFlags(pc.Spec, p)

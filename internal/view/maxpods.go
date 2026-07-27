@@ -16,16 +16,16 @@ import (
 // pod count and the remaining free slots. Pods are counted cluster-wide since
 // node saturation is independent of namespace.
 func MaxPods(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	nodes, err := c.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
-	pods, err := c.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, "", metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	used := map[string]int{}
-	for _, p := range pods.Items {
+	for _, p := range pods {
 		// Terminated pods (Succeeded/Failed — completed Jobs, Evicted, Error)
 		// no longer occupy a kubelet pod slot, so they don't count toward the
 		// node's max-pods ceiling. Match `kubectl describe node`'s
@@ -38,7 +38,7 @@ func MaxPods(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []s
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NODE", "MAXPODS", "USED", "FREE")
-	for _, n := range nodes.Items {
+	for _, n := range nodes {
 		u := used[n.Name]
 		maxCell, freeCell := paint.Muted("none"), paint.Muted("none")
 		if q, ok := n.Status.Allocatable[corev1.ResourcePods]; ok {

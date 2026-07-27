@@ -13,13 +13,13 @@ import (
 
 // Capacity shows CPU/memory capacity and allocatable per node.
 func Capacity(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	nodes, err := c.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NAME", "CPU_CAP", "CPU_ALLOC", "MEM_CAP", "MEM_ALLOC")
-	for _, n := range nodes.Items {
+	for _, n := range nodes {
 		cap, alloc := n.Status.Capacity, n.Status.Allocatable
 		t.Row(
 			n.Name,

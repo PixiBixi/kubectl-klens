@@ -19,7 +19,7 @@ import (
 // from raw status fields. Rows default to VERDICT (risk) order, riskiest at the
 // bottom.
 func Pdb(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	pdbs, err := c.PolicyV1().PodDisruptionBudgets(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	pdbs, err := kube.ListPodDisruptionBudgets(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -30,8 +30,8 @@ func Pdb(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 		verdict string
 		sev     string
 	}
-	list := make([]entry, 0, len(pdbs.Items))
-	for _, p := range pdbs.Items {
+	list := make([]entry, 0, len(pdbs))
+	for _, p := range pdbs {
 		v, sev := pdbVerdict(p.Status)
 		list = append(list, entry{p, v, sev})
 	}

@@ -12,14 +12,14 @@ import (
 
 // Nodes lists nodes with their GKE nodepool and instance-type labels.
 func Nodes(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	nodes, err := c.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NAME", "STATUS", "NODEPOOL", "INSTANCE-TYPE")
-	for i := range nodes.Items {
-		n := &nodes.Items[i]
+	for i := range nodes {
+		n := &nodes[i]
 		t.Row(
 			n.Name,
 			paint.Status(nodeStatus(n)),

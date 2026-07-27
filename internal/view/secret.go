@@ -74,13 +74,13 @@ func getSecret(ctx context.Context, c kubernetes.Interface, ns, name string) (*c
 }
 
 func listSecrets(ctx context.Context, c kubernetes.Interface, f kube.Flags, out io.Writer) error {
-	list, err := c.CoreV1().Secrets(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	list, err := kube.ListSecrets(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
-	sortSecrets(list.Items)
+	sortSecrets(list)
 	t := kube.NewTable(out, kube.NewPainter(f), "NS", "NAME", "TYPE", "KEYS", "AGE")
-	for _, s := range list.Items {
+	for _, s := range list {
 		age := duration.HumanDuration(time.Since(s.CreationTimestamp.Time))
 		t.Row(s.Namespace, s.Name, string(s.Type), strconv.Itoa(len(s.Data)), age)
 	}
@@ -112,17 +112,17 @@ func emitValue(out io.Writer, paint kube.Painter, s *corev1.Secret, key string) 
 }
 
 func pickSecret(ctx context.Context, c kubernetes.Interface, f kube.Flags) (*corev1.Secret, error) {
-	list, err := c.CoreV1().Secrets(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	list, err := kube.ListSecrets(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
-	if len(list.Items) == 0 {
+	if len(list) == 0 {
 		return nil, errors.New("no secrets found in the current scope")
 	}
-	sortSecrets(list.Items)
+	sortSecrets(list)
 	allNS := f.NamespaceScope() == ""
-	items := make([]string, len(list.Items))
-	for i, s := range list.Items {
+	items := make([]string, len(list))
+	for i, s := range list {
 		if allNS {
 			items[i] = s.Namespace + "/" + s.Name
 		} else {
@@ -138,7 +138,7 @@ func pickSecret(ctx context.Context, c kubernetes.Interface, f kube.Flags) (*cor
 	if err != nil {
 		return nil, err
 	}
-	return &list.Items[idx], nil
+	return &list[idx], nil
 }
 
 func pickKey(s *corev1.Secret) (string, error) {

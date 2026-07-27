@@ -21,16 +21,16 @@ import (
 // view with the placement side of availability. Rows default to VERDICT (risk)
 // order, riskiest at the bottom.
 func Spread(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
-	nodes, err := c.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
-	zoneOf := make(map[string]string, len(nodes.Items))
-	for _, n := range nodes.Items {
+	zoneOf := make(map[string]string, len(nodes))
+	for _, n := range nodes {
 		zoneOf[n.Name] = n.Labels["topology.kubernetes.io/zone"]
 	}
 	paint := kube.NewPainter(f)
@@ -42,7 +42,7 @@ func Spread(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 	}
 	groups := map[string]*agg{}
 	var order []string
-	for _, p := range pods.Items {
+	for _, p := range pods {
 		if p.Spec.NodeName == "" {
 			continue
 		}

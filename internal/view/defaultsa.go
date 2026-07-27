@@ -12,13 +12,13 @@ import (
 
 // DefaultSA lists pods whose serviceAccountName is "default".
 func DefaultSA(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NS", "POD")
-	for _, p := range pods.Items {
+	for _, p := range pods {
 		if p.Spec.ServiceAccountName != "default" {
 			continue
 		}

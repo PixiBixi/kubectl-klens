@@ -15,14 +15,14 @@ import (
 // init and ephemeral containers — their images are pulled and run on the node
 // like any other, so an unpatched init image has to be visible here.
 func Images(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "PODNAME", "CONTAINER", "KIND", "PULL", "IMAGE", "TAG")
-	for i := range pods.Items {
-		p := &pods.Items[i]
+	for i := range pods {
+		p := &pods[i]
 		for _, pc := range podContainers(p) {
 			image, tag := splitImageTag(pc.Spec.Image)
 			t.Row(p.Name, pc.Spec.Name, pc.Kind, string(pc.Spec.ImagePullPolicy), image, latestTag(paint, tag))

@@ -22,7 +22,7 @@ import (
 // pull / config errors). Everything is read from the pod object, so no events
 // or extra API calls are needed. Oldest (most-stuck) pods sort first.
 func Pending(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := c.CoreV1().Pods(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -33,7 +33,7 @@ func Pending(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []s
 		reason, detail string
 	}
 	var list []entry
-	for _, p := range pods.Items {
+	for _, p := range pods {
 		if p.Status.Phase != corev1.PodPending {
 			continue
 		}

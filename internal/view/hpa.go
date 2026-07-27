@@ -19,7 +19,7 @@ import (
 // maxed-out (no headroom) or metric-blind HPA is readable at a glance. Rows
 // default to VERDICT (risk) order, riskiest at the bottom.
 func Hpa(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
-	hpas, err := c.AutoscalingV2().HorizontalPodAutoscalers(f.NamespaceScope()).List(ctx, metav1.ListOptions{})
+	hpas, err := kube.ListHorizontalPodAutoscalers(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -29,8 +29,8 @@ func Hpa(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 		hpa          autoscalingv2.HorizontalPodAutoscaler
 		verdict, sev string
 	}
-	list := make([]entry, 0, len(hpas.Items))
-	for _, h := range hpas.Items {
+	list := make([]entry, 0, len(hpas))
+	for _, h := range hpas {
 		v, sev := hpaVerdict(h.Spec, h.Status)
 		list = append(list, entry{h, v, sev})
 	}
