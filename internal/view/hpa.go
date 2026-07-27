@@ -26,11 +26,12 @@ func Hpa(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 	paint := kube.NewPainter(f)
 
 	type entry struct {
-		hpa          autoscalingv2.HorizontalPodAutoscaler
+		hpa          *autoscalingv2.HorizontalPodAutoscaler
 		verdict, sev string
 	}
 	list := make([]entry, 0, len(hpas))
-	for _, h := range hpas {
+	for i := range hpas {
+		h := &hpas[i]
 		v, sev := hpaVerdict(h.Spec, h.Status)
 		list = append(list, entry{h, v, sev})
 	}
@@ -44,7 +45,8 @@ func Hpa(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []strin
 	})
 
 	t := kube.NewTable(out, paint, "NS", "NAME", "REF", "MIN", "MAX", "CURRENT", "DESIRED", "VERDICT")
-	for _, e := range list {
+	for i := range list {
+		e := &list[i]
 		spec, st := e.hpa.Spec, e.hpa.Status
 		cur := strconv.Itoa(int(st.CurrentReplicas))
 		if st.CurrentReplicas >= spec.MaxReplicas {

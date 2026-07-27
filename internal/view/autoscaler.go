@@ -66,7 +66,8 @@ func renderAutoscalerStatus(status, sortCol string, paint kube.Painter, out io.W
 	})
 	fmt.Fprintln(out)
 	t := kube.NewTable(out, paint, "NODEGROUP", "HEALTH", "READY", "TARGET", "MIN", "MAX", "SCALEUP", "SCALEDOWN", "LAST-CHANGE")
-	for _, g := range groups {
+	for i := range groups {
+		g := &groups[i]
 		t.Row(g.name, health(paint, dash(g.health)), dash(g.ready), dash(g.target), dash(g.min), dash(g.max),
 			scaleState(paint, dash(g.scaleUp)), scaleState(paint, dash(g.scaleDown)), paint.Muted(dash(g.lastChange)))
 	}

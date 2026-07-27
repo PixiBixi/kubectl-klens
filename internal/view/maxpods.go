@@ -24,7 +24,8 @@ func MaxPods(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []s
 		return err
 	}
 	used := map[string]int{}
-	for _, p := range pods {
+	for i := range pods {
+		p := &pods[i]
 		// Terminated pods (Succeeded/Failed — completed Jobs, Evicted, Error)
 		// no longer occupy a kubelet pod slot, so they don't count toward the
 		// node's max-pods ceiling. Match `kubectl describe node`'s
@@ -37,7 +38,8 @@ func MaxPods(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []s
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NODE", "MAXPODS", "USED", "FREE")
-	for _, n := range nodes {
+	for i := range nodes {
+		n := &nodes[i]
 		u := used[n.Name]
 		maxCell, freeCell := paint.Muted("none"), paint.Muted("none")
 		if q, ok := n.Status.Allocatable[corev1.ResourcePods]; ok {

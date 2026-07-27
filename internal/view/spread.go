@@ -29,7 +29,8 @@ func Spread(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 		return err
 	}
 	zoneOf := make(map[string]string, len(nodes))
-	for _, n := range nodes {
+	for i := range nodes {
+		n := &nodes[i]
 		zoneOf[n.Name] = n.Labels["topology.kubernetes.io/zone"]
 	}
 	paint := kube.NewPainter(f)
@@ -41,7 +42,8 @@ func Spread(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 	}
 	groups := map[string]*agg{}
 	var order []string
-	for _, p := range pods {
+	for i := range pods {
+		p := &pods[i]
 		if p.Spec.NodeName == "" {
 			continue
 		}
@@ -118,8 +120,8 @@ func spreadVerdict(replicas, nodes, zones int) (verdict, sev string) {
 // workloadKey maps a pod to its owning workload label, reporting false for pods
 // that aren't HA replicas (DaemonSet, Job, uncontrolled). ReplicaSet owners are
 // collapsed to their Deployment by trimming the pod-template-hash suffix.
-func workloadKey(p corev1.Pod) (string, bool) {
-	ref := metav1.GetControllerOf(&p)
+func workloadKey(p *corev1.Pod) (string, bool) {
+	ref := metav1.GetControllerOf(p)
 	if ref == nil {
 		return "", false
 	}

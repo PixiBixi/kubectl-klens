@@ -19,7 +19,8 @@ func SvcFQDN(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []s
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NS", "SERVICE", "FQDN")
-	for _, s := range services {
+	for i := range services {
+		s := &services[i]
 		fqdn := fmt.Sprintf("%s.%s.svc.cluster.local", s.Name, s.Namespace)
 		t.Row(s.Namespace, s.Name, fqdn)
 	}

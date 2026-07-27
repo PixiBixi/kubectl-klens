@@ -20,7 +20,8 @@ func Taints(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []st
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NAME", "TAINTS")
-	for _, n := range nodes {
+	for i := range nodes {
+		n := &nodes[i]
 		var ts []string
 		for _, taint := range n.Spec.Taints {
 			ts = append(ts, fmt.Sprintf("%s=%s:%s", taint.Key, taint.Value, taintEffect(paint, string(taint.Effect))))

@@ -23,7 +23,8 @@ func DefaultSA(ctx context.Context, c kubernetes.Interface, f kube.Flags, args [
 	}
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NS", "POD")
-	for _, p := range pods {
+	for i := range pods {
+		p := &pods[i]
 		t.Row(p.Namespace, p.Name)
 	}
 	t.SortBy(f.Sort)

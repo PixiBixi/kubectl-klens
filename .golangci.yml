@@ -13,6 +13,7 @@ linters:
     - errorlint
     - forcetypeassert
     - gosec
+    - gocritic
     - misspell
     - modernize
     - nilerr
@@ -22,6 +23,21 @@ linters:
     - unconvert
     - usestdlibvars
   settings:
+    gocritic:
+      # The performance tag is what catches copies of the fat k8s API structs
+      # (corev1.Pod is 1192 bytes, Node 768, Container 408) in per-object loops,
+      # which is where they actually cost something.
+      enabled-tags:
+        - performance
+      settings:
+        hugeParam:
+          # Default is 80, which also flags the config structs this codebase
+          # deliberately passes by value: kube.Flags (104 B) and cli.App (96 B)
+          # are threaded through every RunFunc signature by design, and are
+          # copied once per process. Making them pointers would ripple through
+          # ~25 view signatures, invite accidental mutation of shared flags, and
+          # save nothing measurable. 256 keeps the check pointed at API objects.
+          sizeThreshold: 256
     errcheck:
       # Output writers: a failed write to stdout/pipe is not actionable here.
       exclude-functions:
@@ -50,3 +66,11 @@ linters:
       - path: _test\.go
         linters:
           - gosec
+
+issues:
+  # Show every finding. The defaults (max-issues-per-linter 50, max-same-issues 3)
+  # silently hide repeats, which on this codebase meant most of the identical
+  # "copies 1192 bytes" hits never appeared — a fix looked complete when it was
+  # not. On a repo this size there is no reason to cap.
+  max-issues-per-linter: 0
+  max-same-issues: 0

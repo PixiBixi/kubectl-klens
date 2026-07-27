@@ -20,7 +20,8 @@ func PodsPerNode(ctx context.Context, c kubernetes.Interface, f kube.Flags, args
 		return err
 	}
 	counts := map[string]int{}
-	for _, p := range pods {
+	for i := range pods {
+		p := &pods[i]
 		node := p.Spec.NodeName
 		if node == "" {
 			node = "<unscheduled>"

@@ -38,10 +38,10 @@ func httpProbe() *corev1.Probe {
 	return &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz"}}}
 }
 
-func probePod(name, ns string, owner *metav1.OwnerReference, ctr corev1.Container) *corev1.Pod {
+func probePod(name, ns string, owner *metav1.OwnerReference, ctr *corev1.Container) *corev1.Pod {
 	p := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec:       corev1.PodSpec{Containers: []corev1.Container{ctr}},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{*ctr}},
 	}
 	if owner != nil {
 		p.OwnerReferences = []metav1.OwnerReference{*owner}
@@ -55,18 +55,18 @@ func jobOwner() *metav1.OwnerReference {
 }
 
 func TestProbes(t *testing.T) {
-	healthy := probePod("api", "default", nil, corev1.Container{
+	healthy := probePod("api", "default", nil, &corev1.Container{
 		Name:           "app",
 		ReadinessProbe: httpProbe(),
 		LivenessProbe:  httpProbe(),
 	})
-	noReadiness := probePod("worker", "default", nil, corev1.Container{
+	noReadiness := probePod("worker", "default", nil, &corev1.Container{
 		Name:          "app",
 		LivenessProbe: httpProbe(),
 	})
-	noProbes := probePod("cache", "default", nil, corev1.Container{Name: "redis"})
-	batch := probePod("backup-xyz", "default", jobOwner(), corev1.Container{Name: "dump"})
-	system := probePod("kube-dns", "kube-system", nil, corev1.Container{Name: "dns"})
+	noProbes := probePod("cache", "default", nil, &corev1.Container{Name: "redis"})
+	batch := probePod("backup-xyz", "default", jobOwner(), &corev1.Container{Name: "dump"})
+	system := probePod("kube-dns", "kube-system", nil, &corev1.Container{Name: "dns"})
 
 	c := fake.NewClientset(healthy, noReadiness, noProbes, batch, system)
 
@@ -95,10 +95,10 @@ func TestProbes(t *testing.T) {
 }
 
 func TestProbesSortVerdict(t *testing.T) {
-	healthy := probePod("api", "default", nil, corev1.Container{Name: "app", ReadinessProbe: httpProbe(), LivenessProbe: httpProbe()})
-	noReadiness := probePod("worker", "default", nil, corev1.Container{Name: "app", LivenessProbe: httpProbe()})
-	noLiveness := probePod("front", "default", nil, corev1.Container{Name: "nginx", ReadinessProbe: httpProbe()})
-	noProbes := probePod("cache", "default", nil, corev1.Container{Name: "redis"})
+	healthy := probePod("api", "default", nil, &corev1.Container{Name: "app", ReadinessProbe: httpProbe(), LivenessProbe: httpProbe()})
+	noReadiness := probePod("worker", "default", nil, &corev1.Container{Name: "app", LivenessProbe: httpProbe()})
+	noLiveness := probePod("front", "default", nil, &corev1.Container{Name: "nginx", ReadinessProbe: httpProbe()})
+	noProbes := probePod("cache", "default", nil, &corev1.Container{Name: "redis"})
 	c := fake.NewClientset(healthy, noReadiness, noLiveness, noProbes)
 
 	var buf bytes.Buffer
@@ -118,16 +118,16 @@ func TestProbesSortVerdict(t *testing.T) {
 }
 
 func TestProbesColor(t *testing.T) {
-	healthy := probePod("api", "default", nil, corev1.Container{
+	healthy := probePod("api", "default", nil, &corev1.Container{
 		Name:           "app",
 		ReadinessProbe: httpProbe(),
 		LivenessProbe:  httpProbe(),
 	})
-	noReadiness := probePod("worker", "default", nil, corev1.Container{
+	noReadiness := probePod("worker", "default", nil, &corev1.Container{
 		Name:          "app",
 		LivenessProbe: httpProbe(),
 	})
-	noLiveness := probePod("front", "default", nil, corev1.Container{
+	noLiveness := probePod("front", "default", nil, &corev1.Container{
 		Name:           "nginx",
 		ReadinessProbe: httpProbe(),
 	})
