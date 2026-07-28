@@ -36,5 +36,5 @@ func TestDefaultSAFilters(t *testing.T) {
 	if strings.Contains(out, "pod-custom") {
 		t.Fatalf("pod-custom (SA=custom-sa) must not be listed:\n%s", out)
 	}
-	assertPodFieldSelector(t, c, "spec.serviceAccountName=default")
+	assertFieldSelector(t, c, "pods", "spec.serviceAccountName=default")
 }

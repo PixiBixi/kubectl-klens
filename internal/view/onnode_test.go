@@ -40,7 +40,7 @@ func TestOnNodeFilters(t *testing.T) {
 	if strings.Contains(out, "\nb\t") || strings.Contains(out, " b ") {
 		t.Fatalf("pod b (on n2) must not be listed:\n%s", out)
 	}
-	assertPodFieldSelector(t, c, "spec.nodeName=n1")
+	assertFieldSelector(t, c, "pods", "spec.nodeName=n1")
 }
 
 func TestOnNodeColor(t *testing.T) {
