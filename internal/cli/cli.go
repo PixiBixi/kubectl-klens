@@ -48,6 +48,7 @@ var commands = []Command{
 	{Name: "taints", Summary: "List taints of all nodes", Run: view.Taints, SortColumns: []string{"name", "taints"}},
 	{Name: "capacity", Summary: "Show CPU/memory capacity and allocatable per node", Run: view.Capacity, SortColumns: []string{"name", "cpu_cap", "cpu_alloc", "mem_cap", "mem_alloc"}},
 	{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones, SortColumns: []string{"name", "region", "zone"}},
+	{Name: "node-ips", Summary: "Show internal and external IP per node; a node name narrows it to that node", Run: view.NodeIPs, SortColumns: []string{"name", "internal-ip", "external-ip"}},
 	{Name: "pods-per-node", Summary: "Count pods per node", Run: view.PodsPerNode, SortColumns: []string{"node", "pods"}},
 	{Name: "max-pods", Summary: "Show pod ceiling (allocatable), current count, and free slots per node", Run: view.MaxPods, SortColumns: []string{"node", "maxpods", "used", "free"}},
 	{Name: "node-conditions", Summary: "Show node readiness and memory/disk/pid pressure", Run: view.NodeConditions, SortColumns: []string{"name", "status", "memory", "disk", "pid"}},

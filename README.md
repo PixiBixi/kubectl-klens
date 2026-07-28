@@ -33,6 +33,7 @@ cluster-scoped. See [Namespace scope](#namespace-scope) for details.
 | `taints` | taints per node |
 | `capacity` | CPU/mem capacity + allocatable |
 | `zones` | region/zone per node |
+| `node-ips [node]` | internal + external IP per node, or for one node |
 | `pods-per-node` | pod count per node |
 | `max-pods` | pod ceiling, non-terminated count, free slots per node |
 | `node-conditions` | node readiness + memory/disk/pid pressure |
@@ -43,6 +44,18 @@ node can be unhealthy: `NotReady` is a kubelet that is answering and reporting
 itself unready, while `Unknown` is a kubelet that has **stopped reporting
 altogether** — the state that starts the eviction clock once the `unreachable`
 toleration expires. Both are red.
+
+`node-ips` reads `.status.addresses` — the data you would otherwise dig out with
+a `-o jsonpath` filter on `@.type=="ExternalIP"` — and reports the internal
+address next to it. Passing a node name (`kubectl klens node-ips <node>`) narrows
+the listing to that node; the filter is a `metadata.name` field selector, so the
+apiserver returns that one node instead of the whole fleet, and an unknown name
+is an error rather than an empty table. A dual-stack node shows both of its
+addresses comma-joined (`10.0.0.4,fd00::4`). Color reads the two columns
+differently: a missing
+`INTERNAL-IP` is red (the control plane has no route to that kubelet), while a
+missing `EXTERNAL-IP` is a muted `<none>` — the normal, wanted state on private
+nodes. A public address is yellow, because it is internet-reachable surface.
 
 ### Workloads & resources
 
