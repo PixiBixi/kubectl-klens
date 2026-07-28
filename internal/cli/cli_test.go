@@ -179,7 +179,10 @@ func TestSortColumnsMatchHeaders(t *testing.T) {
 			continue
 		}
 		var buf bytes.Buffer
-		if err := c.Run(context.Background(), fake.NewClientset(), kube.Flags{}, []string{"dummy"}, &buf); err != nil {
+		// The positional arg is a node name for the commands that take one, and
+		// node-ips errors out when it names nothing, so back it with a node.
+		objs := []runtime.Object{&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "dummy"}}}
+		if err := c.Run(context.Background(), fake.NewClientset(objs...), kube.Flags{}, []string{"dummy"}, &buf); err != nil {
 			t.Fatalf("%s: run failed: %v", c.Name, err)
 		}
 		header := strings.Split(buf.String(), "\n")[0]

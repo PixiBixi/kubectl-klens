@@ -41,6 +41,8 @@ The authoritative list is the `commands` slice in
 - `taints` — taints per node
 - `capacity` — CPU/mem capacity + allocatable per node
 - `zones` — region/zone per node
+- `node-ips [node]` — internal + external IP per node, or for a single node
+  (`<none>` when a node has no public address)
 - `pods-per-node` — pod count per node
 - `max-pods` — pod ceiling (allocatable), current count, free slots per node
 - `node-conditions` — readiness + memory/disk/pid pressure
