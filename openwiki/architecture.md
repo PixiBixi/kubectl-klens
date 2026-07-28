@@ -249,7 +249,16 @@ and only needs `SortBy`).
    `kube.NewTable`. **Name the painter `paint`, not `p`**, to avoid shadowing the
    `p` pod loop variable. Color is off in tests (they pass `kube.Flags{}`), so
    plain-output assertions stay byte-identical — add separate `...Color` tests.
-5. Update `README.md`'s usage section (repo convention, before committing).
+5. Update the docs before committing — all of the ones the change reaches, not
+   just the README:
+   - `README.md`'s usage section (repo convention);
+   - the command catalog in [quickstart.md](quickstart.md);
+   - the [pushdown table](#listing-paging-and-pushdown-internalkubelistgo) above
+     if the view pushes a field selector down;
+   - the [Testing](#testing) section if you touch the shared fake helpers.
+
+   A note that names a helper which no longer exists sends the next reader
+   hunting for a dead symbol, so treat a rename as a doc change too.
 
 ## Testing
 

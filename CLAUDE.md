@@ -100,7 +100,12 @@ update that map whenever you change a command's scoping.
    to `kube.NewTable`. Name the painter `paint`, not `p`, to avoid shadowing the
    `p` pod loop variable. Color is off in tests (they pass `kube.Flags{}`), so
    plain-output assertions stay byte-identical — add new `...Color` tests instead.
-5. Update the README usage section (per repo convention, before committing).
+5. Update the docs, before committing: the README usage section (repo
+   convention), the `openwiki/quickstart.md` command catalog, and any
+   `openwiki/architecture.md` section the change reaches — its pushdown table
+   when the view uses a field selector, its Testing section when you touch the
+   shared fake helpers. A doc naming a helper that no longer exists is worse than
+   no doc.
 
 ## Testing pattern
 
