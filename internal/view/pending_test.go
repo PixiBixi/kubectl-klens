@@ -94,7 +94,7 @@ func TestPending(t *testing.T) {
 	if strings.Contains(out, "live") {
 		t.Fatalf("running pod must be excluded:\n%s", out)
 	}
-	assertPodFieldSelector(t, c, "status.phase=Pending")
+	assertFieldSelector(t, c, "pods", "status.phase=Pending")
 }
 
 func TestPendingColor(t *testing.T) {
