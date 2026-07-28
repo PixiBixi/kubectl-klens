@@ -115,7 +115,7 @@ response, which spikes memory on both ends on a cluster with tens of thousands
 of pods. Paging stays an implementation detail: callers get the full slice, and
 a single-page collection is returned as the server's own slice with no copy.
 
-On top of paging, three views push their filter **down to the apiserver** with a
+On top of paging, four views push their filter **down to the apiserver** with a
 field selector instead of listing everything and filtering in the loop:
 
 | View | Field selector |
@@ -123,12 +123,13 @@ field selector instead of listing everything and filtering in the loop:
 | `on-node` | `spec.nodeName=<node>` |
 | `pending` | `status.phase=Pending` |
 | `default-sa` | `spec.serviceAccountName=default` |
+| `node-ips <node>` | `metadata.name=<node>` (only when a node is named) |
 
-Pushdown only works for the [field selectors the apiserver actually supports for
-pods](../internal/view/fake_test.go) (`podFields` mirrors that set); an
-unsupported field matches nothing rather than everything, so it fails silently —
-verify against a real cluster, and see the Testing section for the fake that
-honors selectors.
+Pushdown only works for the [field selectors the apiserver actually
+supports](../internal/view/fake_test.go) — `podFields` mirrors the pod set, and
+nodes are indexed on `metadata.name` alone. An unsupported field matches nothing
+rather than everything, so it fails silently: verify against a real cluster, and
+see the Testing section for the fake that honors selectors.
 
 ### `Table` (`internal/kube/table.go`)
 
@@ -263,10 +264,13 @@ feature.
 `fake.NewClientset` **ignores field selectors** — it returns every object
 regardless — so a view that pushes filtering down would pass its test no matter
 what it asked for. `internal/view/fake_test.go` supplies both halves of that
-contract: `newClientsetWithFieldSelectors` installs a list reactor that applies
-the selector the way the apiserver would, and `assertPodFieldSelector` asserts
-the view issued exactly one pod list carrying the expected selector. Use both
-when adding or changing a pushdown view.
+contract: `newClientsetWithFieldSelectors` installs list reactors (pods and
+nodes) that apply the selector the way the apiserver would, and
+`assertFieldSelector(t, c, resource, want)` asserts the view issued exactly one
+list of that resource carrying the expected selector. Use both when adding or
+changing a pushdown view. A new resource kind needs one
+`addFieldSelectorReactor` line plus a `filter<Kind>` mirroring the fields the
+apiserver indexes for it.
 
 ## Where to change what
 
