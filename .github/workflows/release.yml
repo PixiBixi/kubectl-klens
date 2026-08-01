@@ -17,22 +17,43 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Compute next version
-        id: tag
-        if: github.ref_type == 'branch'
-        uses: mathieudutour/github-tag-action@a22cf08638b34d5badda920f9daf6e72c477b07b # v6.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          release_branches: master
-          default_bump: false
-      - name: Fetch tags
-        if: github.ref_type == 'tag' || steps.tag.outputs.new_tag != ''
-        run: git fetch --tags --force
+      # Needed by svu below, and by goreleaser further down.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: github.ref_type == 'tag' || steps.tag.outputs.new_tag != ''
         with:
           go-version-file: go.mod
           cache: false # release publishes artifacts; avoid cache-poisoning vector
+      # svu derives the next version from the conventional commits since the
+      # last tag, and prints the current one back when nothing warrants a
+      # release -- which is the gate below. --v0 keeps a breaking change on a
+      # 0.x project from jumping straight to v1.0.0.
+      - name: Compute next version
+        id: tag
+        if: github.ref_type == 'branch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # renovate: datasource=github-releases depName=caarlos0/svu
+          SVU_VERSION: v3.4.1
+        run: |
+          set -euo pipefail
+          GOBIN="${RUNNER_TEMP}/bin" go install "github.com/caarlos0/svu/v3@${SVU_VERSION}"
+          svu="${RUNNER_TEMP}/bin/svu"
+
+          current=$("$svu" current)
+          next=$("$svu" next --v0)
+          if [ "$next" = "$current" ]; then
+            echo "No releasable commit since ${current} — nothing to do."
+            exit 0
+          fi
+
+          echo "Tagging ${next} (previous: ${current})"
+          gh api "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f "ref=refs/tags/${next}" -f "sha=${GITHUB_SHA}" --silent
+          echo "new_tag=${next}" >> "$GITHUB_OUTPUT"
+      # The tag was created through the API, so the local clone needs it before
+      # goreleaser can read the version off it.
+      - name: Fetch tags
+        if: github.ref_type == 'tag' || steps.tag.outputs.new_tag != ''
+        run: git fetch --tags --force
       - name: Run GoReleaser
         if: github.ref_type == 'tag' || steps.tag.outputs.new_tag != ''
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
