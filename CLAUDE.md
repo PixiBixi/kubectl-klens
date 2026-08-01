@@ -118,13 +118,18 @@ inject a fake client + observable `Namespace` resolver and inspect
 ## Releasing
 
 Releases are **automatic** on push to `master`. `.github/workflows/release.yml`
-runs `mathieudutour/github-tag-action` to compute the next `vX.Y.Z` from
-conventional commits since the last tag (`feat` → minor, `fix` → patch,
-`default_bump: false` so non-releasable commits produce nothing), pushes the tag,
-then runs goreleaser in the same job — no separate PAT needed because a
-`GITHUB_TOKEN`-pushed tag would not re-trigger a workflow. Pushing a `v*` tag by
-hand still works as a manual escape hatch (the job's goreleaser steps also fire on
-`ref_type == 'tag'`).
+runs [`svu`](https://github.com/caarlos0/svu) to compute the next `vX.Y.Z` from
+the conventional commits since the last tag (`feat` → minor, `fix` → patch;
+anything else produces nothing, which is the gate on the following steps),
+creates the tag through the API, then runs goreleaser in the same job — no
+separate PAT needed because a `GITHUB_TOKEN`-created tag would not re-trigger a
+workflow. Pushing a `v*` tag by hand still works as a manual escape hatch (the
+job's goreleaser steps also fire on `ref_type == 'tag'`).
+
+Note that **`perf:` does not cut a release**: svu implements the Conventional
+Commits spec, where only `fix` and `feat` are normative. Use `fix:` for a change
+that has to ship on its own. `--v0` also stops a breaking change from jumping
+straight to `v1.0.0` while the project is pre-1.0.
 
 goreleaser builds cross-platform archives and pushes the regenerated
 `plugins/klens.yaml` to the central
