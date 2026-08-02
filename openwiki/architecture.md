@@ -235,7 +235,19 @@ and only needs `SortBy`).
    inside the func. Fetch through the `kube.List*` helpers (never the clientset
    directly, or you lose paging), push any filter the apiserver can evaluate
    into the `ListOptions` field selector, and enumerate containers via
-   `podContainers`/`podContainerStatuses`.
+   `podContainers`/`podContainerStatuses`. **Iterate API objects by index, not by
+   value** — `for i := range pods { p := &pods[i] }`, and take `*corev1.Pod` in
+   helpers. gocritic's `performance` tag is enabled in `.golangci.yml` and fails
+   CI on `for _, p := range pods`, because `corev1.Pod` is 1192 bytes (`Node` 768,
+   `Container` 408). Two things this rule deliberately does *not* cover:
+   `hugeParam`'s threshold is raised to 256 so `kube.Flags` (104 B) and `cli.App`
+   (96 B) stay by-value — they are threaded through every `RunFunc` by design and
+   copied once per process, and making them pointers would invite mutation of
+   shared flags for nothing. And it is not a speed optimisation: measured on a
+   6400-pod cluster the conversion was inside run-to-run noise, since wall time
+   is apiserver-bound and loop copies never reach peak RSS. It exists to stop the
+   copy from being reintroduced where it *would* matter — a long-lived slice of
+   Pods, or a nested loop.
 2. Register it in the `commands` slice in `internal/cli/cli.go`:
    - set `CurrentNSDefault: true` if it should scope to the current namespace
      (and update `TestCurrentNSDefaultFlags`);

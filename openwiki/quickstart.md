@@ -176,12 +176,22 @@ current.
 ## Release
 
 Releases are **automatic on push to `master`**. `.github/workflows/release.yml`
-runs `mathieudutour/github-tag-action` to compute the next `vX.Y.Z` from the
-conventional commits since the last tag (`feat` → minor, `fix` → patch,
-`default_bump: false` so non-releasable commits produce no release), pushes the
-tag, then runs goreleaser in the same job. So you release by writing the right
-commit type, not by tagging. Pushing a `v*` tag by hand still works as an escape
-hatch (the goreleaser steps also fire on `ref_type == 'tag'`).
+runs [`svu`](https://github.com/caarlos0/svu) to compute the next `vX.Y.Z` from
+the conventional commits since the last tag (`feat` → minor, `fix` → patch,
+`feat!`/`BREAKING CHANGE` → major); when `svu next` equals `svu current` nothing
+is releasable and the job stops there. Otherwise it creates the tag with a single
+`gh api` call — so the checkout keeps `persist-credentials: false` — and runs
+goreleaser in the same job. A `GITHUB_TOKEN`-created tag does not re-trigger a
+workflow, which is why the tagging and the release live in one job. So you
+release by writing the right commit type, not by tagging. Pushing a `v*` tag by
+hand still works as an escape hatch (the goreleaser steps also fire on
+`ref_type == 'tag'`).
+
+Two consequences worth knowing: **`perf:` does not cut a release** — svu
+implements the Conventional Commits spec, where only `fix` and `feat` are
+normative, and it has no setting to add keywords, so use `fix:` for a change that
+has to ship on its own. And `--v0` keeps a breaking change from jumping straight
+to `v1.0.0` while the project is pre-1.0.
 
 goreleaser builds cross-platform archives and pushes the regenerated
 `plugins/klens.yaml` to the central
@@ -193,6 +203,9 @@ Renovate drives the version bumps (`renovate.json`): minor Go-module updates map
 to `feat(deps)` (minor release), patch/digest to `fix(deps)` (patch release),
 and GitHub-Actions updates stay `chore(deps)` (**no** release — they don't ship
 in the binary). All minor/patch/digest updates automerge via PR once CI passes.
+svu itself is pinned as a plain `SVU_VERSION` env var, which no built-in manager
+sees, so a regex `customManager` keyed on the `# renovate:` comment above it
+keeps that pin current too.
 
 ## Where to go next
 
