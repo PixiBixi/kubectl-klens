@@ -1,13 +1,20 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
   ],
   "labels": ["dependencies"],
   "assignees": ["PixiBixi"],
   "semanticCommits": "enabled",
   "postUpdateOptions": ["gomodTidy"],
+  "pinDigests": true,
   "packageRules": [
+    {
+      "description": "Cooldown before automerge picks up a release: a hijacked package is usually spotted and yanked within days. digest is in here because a digest-only update means an upstream tag moved onto another commit. vulnerabilityAlerts overrides this, so CVE fixes still land at once",
+      "matchUpdateTypes": ["major", "minor", "patch", "digest"],
+      "minimumReleaseAge": "5 days"
+    },
     {
       "description": "Automerge all safe updates (minor/patch/digest) via PR once CI passes",
       "matchUpdateTypes": ["minor", "patch", "digest"],
@@ -27,8 +34,8 @@
       "semanticCommitType": "fix"
     },
     {
-      "description": "GitHub Actions updates do not ship in the binary -> no release",
-      "matchManagers": ["github-actions"],
+      "description": "Actions and runner labels do not ship in the binary -> no release",
+      "matchManagers": ["github-actions", "github-runners"],
       "groupName": "github-actions",
       "semanticCommitType": "chore"
     },
@@ -48,10 +55,10 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "svu is pinned as a plain env var in the release workflow, which no built-in manager sees",
-      "fileMatch": ["^\\.github/workflows/release\\.yml$"],
+      "description": "Tools pinned as plain env vars in the workflows (svu, goimports), which no built-in manager sees",
+      "fileMatch": ["^\\.github/workflows/.+\\.yml$"],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>[a-z-]+?) depName=(?<depName>.+?)\\s+SVU_VERSION: (?<currentValue>.+?)\\s"
+        "# renovate: datasource=(?<datasource>[a-z-]+?) depName=(?<depName>.+?)\\s+[A-Z0-9_]+_VERSION: (?<currentValue>.+?)\\s"
       ],
       "versioningTemplate": "semver"
     }
