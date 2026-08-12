@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   goimports:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -21,9 +21,12 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Install goimports
-        run: go install golang.org/x/tools/cmd/goimports@latest
+        env:
+          # renovate: datasource=go depName=golang.org/x/tools
+          GOIMPORTS_VERSION: v0.48.0
+        run: go install "golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION}"
       - name: Format all .go files
-        run: goimports -w $(find . -name '*.go')
+        run: find . -name '*.go' -exec goimports -w {} +
       - uses: reviewdog/action-suggester@2558ba17e65a9039e73764a73009fc05fef28a46 # v1.24.3
         with:
           tool_name: goimports
