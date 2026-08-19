@@ -23,7 +23,7 @@ jobs:
       - name: Install goimports
         env:
           # renovate: datasource=go depName=golang.org/x/tools
-          GOIMPORTS_VERSION: v0.48.0
+          GOIMPORTS_VERSION: v0.49.0
         run: go install "golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION}"
       - name: Format all .go files
         run: find . -name '*.go' -exec goimports -w {} +
