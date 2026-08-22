@@ -44,11 +44,12 @@ func latestTag(paint kube.Painter, tag string) string {
 // repository) and its tag or digest, defaulting to "latest" when neither is
 // present. A digest takes precedence over a tag.
 func splitImageTag(ref string) (name, tag string) {
-	if at := strings.LastIndex(ref, "@"); at >= 0 {
-		return ref[:at], ref[at+1:]
+	if repo, digest, ok := strings.CutLast(ref, "@"); ok {
+		return repo, digest
 	}
-	if colon := strings.LastIndex(ref, ":"); colon > strings.LastIndex(ref, "/") {
-		return ref[:colon], ref[colon+1:]
+	// A colon after the last "/" is a tag; before it, it is a registry port.
+	if repo, last, ok := strings.CutLast(ref, ":"); ok && !strings.Contains(last, "/") {
+		return repo, last
 	}
 	return ref, "latest"
 }
