@@ -8,7 +8,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
@@ -181,11 +180,11 @@ func TestSortColumnsMatchHeaders(t *testing.T) {
 		var buf bytes.Buffer
 		// The positional arg is a node name for the commands that take one, and
 		// node-ips errors out when it names nothing, so back it with a node.
-		objs := []runtime.Object{&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "dummy"}}}
+		objs := []runtime.Object{&corev1.Node{Name: "dummy"}}
 		if err := c.Run(context.Background(), fake.NewClientset(objs...), kube.Flags{}, []string{"dummy"}, &buf); err != nil {
 			t.Fatalf("%s: run failed: %v", c.Name, err)
 		}
-		header := strings.Split(buf.String(), "\n")[0]
+		header, _, _ := strings.Cut(buf.String(), "\n")
 		assertSortColumnsInHeader(t, c.Name, c.SortColumns, header)
 	}
 }
@@ -207,8 +206,8 @@ func assertSortColumnsInHeader(t *testing.T, name string, cols []string, header 
 
 func autoscalerStatusCM(status string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Name: "cluster-autoscaler-status", Namespace: "kube-system"},
-		Data:       map[string]string{"status": status},
+		Name: "cluster-autoscaler-status", Namespace: "kube-system",
+		Data: map[string]string{"status": status},
 	}
 }
 

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -17,17 +16,17 @@ func TestPrivileged(t *testing.T) {
 	yes := true
 	c := fake.NewClientset(
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "safe", Namespace: "default"},
-			Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
+			Name: "safe", Namespace: "default",
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
 		},
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "priv", Namespace: "default"},
+			Name: "priv", Namespace: "default",
 			Spec: corev1.PodSpec{Containers: []corev1.Container{
 				{Name: "app", SecurityContext: &corev1.SecurityContext{Privileged: &yes}},
 			}},
 		},
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "host", Namespace: "default"},
+			Name: "host", Namespace: "default",
 			Spec: corev1.PodSpec{
 				HostNetwork: true,
 				Containers:  []corev1.Container{{Name: "app"}},
@@ -55,17 +54,15 @@ func TestPrivileged(t *testing.T) {
 func TestPrivilegedInitAndEphemeral(t *testing.T) {
 	yes := true
 	c := fake.NewClientset(&corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "tuned", Namespace: "default"},
+		Name: "tuned", Namespace: "default",
 		Spec: corev1.PodSpec{
 			InitContainers: []corev1.Container{
 				{Name: "sysctl-tuner", SecurityContext: &corev1.SecurityContext{Privileged: &yes}},
 			},
 			Containers: []corev1.Container{{Name: "app"}},
 			EphemeralContainers: []corev1.EphemeralContainer{{
-				EphemeralContainerCommon: corev1.EphemeralContainerCommon{
-					Name:            "debugger",
-					SecurityContext: &corev1.SecurityContext{Privileged: &yes},
-				},
+				Name:            "debugger",
+				SecurityContext: &corev1.SecurityContext{Privileged: &yes},
 			}},
 		},
 	})
@@ -93,11 +90,11 @@ func TestPrivilegedPrivEscDefaultEnrichesOnly(t *testing.T) {
 	yes := true
 	c := fake.NewClientset(
 		&corev1.Pod{ // no securityContext at all: privesc defaults to true
-			ObjectMeta: metav1.ObjectMeta{Name: "ordinary", Namespace: "default"},
-			Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
+			Name: "ordinary", Namespace: "default",
+			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}},
 		},
 		&corev1.Pod{ // has a real finding, so the default is worth naming
-			ObjectMeta: metav1.ObjectMeta{Name: "priv", Namespace: "default"},
+			Name: "priv", Namespace: "default",
 			Spec: corev1.PodSpec{Containers: []corev1.Container{
 				{Name: "app", SecurityContext: &corev1.SecurityContext{Privileged: &yes}},
 			}},
@@ -119,14 +116,14 @@ func TestPrivilegedPrivEscDefaultEnrichesOnly(t *testing.T) {
 func TestPrivilegedHostIPCAndCapabilities(t *testing.T) {
 	c := fake.NewClientset(
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "ipc", Namespace: "default"},
+			Name: "ipc", Namespace: "default",
 			Spec: corev1.PodSpec{
 				HostIPC:    true,
 				Containers: []corev1.Container{{Name: "app"}},
 			},
 		},
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "capped", Namespace: "default"},
+			Name: "capped", Namespace: "default",
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{
 				Name: "app",
 				SecurityContext: &corev1.SecurityContext{Capabilities: &corev1.Capabilities{
@@ -136,7 +133,7 @@ func TestPrivilegedHostIPCAndCapabilities(t *testing.T) {
 			}}},
 		},
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "hostport", Namespace: "default"},
+			Name: "hostport", Namespace: "default",
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{
 				Name:  "app",
 				Ports: []corev1.ContainerPort{{ContainerPort: 8080, HostPort: 8080}},
@@ -161,7 +158,7 @@ func TestPrivilegedHostIPCAndCapabilities(t *testing.T) {
 func TestPrivilegedColor(t *testing.T) {
 	yes := true
 	c := fake.NewClientset(&corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "priv", Namespace: "default"},
+		Name: "priv", Namespace: "default",
 		Spec: corev1.PodSpec{Containers: []corev1.Container{
 			{Name: "app", SecurityContext: &corev1.SecurityContext{Privileged: &yes}},
 		}},

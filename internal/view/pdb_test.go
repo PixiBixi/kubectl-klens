@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	policyv1 "k8s.io/api/policy/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -44,9 +43,9 @@ func TestPdbVerdict(t *testing.T) {
 
 func pdbFixture(name string, min *intstr.IntOrString, st policyv1.PodDisruptionBudgetStatus) *policyv1.PodDisruptionBudget {
 	return &policyv1.PodDisruptionBudget{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-		Spec:       policyv1.PodDisruptionBudgetSpec{MinAvailable: min},
-		Status:     st,
+		Name: name, Namespace: "default",
+		Spec:   policyv1.PodDisruptionBudgetSpec{MinAvailable: min},
+		Status: st,
 	}
 }
 

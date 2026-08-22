@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -19,8 +18,8 @@ func podRestarts(name, container string, restarts int32, waitingReason string) *
 		cs.State.Waiting = &corev1.ContainerStateWaiting{Reason: waitingReason}
 	}
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-		Status:     corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{cs}},
+		Name: name, Namespace: "default",
+		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{cs}},
 	}
 }
 
@@ -29,7 +28,7 @@ func podRestarts(name, container string, restarts int32, waitingReason string) *
 // and used to be invisible here.
 func TestRestartsInitContainer(t *testing.T) {
 	c := fake.NewClientset(&corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "wedged", Namespace: "default"},
+		Name: "wedged", Namespace: "default",
 		Status: corev1.PodStatus{
 			InitContainerStatuses: []corev1.ContainerStatus{{
 				Name:         "migrate",
@@ -85,8 +84,8 @@ func podRestartsExit(name, container string, restarts, exit int32) *corev1.Pod {
 	cs.State.Running = &corev1.ContainerStateRunning{}
 	cs.LastTerminationState.Terminated = &corev1.ContainerStateTerminated{Reason: "Error", ExitCode: exit}
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-		Status:     corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{cs}},
+		Name: name, Namespace: "default",
+		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{cs}},
 	}
 }
 

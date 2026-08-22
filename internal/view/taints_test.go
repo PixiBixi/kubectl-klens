@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -15,12 +14,12 @@ import (
 
 func TestTaints(t *testing.T) {
 	tainted := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "n1"},
+		Name: "n1",
 		Spec: corev1.NodeSpec{Taints: []corev1.Taint{
 			{Key: "dedicated", Value: "gpu", Effect: corev1.TaintEffectNoSchedule},
 		}},
 	}
-	clean := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n2"}}
+	clean := &corev1.Node{Name: "n2"}
 	c := fake.NewClientset(tainted, clean)
 	var buf bytes.Buffer
 	if err := Taints(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
@@ -37,14 +36,14 @@ func TestTaints(t *testing.T) {
 
 func TestTaintsColor(t *testing.T) {
 	node := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "n1"},
+		Name: "n1",
 		Spec: corev1.NodeSpec{Taints: []corev1.Taint{
 			{Key: "a", Value: "1", Effect: corev1.TaintEffectNoExecute},
 			{Key: "b", Value: "2", Effect: corev1.TaintEffectNoSchedule},
 			{Key: "c", Value: "3", Effect: corev1.TaintEffectPreferNoSchedule},
 		}},
 	}
-	clean := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n2"}}
+	clean := &corev1.Node{Name: "n2"}
 	c := fake.NewClientset(node, clean)
 	var buf bytes.Buffer
 	if err := Taints(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {

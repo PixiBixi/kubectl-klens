@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -16,7 +15,7 @@ import (
 func TestSvcFQDN(t *testing.T) {
 	c := fake.NewClientset(
 		&corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "team-a"},
+			Name: "api", Namespace: "team-a",
 		},
 	)
 	var buf bytes.Buffer

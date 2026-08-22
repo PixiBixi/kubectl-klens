@@ -35,13 +35,13 @@ func TestProbesVerdict(t *testing.T) {
 }
 
 func httpProbe() *corev1.Probe {
-	return &corev1.Probe{ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz"}}}
+	return &corev1.Probe{HTTPGet: &corev1.HTTPGetAction{Path: "/healthz"}}
 }
 
 func probePod(name, ns string, owner *metav1.OwnerReference, ctr *corev1.Container) *corev1.Pod {
 	p := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec:       corev1.PodSpec{Containers: []corev1.Container{*ctr}},
+		Name: name, Namespace: ns,
+		Spec: corev1.PodSpec{Containers: []corev1.Container{*ctr}},
 	}
 	if owner != nil {
 		p.OwnerReferences = []metav1.OwnerReference{*owner}

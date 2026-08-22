@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -91,8 +90,8 @@ nodeGroups:
 
 func autoscalerCM(status string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Name: "cluster-autoscaler-status", Namespace: "kube-system"},
-		Data:       map[string]string{"status": status},
+		Name: "cluster-autoscaler-status", Namespace: "kube-system",
+		Data: map[string]string{"status": status},
 	}
 }
 
@@ -147,7 +146,7 @@ func assertNodeGroupTable(t *testing.T, out string) {
 
 func TestAutoscalerYAMLFormat(t *testing.T) {
 	out := renderTo(t, yamlStatus)
-	summary := strings.Split(out, "\n")[0]
+	summary, _, _ := strings.Cut(out, "\n")
 	for _, want := range []string{"Cluster-wide: Healthy", "scaleUp=NoActivity", "scaleDown=NoCandidates", "(ready 35/35)", "2026-06-18"} {
 		if !strings.Contains(summary, want) {
 			t.Fatalf("summary line missing %q:\n%s", want, summary)
@@ -166,7 +165,7 @@ func TestAutoscalerYAMLFormat(t *testing.T) {
 
 func TestAutoscalerLegacyFormat(t *testing.T) {
 	out := renderTo(t, legacyStatus)
-	summary := strings.Split(out, "\n")[0]
+	summary, _, _ := strings.Cut(out, "\n")
 	for _, want := range []string{"Cluster-wide: Healthy", "scaleUp=NoActivity", "scaleDown=NoCandidates", "(ready 10/10)"} {
 		if !strings.Contains(summary, want) {
 			t.Fatalf("summary line missing %q:\n%s", want, summary)
