@@ -34,8 +34,8 @@
       "semanticCommitType": "fix"
     },
     {
-      "description": "Actions and runner labels do not ship in the binary -> no release",
-      "matchManagers": ["github-actions", "github-runners"],
+      "description": "Actions do not ship in the binary -> no release. github-runners is a datasource rather than a manager, so the github-actions manager carries the runner labels too",
+      "matchManagers": ["github-actions"],
       "groupName": "github-actions",
       "semanticCommitType": "chore"
     },
