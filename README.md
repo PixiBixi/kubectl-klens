@@ -19,6 +19,9 @@ kubectl krew upgrade klens   # later, to update
 Or download a release archive, extract `kubectl-klens` onto your `PATH`, and
 invoke it as `kubectl klens`.
 
+The darwin binaries require macOS 13 Ventura or later (Go 1.27 toolchain
+minimum).
+
 ## Commands
 
 `†` = defaults to the current kubeconfig namespace (kubens/kubectx); `-A` widens
