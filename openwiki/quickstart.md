@@ -7,7 +7,7 @@ capacity, requests/limits, images, restarts, PVCs, and a set of *verdict*
 commands (`pdb`, `hpa`, `spread`, `probes`, `pending`) that classify a
 resource's health at a glance instead of making you read raw status fields.
 
-- **Language / runtime:** Go 1.26, compiled to a static `kubectl-klens` binary.
+- **Language / runtime:** Go 1.27, compiled to a static `kubectl-klens` binary.
 - **Key deps:** `k8s.io/client-go` (cluster access), `manifoldco/promptui`
   (interactive pickers, `secret` only), `golang.org/x/term` (TTY detection).
 - **No cobra:** dispatch is a hand-rolled flag-based `switch` over a package-level
