@@ -5,9 +5,9 @@ go 1.27.0
 require (
 	github.com/manifoldco/promptui v0.9.0
 	golang.org/x/term v0.45.0
-	k8s.io/api v0.36.3
-	k8s.io/apimachinery v0.36.3
-	k8s.io/client-go v0.36.3
+	k8s.io/api v0.36.4
+	k8s.io/apimachinery v0.36.4
+	k8s.io/client-go v0.36.4
 	sigs.k8s.io/yaml v1.6.0
 )
 
