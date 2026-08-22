@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -15,12 +14,10 @@ import (
 
 func TestZones(t *testing.T) {
 	node := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "n1",
-			Labels: map[string]string{
-				"topology.kubernetes.io/region": "us-west1",
-				"topology.kubernetes.io/zone":   "us-west1-a",
-			},
+		Name: "n1",
+		Labels: map[string]string{
+			"topology.kubernetes.io/region": "us-west1",
+			"topology.kubernetes.io/zone":   "us-west1-a",
 		},
 	}
 	c := fake.NewClientset(node)

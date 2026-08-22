@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -17,12 +16,12 @@ func TestDefaultSAFilters(t *testing.T) {
 	// the custom-SA pod to be excluded the way a real apiserver excludes it.
 	c := newClientsetWithFieldSelectors(
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "pod-default", Namespace: "default"},
-			Spec:       corev1.PodSpec{ServiceAccountName: "default"},
+			Name: "pod-default", Namespace: "default",
+			Spec: corev1.PodSpec{ServiceAccountName: "default"},
 		},
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "pod-custom", Namespace: "default"},
-			Spec:       corev1.PodSpec{ServiceAccountName: "custom-sa"},
+			Name: "pod-custom", Namespace: "default",
+			Spec: corev1.PodSpec{ServiceAccountName: "custom-sa"},
 		},
 	)
 	var buf bytes.Buffer

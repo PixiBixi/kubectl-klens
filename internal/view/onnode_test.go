@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -45,9 +44,9 @@ func TestOnNodeFilters(t *testing.T) {
 
 func TestOnNodeColor(t *testing.T) {
 	running := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "ns"},
-		Spec:       corev1.PodSpec{NodeName: "node-a"},
-		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+		Name: "p1", Namespace: "ns",
+		Spec:   corev1.PodSpec{NodeName: "node-a"},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
 	}
 	c := fake.NewClientset(running)
 	var buf bytes.Buffer

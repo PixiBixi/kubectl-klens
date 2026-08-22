@@ -8,7 +8,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -16,7 +15,7 @@ import (
 
 func TestReqlim(t *testing.T) {
 	app := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "app", Namespace: "prod"},
+		Name: "app", Namespace: "prod",
 		Spec: corev1.PodSpec{Containers: []corev1.Container{{
 			Name: "main",
 			Resources: corev1.ResourceRequirements{
@@ -26,8 +25,8 @@ func TestReqlim(t *testing.T) {
 		}}},
 	}
 	sys := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "kube-proxy", Namespace: "kube-system"},
-		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "kube-proxy"}}},
+		Name: "kube-proxy", Namespace: "kube-system",
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "kube-proxy"}}},
 	}
 	c := fake.NewClientset(app, sys)
 	var buf bytes.Buffer
@@ -48,7 +47,7 @@ func TestReqlim(t *testing.T) {
 // so omitting them understated the real cost.
 func TestReqlimInitContainer(t *testing.T) {
 	c := fake.NewClientset(&corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "app", Namespace: "prod"},
+		Name: "app", Namespace: "prod",
 		Spec: corev1.PodSpec{
 			InitContainers: []corev1.Container{{
 				Name: "migrate",
@@ -76,8 +75,8 @@ func TestReqlimInitContainer(t *testing.T) {
 // kube-system by name printed only headers.
 func TestReqlimExplicitKubeSystem(t *testing.T) {
 	c := fake.NewClientset(&corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "kube-proxy", Namespace: "kube-system"},
-		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "kube-proxy"}}},
+		Name: "kube-proxy", Namespace: "kube-system",
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "kube-proxy"}}},
 	})
 	var buf bytes.Buffer
 	if err := Reqlim(context.Background(), c, kube.Flags{Namespace: "kube-system"}, nil, &buf); err != nil {

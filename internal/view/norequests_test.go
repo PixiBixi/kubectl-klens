@@ -8,7 +8,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -16,7 +15,7 @@ import (
 
 func podWithRequests(name, ns string, requests corev1.ResourceList) *corev1.Pod {
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Name: name, Namespace: ns,
 		Spec: corev1.PodSpec{Containers: []corev1.Container{
 			{Name: "app", Resources: corev1.ResourceRequirements{Requests: requests}},
 		}},

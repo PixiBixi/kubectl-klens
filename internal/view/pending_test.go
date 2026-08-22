@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -51,7 +50,7 @@ func TestSchedulerCause(t *testing.T) {
 
 func TestPending(t *testing.T) {
 	unsched := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "default"},
+		Name: "api", Namespace: "default",
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{{
@@ -63,8 +62,8 @@ func TestPending(t *testing.T) {
 		},
 	}
 	badimg := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "worker", Namespace: "default"},
-		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "myreg/app:bad"}}},
+		Name: "worker", Namespace: "default",
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "myreg/app:bad"}}},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			ContainerStatuses: []corev1.ContainerStatus{{
@@ -74,8 +73,8 @@ func TestPending(t *testing.T) {
 		},
 	}
 	running := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "live", Namespace: "default"},
-		Status:     corev1.PodStatus{Phase: corev1.PodRunning},
+		Name: "live", Namespace: "default",
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
 	}
 	// The phase filter is pushed down, so the fake has to honour field selectors
 	// for the Running pod to be excluded the way a real apiserver excludes it.
@@ -99,7 +98,7 @@ func TestPending(t *testing.T) {
 
 func TestPendingColor(t *testing.T) {
 	unsched := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "default"},
+		Name: "api", Namespace: "default",
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			Conditions: []corev1.PodCondition{{
@@ -109,8 +108,8 @@ func TestPendingColor(t *testing.T) {
 		},
 	}
 	badimg := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: "worker", Namespace: "default"},
-		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "x:bad"}}},
+		Name: "worker", Namespace: "default",
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "x:bad"}}},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			ContainerStatuses: []corev1.ContainerStatus{{

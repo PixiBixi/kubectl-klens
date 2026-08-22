@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -15,8 +14,8 @@ import (
 
 func dbCreds() *corev1.Secret {
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "db-creds", Namespace: "default"},
-		Type:       corev1.SecretTypeOpaque,
+		Name: "db-creds", Namespace: "default",
+		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
 			"username": []byte("admin"),
 			"password": []byte("s3cr3t"),
@@ -27,7 +26,7 @@ func dbCreds() *corev1.Secret {
 func TestSecretListsWhenNoName(t *testing.T) {
 	c := fake.NewClientset(
 		dbCreds(),
-		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "tls", Namespace: "default"}, Type: corev1.SecretTypeTLS},
+		&corev1.Secret{Name: "tls", Namespace: "default", Type: corev1.SecretTypeTLS},
 	)
 	var buf bytes.Buffer
 	if err := Secret(context.Background(), c, kube.Flags{Namespace: "default"}, nil, &buf); err != nil {
@@ -94,8 +93,8 @@ func TestSecretAllDumpsValues(t *testing.T) {
 
 func TestPickKeyAutoSelectsSingleKey(t *testing.T) {
 	s := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "single", Namespace: "default"},
-		Data:       map[string][]byte{"token": []byte("abc")},
+		Name: "single", Namespace: "default",
+		Data: map[string][]byte{"token": []byte("abc")},
 	}
 	key, err := pickKey(s)
 	if err != nil {

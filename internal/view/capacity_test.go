@@ -8,7 +8,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -16,7 +15,7 @@ import (
 
 func TestCapacity(t *testing.T) {
 	node := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "n1"},
+		Name: "n1",
 		Status: corev1.NodeStatus{
 			Capacity: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("4"),
@@ -43,7 +42,7 @@ func TestCapacity(t *testing.T) {
 
 func TestCapacityColorMutesMissing(t *testing.T) {
 	// Node reporting no capacity/allocatable → every cell is a muted "none".
-	c := fake.NewClientset(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n1"}})
+	c := fake.NewClientset(&corev1.Node{Name: "n1"})
 	var buf bytes.Buffer
 	if err := Capacity(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)

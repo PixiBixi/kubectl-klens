@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -15,12 +14,10 @@ import (
 
 func TestNodes(t *testing.T) {
 	node := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "gke-pool-1-abc",
-			Labels: map[string]string{
-				"cloud.google.com/gke-nodepool":    "pool-1",
-				"node.kubernetes.io/instance-type": "e2-standard-4",
-			},
+		Name: "gke-pool-1-abc",
+		Labels: map[string]string{
+			"cloud.google.com/gke-nodepool":    "pool-1",
+			"node.kubernetes.io/instance-type": "e2-standard-4",
 		},
 		Status: corev1.NodeStatus{
 			Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}},
@@ -41,12 +38,12 @@ func TestNodes(t *testing.T) {
 
 func TestNodesColor(t *testing.T) {
 	ready := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "ok"},
-		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}},
+		Name:   "ok",
+		Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}},
 	}
 	down := &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: "down"},
-		Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}},
+		Name:   "down",
+		Status: corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}},
 	}
 	c := fake.NewClientset(ready, down)
 	var buf bytes.Buffer
@@ -64,7 +61,7 @@ func TestNodesColor(t *testing.T) {
 
 func TestNodesColorUnknownAndPlaceholders(t *testing.T) {
 	// Node with no Ready condition → status "Unknown"; no labels → muted <none>.
-	c := fake.NewClientset(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n"}})
+	c := fake.NewClientset(&corev1.Node{Name: "n"})
 	var buf bytes.Buffer
 	if err := Nodes(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)

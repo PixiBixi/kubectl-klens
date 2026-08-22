@@ -47,7 +47,7 @@ func TestPodContainersOrderAndKinds(t *testing.T) {
 		InitContainers: []corev1.Container{{Name: "migrate"}, {Name: "wait-db"}},
 		Containers:     []corev1.Container{{Name: "api"}},
 		EphemeralContainers: []corev1.EphemeralContainer{
-			{EphemeralContainerCommon: corev1.EphemeralContainerCommon{Name: "debugger"}},
+			{Name: "debugger"},
 		},
 	}}
 	got := podContainers(p)

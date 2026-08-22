@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -15,8 +14,8 @@ import (
 
 func nodeConditions(name string, conds ...corev1.NodeCondition) *corev1.Node {
 	return &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Status:     corev1.NodeStatus{Conditions: conds},
+		Name:   name,
+		Status: corev1.NodeStatus{Conditions: conds},
 	}
 }
 

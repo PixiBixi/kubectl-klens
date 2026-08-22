@@ -9,7 +9,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -17,7 +16,7 @@ import (
 
 func nodeMaxPods(name string, max int64) *corev1.Node {
 	return &corev1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Name: name,
 		Status: corev1.NodeStatus{
 			Allocatable: corev1.ResourceList{
 				corev1.ResourcePods: *resource.NewQuantity(max, resource.DecimalSI),
@@ -108,7 +107,7 @@ func TestMaxPodsColorBySaturation(t *testing.T) {
 }
 
 func TestMaxPodsUnknownAllocatable(t *testing.T) {
-	c := fake.NewClientset(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n1"}})
+	c := fake.NewClientset(&corev1.Node{Name: "n1"})
 	var buf bytes.Buffer
 	if err := MaxPods(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)

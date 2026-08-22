@@ -36,13 +36,13 @@ func TestSpreadVerdict(t *testing.T) {
 }
 
 func zonedNode(name, zone string) *corev1.Node {
-	return &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: map[string]string{"topology.kubernetes.io/zone": zone}}}
+	return &corev1.Node{Name: name, Labels: map[string]string{"topology.kubernetes.io/zone": zone}}
 }
 
 func ownedPod(name, node string, owner metav1.OwnerReference) *corev1.Pod {
 	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", OwnerReferences: []metav1.OwnerReference{owner}},
-		Spec:       corev1.PodSpec{NodeName: node},
+		Name: name, Namespace: "default", OwnerReferences: []metav1.OwnerReference{owner},
+		Spec: corev1.PodSpec{NodeName: node},
 	}
 }
 
