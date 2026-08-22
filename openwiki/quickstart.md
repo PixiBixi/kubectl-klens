@@ -199,13 +199,32 @@ goreleaser builds cross-platform archives and pushes the regenerated
 publisher, using the `KREW_INDEX_TOKEN` PAT for the cross-repo push).
 Version/commit/date are injected via `-X main.version=...` ldflags.
 
+Every release also gets a **build-provenance attestation** over the archives and
+`checksums.txt` (`actions/attest-build-provenance`, signed keylessly with the
+job's `id-token`). A signature would say who published; provenance says *how* the
+artifact was built — which repo, workflow and commit. Verify a download with:
+
+```bash
+gh attestation verify kubectl-klens_<version>_Darwin_arm64.tar.gz \
+  --repo PixiBixi/kubectl-klens
+```
+
 Renovate drives the version bumps (`renovate.json`): minor Go-module updates map
 to `feat(deps)` (minor release), patch/digest to `fix(deps)` (patch release),
 and GitHub-Actions updates stay `chore(deps)` (**no** release — they don't ship
-in the binary). All minor/patch/digest updates automerge via PR once CI passes.
-svu itself is pinned as a plain `SVU_VERSION` env var, which no built-in manager
-sees, so a regex `customManager` keyed on the `# renovate:` comment above it
-keeps that pin current too.
+in the binary). Minor/patch/digest updates automerge via PR once CI passes, but
+only after a **5-day `minimumReleaseAge` cooldown**: a hijacked package is
+usually spotted and yanked within days, so waiting costs nothing and catches the
+window that matters. Digest-only updates sit in the same hold, because a moved
+tag means an upstream ref now points at a different commit.
+`vulnerabilityAlerts` overrides the cooldown, so CVE fixes still land at once.
+Actions are pinned to commit digests rather than tags
+(`helpers:pinGitHubActionDigests`, `pinDigests`), so Renovate keeps the digests
+moving instead of trusting a mutable tag. Two tools are pinned as plain
+`*_VERSION` env vars that no built-in manager sees — svu in `release.yml` and
+goimports (`golang.org/x/tools`) in `go-format.yml` — so a regex
+`customManager` keyed on the `# renovate:` comment above each keeps those pins
+current too.
 
 ## Where to go next
 
