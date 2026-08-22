@@ -310,8 +310,8 @@ func submatch(re *regexp.Regexp, s string) string {
 
 // shortName trims a GKE instance-group URL down to its final path segment.
 func shortName(name string) string {
-	if i := strings.LastIndex(name, "/"); i >= 0 {
-		return name[i+1:]
+	if _, after, ok := strings.CutLast(name, "/"); ok {
+		return after
 	}
 	return name
 }

@@ -138,8 +138,8 @@ func workloadKey(p *corev1.Pod) (string, bool) {
 // trimHash drops the final "-<segment>" of a ReplicaSet name (its
 // pod-template-hash) to recover the Deployment name.
 func trimHash(name string) string {
-	if i := strings.LastIndex(name, "-"); i > 0 {
-		return name[:i]
+	if before, _, ok := strings.CutLast(name, "-"); ok && before != "" {
+		return before
 	}
 	return name
 }
