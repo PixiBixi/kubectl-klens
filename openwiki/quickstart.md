@@ -1,4 +1,4 @@
-# kubectl-klens — Quickstart
+# kubectl-klens - Quickstart
 
 `kubectl-klens` is a single-binary **kubectl plugin** (`kubectl klens`) bundling
 ~25 read-only cluster-inspection shortcuts behind one dispatcher. It is the
@@ -37,31 +37,31 @@ The authoritative list is the `commands` slice in
 [`internal/cli/cli.go`](../internal/cli/cli.go). Grouped by what they inspect:
 
 **Nodes / capacity**
-- `nodes` — nodes + GKE nodepool + instance-type
-- `taints` — taints per node
-- `capacity` — CPU/mem capacity + allocatable per node
-- `zones` — region/zone per node
-- `node-ips [node]` — internal + external IP per node, or for a single node
+- `nodes` - nodes + GKE nodepool + instance-type
+- `taints` - taints per node
+- `capacity` - CPU/mem capacity + allocatable per node
+- `zones` - region/zone per node
+- `node-ips [node]` - internal + external IP per node, or for a single node
   (`<none>` when a node has no public address)
-- `pods-per-node` — pod count per node
-- `max-pods` — pod ceiling (allocatable), current count, free slots per node
-- `node-conditions` — readiness + memory/disk/pid pressure
-- `on-node <node>` — pods scheduled on a given node
-- `autoscaler` — cluster-autoscaler status (always reads `kube-system`)
+- `pods-per-node` - pod count per node
+- `max-pods` - pod ceiling (allocatable), current count, free slots per node
+- `node-conditions` - readiness + memory/disk/pid pressure
+- `on-node <node>` - pods scheduled on a given node
+- `autoscaler` - cluster-autoscaler status (always reads `kube-system`)
 
 **Workload hygiene (namespace-scoped)**
-- `reqlim` — requests/limits per container
-- `no-limits` / `no-requests` — containers missing limits / requests
-- `images` — image per container per pod
-- `image-count` — image occurrence counts split registry/image/tag (cluster-wide)
-- `restarts` — restarted containers + crash reason + last exit code (137/143 = SIGKILL/SIGTERM)
-- `pvc` — PVCs bound to pod + node
-- `default-sa` — pods still on the default service account
-- `privileged` — containers with privileged/host security flags
-- `svc-fqdn` — in-cluster FQDN of services
+- `reqlim` - requests/limits per container
+- `no-limits` / `no-requests` - containers missing limits / requests
+- `images` - image per container per pod
+- `image-count` - image occurrence counts split registry/image/tag (cluster-wide)
+- `restarts` - restarted containers + crash reason + last exit code (137/143 = SIGKILL/SIGTERM)
+- `pvc` - PVCs bound to pod + node
+- `default-sa` - pods still on the default service account
+- `privileged` - containers with privileged/host security flags
+- `svc-fqdn` - in-cluster FQDN of services
 
 `reqlim`, `no-limits`, `no-requests`, `images`, `restarts` and `privileged`
-report **every** container of a pod — init and ephemeral ones included — and name
+report **every** container of a pod - init and ephemeral ones included - and name
 the role in a `KIND` column (`app`/`init`/`eph`), because an init container's
 requests, images and security context count exactly as much as an app
 container's. `reqlim`, `no-limits`, `no-requests` and `probes` drop kube-system
@@ -71,14 +71,14 @@ README's [Container kinds](../README.md#container-kinds) and
 `KIND` and `FLAGS` values.
 
 **Verdict commands** (compute a health classification, default-sorted worst-last)
-- `pdb` — PodDisruptionBudget drain-safety verdict
-- `pending` — Pending pods with a synthesized blocking reason
-- `hpa` — HorizontalPodAutoscaler autoscaling verdict
-- `spread` — replica placement single-point-of-failure verdict
-- `probes` — readiness/liveness/startup probe reliability verdict
+- `pdb` - PodDisruptionBudget drain-safety verdict
+- `pending` - Pending pods with a synthesized blocking reason
+- `hpa` - HorizontalPodAutoscaler autoscaling verdict
+- `spread` - replica placement single-point-of-failure verdict
+- `probes` - readiness/liveness/startup probe reliability verdict
 
 **Interactive**
-- `secret` — browse secrets interactively (pick secret, then key); positional
+- `secret` - browse secrets interactively (pick secret, then key); positional
   args skip the pickers. The only command that draws promptui pickers, and only
   when stdout is a TTY.
 
@@ -88,7 +88,7 @@ registry, so it can't drift). Subcommands accept singular/plural aliases
 
 ## Cross-cutting behaviour
 
-These five behaviours apply across commands — learn them once.
+These five behaviours apply across commands - learn them once.
 
 ### Namespace defaulting
 Some commands default to the **current kubeconfig namespace** (the one set by
@@ -100,7 +100,7 @@ kubens/kubectx); the rest default to **all namespaces**.
 - `-A` / `--all-namespaces` widens to all; `-n <ns>` targets one.
 - `autoscaler` ignores namespace flags entirely (always `kube-system`).
 
-This is driven by `Command.CurrentNSDefault` and is locked by a guard test —
+This is driven by `Command.CurrentNSDefault` and is locked by a guard test -
 see [architecture.md](architecture.md#namespace-defaulting).
 
 ### Sorting (`--sort`)
@@ -128,7 +128,7 @@ output through unchanged).
 ### Request bounds and interruption
 Every apiserver request is bounded by `--request-timeout` (default `1m0s`;
 `--request-timeout=0` removes the bound). It is a safety net against an
-unresponsive control plane, not a budget — the heaviest command measured on a
+unresponsive control plane, not a budget - the heaviest command measured on a
 6500-pod cluster takes about four seconds. If you do hit it, the error names the
 flag rather than failing opaquely:
 
@@ -160,14 +160,15 @@ Load kubectl's own completion first, e.g. `source <(kubectl completion zsh)`.
 make build      # go build -ldflags "-s -w" -o kubectl-klens .
 make test       # go test -race ./...
 make lint       # golangci-lint run (config: .golangci.yml)
-make snapshot   # goreleaser --snapshot --clean (dry-run)
+make snapshot   # goreleaser release --snapshot --clean (dry-run)
 
 go test -race ./internal/view -run TestNodes    # single test
 ```
 
-`Taskfile.yml` mirrors the Makefile (`task build`, `task test`, ...). `make lint`
-runs **golangci-lint** (`.github/workflows/lint.yml`, config in `.golangci.yml`),
-the same linter CI enforces. The
+`Taskfile.yml` mirrors the Makefile (`task build`, `task test`, ...), including
+the bare invocation: `make` and `task` both just list the available targets.
+`make lint` runs **golangci-lint** (`.github/workflows/lint.yml`, config in
+`.golangci.yml`), the same linter CI enforces. The
 `ci.yml` Test job runs `go mod verify`, build, and `go test -race`. Separate
 hardening workflows add `govulncheck` (dependency CVEs), `zizmor` (GitHub Actions
 security), goimports formatting, and markdownlint; Renovate keeps dependencies
@@ -180,14 +181,14 @@ runs [`svu`](https://github.com/caarlos0/svu) to compute the next `vX.Y.Z` from
 the conventional commits since the last tag (`feat` → minor, `fix` → patch,
 `feat!`/`BREAKING CHANGE` → major); when `svu next` equals `svu current` nothing
 is releasable and the job stops there. Otherwise it creates the tag with a single
-`gh api` call — so the checkout keeps `persist-credentials: false` — and runs
+`gh api` call - so the checkout keeps `persist-credentials: false` - and runs
 goreleaser in the same job. A `GITHUB_TOKEN`-created tag does not re-trigger a
 workflow, which is why the tagging and the release live in one job. So you
 release by writing the right commit type, not by tagging. Pushing a `v*` tag by
 hand still works as an escape hatch (the goreleaser steps also fire on
 `ref_type == 'tag'`).
 
-Two consequences worth knowing: **`perf:` does not cut a release** — svu
+Two consequences worth knowing: **`perf:` does not cut a release** - svu
 implements the Conventional Commits spec, where only `fix` and `feat` are
 normative, and it has no setting to add keywords, so use `fix:` for a change that
 has to ship on its own. And `--v0` keeps a breaking change from jumping straight
@@ -202,7 +203,7 @@ Version/commit/date are injected via `-X main.version=...` ldflags.
 Every release also gets a **build-provenance attestation** over the archives and
 `checksums.txt` (`actions/attest-build-provenance`, signed keylessly with the
 job's `id-token`). A signature would say who published; provenance says *how* the
-artifact was built — which repo, workflow and commit. Verify a download with:
+artifact was built - which repo, workflow and commit. Verify a download with:
 
 ```bash
 gh attestation verify kubectl-klens_<version>_Darwin_arm64.tar.gz \
@@ -211,8 +212,11 @@ gh attestation verify kubectl-klens_<version>_Darwin_arm64.tar.gz \
 
 Renovate drives the version bumps (`renovate.json`): minor Go-module updates map
 to `feat(deps)` (minor release), patch/digest to `fix(deps)` (patch release),
-and GitHub-Actions updates stay `chore(deps)` (**no** release — they don't ship
-in the binary). Minor/patch/digest updates automerge via PR once CI passes, but
+and GitHub-Actions updates stay `chore(deps)` (**no** release - they don't ship
+in the binary). Runner-label bumps ride that same rule: `github-runners` is a
+Renovate *datasource*, not a manager, so the `github-actions` manager carries
+them and listing it under `matchManagers` would be invalid. Minor/patch/digest
+updates automerge via PR once CI passes, but
 only after a **5-day `minimumReleaseAge` cooldown**: a hijacked package is
 usually spotted and yanked within days, so waiting costs nothing and catches the
 window that matters. Digest-only updates sit in the same hold, because a moved
@@ -221,14 +225,14 @@ tag means an upstream ref now points at a different commit.
 Actions are pinned to commit digests rather than tags
 (`helpers:pinGitHubActionDigests`, `pinDigests`), so Renovate keeps the digests
 moving instead of trusting a mutable tag. Two tools are pinned as plain
-`*_VERSION` env vars that no built-in manager sees — svu in `release.yml` and
-goimports (`golang.org/x/tools`) in `go-format.yml` — so a regex
+`*_VERSION` env vars that no built-in manager sees - svu in `release.yml` and
+goimports (`golang.org/x/tools`) in `go-format.yml` - so a regex
 `customManager` keyed on the `# renovate:` comment above each keeps those pins
 current too.
 
 ## Where to go next
 
-- **[architecture.md](architecture.md)** — the cli→view→kube layering, the
+- **[architecture.md](architecture.md)** - the cli→view→kube layering, the
   `RunFunc` contract, the paged/pushed-down listing layer, the `Table`/`Painter`
   output mechanics, the shared view helpers, the verdict-command pattern, and a
   step-by-step guide to adding a subcommand.
