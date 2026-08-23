@@ -15,7 +15,7 @@ import (
 // Privileged lists containers with security-sensitive settings: privileged
 // mode, allowed privilege escalation, added node-level capabilities, host ports,
 // explicit root, or pods sharing the host network/PID/IPC namespaces or mounting
-// host paths. Init and ephemeral containers are covered too — a privileged init
+// host paths. Init and ephemeral containers are covered too - a privileged init
 // container escalates exactly as far as an app one. Only flagged rows are shown.
 func Privileged(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
 	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
@@ -58,8 +58,8 @@ func hasHardFinding(flags []string) bool {
 	return false
 }
 
-// dangerousCaps are Linux capabilities that grant host-level power when added —
-// SYS_ADMIN alone is broadly equivalent to privileged mode — or that the
+// dangerousCaps are Linux capabilities that grant host-level power when added -
+// SYS_ADMIN alone is broadly equivalent to privileged mode - or that the
 // restricted Pod Security Standard forbids outright. Capabilities present in a
 // runtime's default set (SETUID, DAC_OVERRIDE, ...) are deliberately absent:
 // only explicit additions are inspected, and listing the defaults would add

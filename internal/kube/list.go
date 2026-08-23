@@ -21,7 +21,7 @@ const ChunkSize = 500
 // implementation detail of this package.
 //
 // A collection that fits in one page is handed back as the server's own slice,
-// with no copy — that is the common case (most namespaces hold far fewer than
+// with no copy - that is the common case (most namespaces hold far fewer than
 // ChunkSize objects) and these objects are fat: a corev1.Pod is ~1.2 kB.
 //
 // A continue token can expire mid-walk on a very slow client (the apiserver

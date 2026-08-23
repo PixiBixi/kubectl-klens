@@ -17,7 +17,7 @@ import (
 // Restarts lists containers that have restarted, most restarts first, with the
 // reason behind the current or last termination (e.g. CrashLoopBackOff,
 // OOMKilled) and its exit code (137/143 = SIGKILL/SIGTERM). Init and ephemeral
-// containers are included — an init container looping in CrashLoopBackOff is a
+// containers are included - an init container looping in CrashLoopBackOff is a
 // classic cause of a pod that never starts, and it used to be invisible here.
 // Containers with zero restarts are omitted.
 func Restarts(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {

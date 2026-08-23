@@ -155,8 +155,8 @@ func TestCompletionInstallRequiresInstallArg(t *testing.T) {
 }
 
 // TestCompletionOffersEveryGlobalFlag stops completionFlags from drifting away
-// from globalFlags. The two lists are separate — globalFlags drives registration
-// and --help, completionFlags drives shell completion — so adding a global flag
+// from globalFlags. The two lists are separate - globalFlags drives registration
+// and --help, completionFlags drives shell completion - so adding a global flag
 // silently leaves it uncompletable without this guard.
 func TestCompletionOffersEveryGlobalFlag(t *testing.T) {
 	for _, gf := range globalFlags {

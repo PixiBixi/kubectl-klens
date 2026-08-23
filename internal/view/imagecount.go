@@ -22,7 +22,7 @@ type imageCount struct {
 
 // ImageCount counts container image occurrences across pods, splitting each
 // reference into registry, repository, and tag. Init and ephemeral containers
-// count too — they are real pulls against the registry, so omitting them
+// count too - they are real pulls against the registry, so omitting them
 // understated usage. The --sort column selects the primary order (count desc by
 // default, the others ascending).
 func ImageCount(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {

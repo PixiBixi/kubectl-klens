@@ -84,7 +84,7 @@ func TestPrivilegedInitAndEphemeral(t *testing.T) {
 
 // TestPrivilegedPrivEscDefaultEnrichesOnly locks in the chosen trade-off: an
 // unset allowPrivilegeEscalation is reported as context on rows that already
-// have a finding, but never creates a row on its own — otherwise the command
+// have a finding, but never creates a row on its own - otherwise the command
 // would match nearly every container in a normal cluster.
 func TestPrivilegedPrivEscDefaultEnrichesOnly(t *testing.T) {
 	yes := true

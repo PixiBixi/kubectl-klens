@@ -70,7 +70,7 @@ linters:
 issues:
   # Show every finding. The defaults (max-issues-per-linter 50, max-same-issues 3)
   # silently hide repeats, which on this codebase meant most of the identical
-  # "copies 1192 bytes" hits never appeared — a fix looked complete when it was
+  # "copies 1192 bytes" hits never appeared - a fix looked complete when it was
   # not. On a repo this size there is no reason to cap.
   max-issues-per-linter: 0
   max-same-issues: 0

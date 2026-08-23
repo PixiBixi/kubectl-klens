@@ -230,7 +230,7 @@ func lookup(name string) (Command, bool) {
 }
 
 func (a App) usage(w io.Writer) {
-	fmt.Fprint(w, `klens — kubectl plugin for quick cluster inspection
+	fmt.Fprint(w, `klens - kubectl plugin for quick cluster inspection
 
 Usage:
   kubectl klens <command> [flags]

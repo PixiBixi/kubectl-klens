@@ -1,4 +1,4 @@
-# kubectl-klens — `pdb` command design
+# kubectl-klens - `pdb` command design
 
 Date: 2026-06-20
 
@@ -15,7 +15,7 @@ delivery-prod-kafka             5               N/A               0             
 delivery-prod-kafka-exporter    1               N/A               1                     40d
 ```
 
-The operator still has to reason: *"ALLOWED DISRUPTIONS = 0 — is that fine
+The operator still has to reason: *"ALLOWED DISRUPTIONS = 0 - is that fine
 (at floor, expected) or is it a problem (blocked drain)? Is this PDB even doing
 anything, or is it orphaned with no matching pods? Is it misconfigured so it can
 **never** allow a disruption?"*
@@ -53,7 +53,7 @@ the drain-safety state is readable at a glance instead of inferred.
   (`k8s.io/api/policy/v1`).
 - Registry entry in `internal/cli/cli.go`:
   - `Name: "pdb"`, `Summary: "List PodDisruptionBudgets with a drain-safety verdict in the current namespace (-A for all)"`.
-  - `CurrentNSDefault: true` — scopes to the current kubeconfig namespace absent
+  - `CurrentNSDefault: true` - scopes to the current kubeconfig namespace absent
     `-n`/`-A`. **Must be added to the `TestCurrentNSDefaultFlags` map** in
     `cli_test.go` (the authoritative list).
   - `SortColumns: []string{"ns", "name", "policy", "expected", "desired", "healthy", "allowed", "verdict"}`.
@@ -92,12 +92,12 @@ Rules, in precedence order:
 
 | # | Verdict      | Condition                                            | Severity | Meaning                                                        |
 |---|--------------|------------------------------------------------------|----------|----------------------------------------------------------------|
-| 1 | `ORPHAN`     | `ExpectedPods == 0`                                  | muted    | PDB selects no pods — inert, but a sign of a stale selector.   |
-| 2 | `NO-GUARD`   | `DesiredHealthy == 0 && ExpectedPods >= 2`           | bad      | Zero floor on a multi-replica workload: a drain can evict **every** replica at once — the PDB provides no protection (e.g. `minAvailable: 0`, or `maxUnavailable >= replicas`). |
+| 1 | `ORPHAN`     | `ExpectedPods == 0`                                  | muted    | PDB selects no pods - inert, but a sign of a stale selector.   |
+| 2 | `NO-GUARD`   | `DesiredHealthy == 0 && ExpectedPods >= 2`           | bad      | Zero floor on a multi-replica workload: a drain can evict **every** replica at once - the PDB provides no protection (e.g. `minAvailable: 0`, or `maxUnavailable >= replicas`). |
 | 3 | `PERMABLOCK` | `DesiredHealthy >= ExpectedPods`                     | bad      | Floor ≥ population: a disruption can **never** be allowed. Misconfigured (e.g. `minAvailable: 100%`, or `minAvailable >= replicas`). |
-| 4 | `BLOCKED`    | `DisruptionsAllowed == 0 && CurrentHealthy < DesiredHealthy` | bad | Below floor *and* no disruptions allowed — a drain is stuck and pods are unhealthy. |
+| 4 | `BLOCKED`    | `DisruptionsAllowed == 0 && CurrentHealthy < DesiredHealthy` | bad | Below floor *and* no disruptions allowed - a drain is stuck and pods are unhealthy. |
 | 5 | `AT-FLOOR`   | `DisruptionsAllowed == 0 && CurrentHealthy >= DesiredHealthy` | warn | At (or above) the floor with nothing to spare: healthy, but a drain will block until a replacement is ready. Expected steady state for tight PDBs. |
-| 6 | `OK`         | `DisruptionsAllowed >= 1`                            | ok       | At least one pod can be evicted now — drains proceed.          |
+| 6 | `OK`         | `DisruptionsAllowed >= 1`                            | ok       | At least one pod can be evicted now - drains proceed.          |
 
 Rules 4–6 cover every remaining `DisruptionsAllowed` value once ORPHAN,
 NO-GUARD, and PERMABLOCK are excluded (`< floor` → BLOCKED, `>= floor` with 0
@@ -106,8 +106,8 @@ allowed → AT-FLOOR, `>= 1` allowed → OK), so the helper always returns a ver
 Rationale for ordering:
 - ORPHAN first: with no pods, the other fields are meaningless.
 - NO-GUARD before PERMABLOCK: a zero floor (`DesiredHealthy == 0`) is the
-  opposite failure mode from PERMABLOCK — the PDB is toothless rather than
-  permanently blocking — and is only meaningful for a multi-replica workload, so
+  opposite failure mode from PERMABLOCK - the PDB is toothless rather than
+  permanently blocking - and is only meaningful for a multi-replica workload, so
   it is gated on `ExpectedPods >= 2` (a single replica with `minAvailable: 0` is
   a deliberate opt-out, not a risk).
 - PERMABLOCK before BLOCKED: a permanent misconfiguration is a distinct, more
@@ -138,7 +138,7 @@ the `sev` returned by `pdbVerdict` (no second classification).
 
 `internal/view/pdb_test.go`:
 
-1. **`TestPdbVerdict`** — table-driven over the pure helper, one case per rule
+1. **`TestPdbVerdict`** - table-driven over the pure helper, one case per rule
    plus boundary cases:
    - ORPHAN: `ExpectedPods=0`.
    - PERMABLOCK: `DesiredHealthy=3, ExpectedPods=3` (equal) and `>` variant.
@@ -146,10 +146,10 @@ the `sev` returned by `pdbVerdict` (no second classification).
    - AT-FLOOR: `DisruptionsAllowed=0, CurrentHealthy=3, DesiredHealthy=3`.
    - OK: `DisruptionsAllowed=1` (and `>=2`).
    - Asserts both `verdict` and `sev`.
-2. **`TestPdb`** — `fake.NewClientset` with one PDB per verdict; run with
+2. **`TestPdb`** - `fake.NewClientset` with one PDB per verdict; run with
    `kube.Flags{}`; assert each verdict string appears and that rows are ordered
    risk-descending (BLOCKED/PERMABLOCK before OK).
-3. **`TestPdbColor`** — run with `kube.Flags{Color: true}`; assert the colored
+3. **`TestPdbColor`** - run with `kube.Flags{Color: true}`; assert the colored
    tokens (e.g. `\x1b[31mBLOCKED\x1b[0m`, `\x1b[32mOK\x1b[0m`, a muted `none`).
 
 Construct fakes with explicit `Status` fields (the fake client does not run the
@@ -159,7 +159,7 @@ disruption controller, so we set `ExpectedPods`/`DesiredHealthy`/
 ## README
 
 Add `pdb` to the command list and the usage section, and extend the color
-palette note to mention the VERDICT classifications — before committing, per
+palette note to mention the VERDICT classifications - before committing, per
 repo convention.
 
 ## Out of scope / future

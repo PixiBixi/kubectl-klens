@@ -1,4 +1,4 @@
-# kubectl-klens — colorized output design
+# kubectl-klens - colorized output design
 
 Date: 2026-06-19
 
@@ -10,7 +10,7 @@ kubecolor only colorizes formats it recognizes (`get`, `describe`, ...) and
 passes plugin output through verbatim. It cannot understand klens' bespoke
 tables.
 
-The fix is therefore **not** "make klens compatible with kubecolor" — it is to
+The fix is therefore **not** "make klens compatible with kubecolor" - it is to
 give klens its own ANSI colors. Codes emitted by klens survive kubecolor's
 passthrough, so the result works both standalone and under the kubecolor alias.
 
@@ -54,7 +54,7 @@ This collapses to a single resolved `bool`, stored on `kube.Flags.Color`.
 
 ## Components
 
-### `internal/cli` — color resolution
+### `internal/cli` - color resolution
 
 The dispatcher resolves the color `bool` once (flag + env + TTY of the `Out`
 writer) and sets `kube.Flags.Color`. `--color` is a global flag registered in
@@ -62,7 +62,7 @@ the existing `globalFlags` table (so it appears in `--help` and FlagSet
 registration without drift). Completion offers `auto|always|never` for
 `--color`.
 
-### `internal/kube` — palette + painter (`color.go`)
+### `internal/kube` - palette + painter (`color.go`)
 
 ```go
 type Painter struct{ enabled bool }
@@ -85,7 +85,7 @@ func (p Painter) Status(s string) string// classifier for unambiguous tokens
 - No global mutable state: the painter is built per view from `Flags`, so
   parallel `-race` tests are safe.
 
-### `internal/kube` — ANSI-aware `Table`
+### `internal/kube` - ANSI-aware `Table`
 
 The `tabwriter`-based alignment in `Table.Flush` measures cell width in runes,
 so embedded ANSI codes inflate the measured width and break alignment of any
@@ -131,7 +131,7 @@ Views opt in cell by cell using the painter:
 - New targeted tests run with `kube.Flags{Color: true}` and assert:
   - the expected ANSI codes wrap the expected tokens (e.g. READY=Ready is green
     in node-conditions, a `latest` tag is yellow in image-count);
-  - alignment is preserved despite ANSI — a colored middle column does not shift
+  - alignment is preserved despite ANSI - a colored middle column does not shift
     the following column (assert column start positions on visible width);
   - `--color=never` / `NO_COLOR` produce byte-identical output to the current
     plain rendering.
@@ -141,12 +141,12 @@ Views opt in cell by cell using the painter:
 
 ## Rejected alternatives
 
-- **tabwriter + `Escape` brackets** — spike showed the `\xff` escape bytes are
+- **tabwriter + `Escape` brackets** - spike showed the `\xff` escape bytes are
   emitted verbatim into the output (`M-^?` under `cat -v`). Rejected.
-- **Color only the last column** — tabwriter does not pad the trailing column so
+- **Color only the last column** - tabwriter does not pad the trailing column so
   it would align, but most klens status columns are in the middle. Rejected as
   too limiting.
-- **Global color state** — simpler call sites but mutable global state is unsafe
+- **Global color state** - simpler call sites but mutable global state is unsafe
   for the parallel `-race` test suite. Rejected in favor of a `Flags`-threaded
   `Painter`.
 

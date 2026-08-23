@@ -18,7 +18,7 @@ When working in this repository, read the OpenWiki quickstart first, then follow
 `kubectl-klens` is a single-binary kubectl plugin (`kubectl klens`) bundling ~25
 read-only cluster-inspection shortcuts. Go 1.27, depends on `client-go`,
 `promptui` (interactive pickers), and `golang.org/x/term` (TTY detection). No
-cobra — dispatch is a hand-rolled flag-based switch.
+cobra - dispatch is a hand-rolled flag-based switch.
 
 ## Common commands
 
@@ -32,7 +32,7 @@ go test -race ./internal/view -run TestNodes   # single test
 ```
 
 `Taskfile.yml` mirrors the Makefile (`task build`, `task test`, ...). `make lint`
-runs **golangci-lint** (`.golangci.yml`, `version: "2"`) — the same linter the
+runs **golangci-lint** (`.golangci.yml`, `version: "2"`) - the same linter the
 `Lint` CI job enforces. CI is split across `.github/workflows/`: `ci.yml`
 (`go mod verify`, build, `go test -race`), `lint.yml` (golangci-lint), plus
 `go-format`, `govulncheck`, `github-actions`, and `markdownlint` workflows.
@@ -41,7 +41,7 @@ runs **golangci-lint** (`.golangci.yml`, `version: "2"`) — the same linter the
 
 Three packages under `internal/`, layered cli → view → kube:
 
-- **`internal/cli`** — the dispatcher. `App` holds injected `NewClient` and
+- **`internal/cli`** - the dispatcher. `App` holds injected `NewClient` and
   `Namespace` functions so `Run` is testable without a real cluster (see
   `NewApp` for the production wiring). `commands` (a package-level slice) is the
   single registry of `Command` entries; `Run` parses global flags, builds the
@@ -50,12 +50,12 @@ Three packages under `internal/`, layered cli → view → kube:
   registers the flag, validates the value against that list, and the value flows
   through `kube.Flags.Sort`. Global flags (`-n`, `--context`, ...) live once in
   the `globalFlags` table, which drives both FlagSet registration and the
-  `--help` listing so the two can't drift — add a global flag there, not in two
+  `--help` listing so the two can't drift - add a global flag there, not in two
   places. `complete.go`
   implements the cobra-compatible `__complete` protocol kubectl invokes via the
   `completion/kubectl_complete-klens` shim, plus `completion install` (writes
   the shim to krew's bin dir, needs no cluster).
-- **`internal/view`** — one file per subcommand, each a `RunFunc`:
+- **`internal/view`** - one file per subcommand, each a `RunFunc`:
   `func(ctx, kubernetes.Interface, kube.Flags, args []string, out io.Writer) error`.
   Shared node helpers live in `view.go`. `secret.go` is the only interactive
   command: `kube.IsTTY(out)` gates promptui pickers vs. plain piped listings.
@@ -63,7 +63,7 @@ Three packages under `internal/`, layered cli → view → kube:
   `restarts` keep a bespoke count-descending default (overridden by `--sort`).
   Views colorize status cells by building `paint := kube.NewPainter(f)` and
   wrapping cells (`paint.OK/Warn/Bad/Muted` or the `paint.Status` classifier).
-- **`internal/kube`** — kubeconfig plumbing (`Client`, `CurrentNamespace`,
+- **`internal/kube`** - kubeconfig plumbing (`Client`, `CurrentNamespace`,
   `clientConfig` via deferred loading rules + context override), the `Flags`
   struct with `NamespaceScope()`, the `Table` helper used for all columnar
   output, and `color.go` (`Painter` + `ResolveColor` + `IsTTY`). `Table` buffers
@@ -81,7 +81,7 @@ neither `-n` nor `-A`, the dispatcher resolves the current kubeconfig namespace
 by default. The current `CurrentNSDefault` set (`reqlim`, `no-limits`,
 `no-requests`, `images`, `restarts`, `pvc`, `svc-fqdn`, `secret`, `privileged`,
 `pdb`, `pending`, `hpa`, `spread`, `probes`) is locked in by
-`TestCurrentNSDefaultFlags` in `cli_test.go`, which is the authoritative list —
+`TestCurrentNSDefaultFlags` in `cli_test.go`, which is the authoritative list -
 update that map whenever you change a command's scoping.
 
 ## Adding a subcommand
@@ -94,15 +94,15 @@ update that map whenever you change a command's scoping.
    lowercased headers to enable `--sort`, then call `t.SortBy(f.Sort)` in the
    view). `TestSortColumnsMatchHeaders` guards that those columns exist.
 3. Add a `_test.go` next to it. Shell completion, `--help`, and dispatch are all
-   registry-driven — no extra wiring.
+   registry-driven - no extra wiring.
 4. To color cells, build `paint := kube.NewPainter(f)`, wrap status cells
    (`paint.OK/Warn/Bad/Muted` or the `paint.Status` classifier), and pass `paint`
    to `kube.NewTable`. Name the painter `paint`, not `p`, to avoid shadowing the
    `p` pod loop variable. Color is off in tests (they pass `kube.Flags{}`), so
-   plain-output assertions stay byte-identical — add new `...Color` tests instead.
+   plain-output assertions stay byte-identical - add new `...Color` tests instead.
 5. Update the docs, before committing: the README usage section (repo
    convention), the `openwiki/quickstart.md` command catalog, and any
-   `openwiki/architecture.md` section the change reaches — its pushdown table
+   `openwiki/architecture.md` section the change reaches - its pushdown table
    when the view uses a field selector, its Testing section when you touch the
    shared fake helpers. A doc naming a helper that no longer exists is worse than
    no doc.
@@ -121,7 +121,7 @@ Releases are **automatic** on push to `master`. `.github/workflows/release.yml`
 runs [`svu`](https://github.com/caarlos0/svu) to compute the next `vX.Y.Z` from
 the conventional commits since the last tag (`feat` → minor, `fix` → patch;
 anything else produces nothing, which is the gate on the following steps),
-creates the tag through the API, then runs goreleaser in the same job — no
+creates the tag through the API, then runs goreleaser in the same job - no
 separate PAT needed because a `GITHUB_TOKEN`-created tag would not re-trigger a
 workflow. Pushing a `v*` tag by hand still works as a manual escape hatch (the
 job's goreleaser steps also fire on `ref_type == 'tag'`).
@@ -140,5 +140,5 @@ injected via `-X main.version=...` ldflags.
 
 Renovate drives the version bumps: `renovate.json` maps minor Go-module updates to
 `feat(deps):` (minor release) and patch/digest to `fix(deps):` (patch release);
-GitHub Actions updates stay `chore(deps):` (automerged, **no** release — they don't
+GitHub Actions updates stay `chore(deps):` (automerged, **no** release - they don't
 ship in the binary). All minor/patch/digest updates automerge via PR once CI passes.

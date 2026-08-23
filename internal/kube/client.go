@@ -39,8 +39,8 @@ func Client(f Flags) (kubernetes.Interface, error) {
 	return kubernetes.NewForConfig(cfg)
 }
 
-// CurrentNamespace returns the namespace of the active kubeconfig context — the
-// "shell" namespace as set by kubens/kubectx — defaulting to "default" when the
+// CurrentNamespace returns the namespace of the active kubeconfig context - the
+// "shell" namespace as set by kubens/kubectx - defaulting to "default" when the
 // context pins none.
 func CurrentNamespace(f Flags) (string, error) {
 	ns, _, err := clientConfig(f).Namespace()

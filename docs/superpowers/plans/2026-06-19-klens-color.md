@@ -1,4 +1,4 @@
-# klens colorized output — Implementation Plan
+# klens colorized output - Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -11,27 +11,27 @@
 **Spec:** `docs/superpowers/specs/2026-06-19-klens-color-design.md`
 
 **Deviations from spec (intentional, columns don't exist):**
-- `pvc` view columns are `NS POD NODE PVC` — no STATUS phase → header-only (no cell color).
-- `default-sa` view columns are `NS POD` — no SA column → header-only.
+- `pvc` view columns are `NS POD NODE PVC` - no STATUS phase → header-only (no cell color).
+- `default-sa` view columns are `NS POD` - no SA column → header-only.
 These two get bold headers only, like the other non-status commands.
 
 ---
 
 ## File Structure
 
-- **Create** `internal/kube/color.go` — `Painter`, palette constants, `Status` classifier, `visibleWidth`, `IsTTY`, `ResolveColor`. One responsibility: color decisions + ANSI helpers.
-- **Create** `internal/kube/color_test.go` — painter on/off, `Status` mapping, `ResolveColor` precedence, `visibleWidth`.
-- **Modify** `internal/kube/flags.go` — add `ColorMode string` (raw flag) and `Color bool` (resolved).
-- **Modify** `internal/kube/table.go` — `NewTable` gains a `Painter` param; `Flush` aligns on visible width + bolds headers; drop `text/tabwriter`.
-- **Modify** `internal/kube/table_test.go` — pass a disabled painter; add exact-output, ANSI-alignment, and bold-header tests.
-- **Modify** `internal/view/secret.go` — use `kube.IsTTY`; thread painter into table helpers; remove local `isTTY`.
-- **Modify** every other `internal/view/*.go` that builds a table — create `paint := kube.NewPainter(f)`, pass to `NewTable`, color status cells where the spec mapping applies.
-- **Modify** `internal/cli/cli.go` — register/validate `--color`, resolve `Flags.Color` after parse.
-- **Modify** `internal/cli/complete.go` — offer `--color` and its `auto|always|never` values.
-- **Modify** `internal/cli/{cli_test.go,complete_test.go}` — reject invalid `--color`, complete color values.
-- **Modify** `README.md`, `CLAUDE.md` — document the flag/env and the painter/table architecture.
+- **Create** `internal/kube/color.go` - `Painter`, palette constants, `Status` classifier, `visibleWidth`, `IsTTY`, `ResolveColor`. One responsibility: color decisions + ANSI helpers.
+- **Create** `internal/kube/color_test.go` - painter on/off, `Status` mapping, `ResolveColor` precedence, `visibleWidth`.
+- **Modify** `internal/kube/flags.go` - add `ColorMode string` (raw flag) and `Color bool` (resolved).
+- **Modify** `internal/kube/table.go` - `NewTable` gains a `Painter` param; `Flush` aligns on visible width + bolds headers; drop `text/tabwriter`.
+- **Modify** `internal/kube/table_test.go` - pass a disabled painter; add exact-output, ANSI-alignment, and bold-header tests.
+- **Modify** `internal/view/secret.go` - use `kube.IsTTY`; thread painter into table helpers; remove local `isTTY`.
+- **Modify** every other `internal/view/*.go` that builds a table - create `paint := kube.NewPainter(f)`, pass to `NewTable`, color status cells where the spec mapping applies.
+- **Modify** `internal/cli/cli.go` - register/validate `--color`, resolve `Flags.Color` after parse.
+- **Modify** `internal/cli/complete.go` - offer `--color` and its `auto|always|never` values.
+- **Modify** `internal/cli/{cli_test.go,complete_test.go}` - reject invalid `--color`, complete color values.
+- **Modify** `README.md`, `CLAUDE.md` - document the flag/env and the painter/table architecture.
 
-**Painter variable is named `paint`, never `p`** — most views already bind `p` to a pod in their loop (`for _, p := range pods.Items`). Using `p` for the painter would shadow it.
+**Painter variable is named `paint`, never `p`** - most views already bind `p` to a pod in their loop (`for _, p := range pods.Items`). Using `p` for the painter would shadow it.
 
 ---
 
@@ -151,7 +151,7 @@ func TestResolveColor(t *testing.T) {
 - [ ] **Step 3: Run test to verify it fails**
 
 Run: `go test ./internal/kube -run 'TestPainter|TestStatus|TestVisibleWidth|TestResolveColor' -v`
-Expected: FAIL — `NewPainter`, `ResolveColor`, `visibleWidth` undefined.
+Expected: FAIL - `NewPainter`, `ResolveColor`, `visibleWidth` undefined.
 
 - [ ] **Step 4: Write the implementation**
 
@@ -285,7 +285,7 @@ func isTTY(w io.Writer) bool {
 }
 ```
 
-Then remove the now-unused imports `"os"` and `"golang.org/x/term"` from the import block (verify nothing else in the file uses them — currently nothing does).
+Then remove the now-unused imports `"os"` and `"golang.org/x/term"` from the import block (verify nothing else in the file uses them - currently nothing does).
 
 - [ ] **Step 3: Run tests to verify still green**
 
@@ -303,7 +303,7 @@ git commit -m "refactor(color): use kube.IsTTY in secret, drop the local copy"
 
 ## Task 3: ANSI-aware Table + thread painter through all views (no cell color yet)
 
-This task changes `NewTable`'s signature, so it must update **every** caller in the same commit to keep the build green. Cell coloring is added in later tasks — here each table just gets a painter (bold headers) and visible-width alignment.
+This task changes `NewTable`'s signature, so it must update **every** caller in the same commit to keep the build green. Cell coloring is added in later tasks - here each table just gets a painter (bold headers) and visible-width alignment.
 
 **Files:**
 - Modify: `internal/kube/table.go`
@@ -367,7 +367,7 @@ func TestTableHeaderBoldWhenEnabled(t *testing.T) {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `go test ./internal/kube -run TestTable -v`
-Expected: FAIL — `NewTable` now takes a painter (compile error) / new asserts fail.
+Expected: FAIL - `NewTable` now takes a painter (compile error) / new asserts fail.
 
 - [ ] **Step 3: Rewrite table.go**
 
@@ -523,31 +523,31 @@ func Label(labels map[string]string, key string) string {
 }
 ```
 
-> Note: `widthsPad` recomputes the column max per cell. Tables here are small (≤ node/pod counts), so this is fine and keeps `writeLine` simple. If a profiler ever flags it, precompute `widths` once and pass the slice — but YAGNI for now.
+> Note: `widthsPad` recomputes the column max per cell. Tables here are small (≤ node/pod counts), so this is fine and keeps `writeLine` simple. If a profiler ever flags it, precompute `widths` once and pass the slice - but YAGNI for now.
 
 - [ ] **Step 4: Update every NewTable caller**
 
 The compiler will list them. Each becomes `kube.NewTable(out, paint, <headers...>)` where `paint := kube.NewPainter(f)` is added at the top of the function. Exact list and the line to add:
 
-- `internal/view/nodes.go` — add `paint := kube.NewPainter(f)`; `kube.NewTable(out, paint, ...)`.
-- `internal/view/taints.go` — same.
-- `internal/view/capacity.go` — same.
-- `internal/view/zones.go` — same.
-- `internal/view/podspernode.go` — same.
-- `internal/view/maxpods.go` — same.
-- `internal/view/nodeconditions.go` — same.
-- `internal/view/reqlim.go` — same.
-- `internal/view/nolimits.go` — in `reportMissing`, add `paint := kube.NewPainter(f)`; `kube.NewTable(out, paint, ...)`.
-- `internal/view/images.go` — same.
-- `internal/view/imagecount.go` — same.
-- `internal/view/onnode.go` — same.
-- `internal/view/restarts.go` — same.
-- `internal/view/pvc.go` — same.
-- `internal/view/defaultsa.go` — same.
-- `internal/view/privileged.go` — same.
-- `internal/view/svcfqdn.go` — same.
-- `internal/view/autoscaler.go` — see Step 5 (painter must be threaded through `renderAutoscalerStatus`).
-- `internal/view/secret.go` — `listSecrets` (has `f`): add `paint := kube.NewPainter(f)`; for `emitKeys`/`emitValue` see Step 6.
+- `internal/view/nodes.go` - add `paint := kube.NewPainter(f)`; `kube.NewTable(out, paint, ...)`.
+- `internal/view/taints.go` - same.
+- `internal/view/capacity.go` - same.
+- `internal/view/zones.go` - same.
+- `internal/view/podspernode.go` - same.
+- `internal/view/maxpods.go` - same.
+- `internal/view/nodeconditions.go` - same.
+- `internal/view/reqlim.go` - same.
+- `internal/view/nolimits.go` - in `reportMissing`, add `paint := kube.NewPainter(f)`; `kube.NewTable(out, paint, ...)`.
+- `internal/view/images.go` - same.
+- `internal/view/imagecount.go` - same.
+- `internal/view/onnode.go` - same.
+- `internal/view/restarts.go` - same.
+- `internal/view/pvc.go` - same.
+- `internal/view/defaultsa.go` - same.
+- `internal/view/privileged.go` - same.
+- `internal/view/svcfqdn.go` - same.
+- `internal/view/autoscaler.go` - see Step 5 (painter must be threaded through `renderAutoscalerStatus`).
+- `internal/view/secret.go` - `listSecrets` (has `f`): add `paint := kube.NewPainter(f)`; for `emitKeys`/`emitValue` see Step 6.
 
 For the straightforward views, the edit is exactly two lines. Example for `internal/view/nodeconditions.go`:
 
@@ -613,7 +613,7 @@ func renderAutoscalerStatus(status, sortCol string, paint kube.Painter, out io.W
 }
 ```
 
-And update `clusterWideSummary` to accept the painter (no coloring yet — added in Task 7; for now just take the param and ignore it to keep the build green):
+And update `clusterWideSummary` to accept the painter (no coloring yet - added in Task 7; for now just take the param and ignore it to keep the build green):
 
 ```go
 func clusterWideSummary(cw caClusterWide, paint kube.Painter) string {
@@ -668,7 +668,7 @@ func emitValue(out io.Writer, paint kube.Painter, s *corev1.Secret, key string) 
 - [ ] **Step 7: Run the whole suite**
 
 Run: `go build ./... && go test ./... `
-Expected: build OK; all tests PASS. Existing view tests run with `Flags{}` (Color false), so output is plain and byte-identical — substring asserts unaffected.
+Expected: build OK; all tests PASS. Existing view tests run with `Flags{}` (Color false), so output is plain and byte-identical - substring asserts unaffected.
 
 - [ ] **Step 8: Commit**
 
@@ -781,7 +781,7 @@ Add a value-completion branch in `completions`, next to the `--sort` branch:
 - [ ] **Step 6: Run tests**
 
 Run: `go test ./internal/cli -v`
-Expected: PASS (new tests green; existing tests unaffected — `--color` defaults to "" → resolves false on the test `bytes.Buffer`).
+Expected: PASS (new tests green; existing tests unaffected - `--color` defaults to "" → resolves false on the test `bytes.Buffer`).
 
 - [ ] **Step 7: Commit**
 
@@ -800,7 +800,7 @@ git commit -m "feat(color): add --color flag with resolution and completion"
 
 - [ ] **Step 1: Write the failing test**
 
-In `internal/view/nodeconditions_test.go` add (adjust the helper that builds a node if the file already has one — reuse it; the assertion is what matters):
+In `internal/view/nodeconditions_test.go` add (adjust the helper that builds a node if the file already has one - reuse it; the assertion is what matters):
 
 ```go
 func TestNodeConditionsColor(t *testing.T) {
@@ -871,7 +871,7 @@ func pressure(paint kube.Painter, status string) string {
 - [ ] **Step 4: Run tests**
 
 Run: `go test ./internal/view -run TestNodeConditions -v`
-Expected: PASS (color test green; existing plain test still passes — `Flags{}` → no color).
+Expected: PASS (color test green; existing plain test still passes - `Flags{}` → no color).
 
 - [ ] **Step 5: Commit**
 
@@ -978,11 +978,11 @@ func TestAutoscalerColor(t *testing.T) {
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `go test ./internal/view -run TestAutoscalerColor -v`
-Expected: FAIL (summary not colored — `clusterWideSummary` still ignores the painter from Task 3).
+Expected: FAIL (summary not colored - `clusterWideSummary` still ignores the painter from Task 3).
 
 - [ ] **Step 3: Color the summary and table cells**
 
-In `internal/view/autoscaler.go`, implement coloring in `clusterWideSummary` (replace the `_ = paint` stub). **Read the existing function body first** and keep its exact label/spacing format — only wrap the health token with `health(paint, …)` and each scale-state token with `scaleState(paint, …)`. The block below shows the intended shape; reconcile it with the real field names and formatting rather than overwriting blindly (a format drift would break the existing plain-output autoscaler test):
+In `internal/view/autoscaler.go`, implement coloring in `clusterWideSummary` (replace the `_ = paint` stub). **Read the existing function body first** and keep its exact label/spacing format - only wrap the health token with `health(paint, …)` and each scale-state token with `scaleState(paint, …)`. The block below shows the intended shape; reconcile it with the real field names and formatting rather than overwriting blindly (a format drift would break the existing plain-output autoscaler test):
 
 ```go
 func clusterWideSummary(cw caClusterWide, paint kube.Painter) string {
@@ -1051,7 +1051,7 @@ func scaleState(paint kube.Painter, status string) string {
 - [ ] **Step 4: Run tests**
 
 Run: `go test ./internal/view -run TestAutoscaler -v`
-Expected: PASS — `TestAutoscalerColor` green; the existing format/sort tests still pass because they run with `Flags{}`/`Flags{Sort:...}` (Color false), so cells stay plain and `rowFields` still sees `Healthy`, the bare timestamp, etc.
+Expected: PASS - `TestAutoscalerColor` green; the existing format/sort tests still pass because they run with `Flags{}`/`Flags{Sort:...}` (Color false), so cells stay plain and `rowFields` still sees `Healthy`, the bare timestamp, etc.
 
 - [ ] **Step 5: Commit**
 
@@ -1460,7 +1460,7 @@ default via the environment.
 
 Under kubecolor (`alias kubectl=kubecolor`) klens' stdout is a pipe, so `auto`
 turns color off. kubecolor passes plugin output through unchanged, so klens'
-own colors survive — force them on with `--color=always` or, once in your
+own colors survive - force them on with `--color=always` or, once in your
 shell, `export KLENS_COLOR=always`.
 ```
 
@@ -1469,7 +1469,7 @@ shell, `export KLENS_COLOR=always`.
 In the `internal/kube` bullet, note the painter and visible-width table:
 
 ```
-- **`internal/kube`** — ... the `Table` helper used for all columnar output, and
+- **`internal/kube`** - ... the `Table` helper used for all columnar output, and
   `color.go` (`Painter` + `ResolveColor` + `IsTTY`). `Table` aligns on *visible*
   width (ANSI stripped) so colored cells don't break columns, and bolds headers
   via the `Painter` passed to `NewTable`. Color is resolved once in the
@@ -1505,7 +1505,7 @@ git commit -m "docs(color): document --color/NO_COLOR/KLENS_COLOR and painter ar
 
 ## Notes for the implementer
 
-- **Color is off in tests by default.** Every existing view test passes `kube.Flags{}` (or `{Sort:...}`), so `Color` is false, the painter is a no-op, and output stays byte-identical. Do not add color assertions to existing tests — add new `...Color` tests.
+- **Color is off in tests by default.** Every existing view test passes `kube.Flags{}` (or `{Sort:...}`), so `Color` is false, the painter is a no-op, and output stays byte-identical. Do not add color assertions to existing tests - add new `...Color` tests.
 - **Painter variable name is `paint`.** Never `p` (shadows the pod loop variable in most views).
 - **The Table always strips ANSI for width**, regardless of whether color is enabled, so a disabled-painter table is still correct (no ANSI present → no-op strip).
-- **Last column is never padded** — preserves the no-trailing-whitespace behavior of the old tabwriter output.
+- **Last column is never padded** - preserves the no-trailing-whitespace behavior of the old tabwriter output.

@@ -12,7 +12,7 @@ import (
 )
 
 // Images lists every container image per pod, one row per container, including
-// init and ephemeral containers — their images are pulled and run on the node
+// init and ephemeral containers - their images are pulled and run on the node
 // like any other, so an unpatched init image has to be visible here.
 func Images(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
 	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})

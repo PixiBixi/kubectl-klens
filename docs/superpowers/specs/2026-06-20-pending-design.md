@@ -1,4 +1,4 @@
-# kubectl-klens — `pending` command design
+# kubectl-klens - `pending` command design
 
 Date: 2026-06-20
 
@@ -39,7 +39,7 @@ extra calls).
 - Registry entry in `internal/cli/cli.go`: `Name: "pending"`,
   `CurrentNSDefault: true` (added to the `TestCurrentNSDefaultFlags` map),
   `SortColumns: []string{"ns", "pod", "reason"}` (AGE/DETAIL are not
-  meaningfully text-sortable, so they are display-only — the guard test allows a
+  meaningfully text-sortable, so they are display-only - the guard test allows a
   subset of headers).
 
 ## Columns
@@ -58,17 +58,17 @@ NS  POD  AGE  REASON  DETAIL
 
 ## REASON / DETAIL derivation (precedence)
 
-1. **Unschedulable** — if the `PodScheduled` condition is `False`:
+1. **Unschedulable** - if the `PodScheduled` condition is `False`:
    - `REASON` = condition `Reason` (typically `Unschedulable`).
    - `DETAIL` = parsed dominant cause of condition `Message` (see parser).
-2. **Stuck pulling/creating** — else, the first container in `Waiting` state
+2. **Stuck pulling/creating** - else, the first container in `Waiting` state
    (scan `Status.ContainerStatuses` then `Status.InitContainerStatuses`):
    - `REASON` = `waiting.Reason` (`ImagePullBackOff`, `ErrImagePull`,
      `CreateContainerConfigError`, `InvalidImageName`, `ContainerCreating`,
      `PodInitializing`, ...).
    - `DETAIL` = for image-related reasons (`ImagePullBackOff`, `ErrImagePull`,
      `InvalidImageName`), the offending container `Image`; otherwise muted `-`.
-3. **Fallback** — `REASON` = `Pending`, `DETAIL` = muted `-`.
+3. **Fallback** - `REASON` = `Pending`, `DETAIL` = muted `-`.
 
 ## Scheduler-message parser
 
@@ -112,17 +112,17 @@ applies any explicit `--sort` (ns|pod|reason), overriding the default.
 
 `internal/view/pending_test.go`:
 
-1. **`TestSchedulerCause`** — table-driven over the pure parser:
+1. **`TestSchedulerCause`** - table-driven over the pure parser:
    - dominant-count pick: `0/5 nodes are available: 3 Insufficient cpu, 2 node(s) had untolerated taint {x: y}.` → `Insufficient cpu (3 nodes)`.
    - single clause, no preemption tail.
    - taint clause with `{...}` blob stripped.
    - unparseable message → trimmed raw fallback.
-2. **`TestPending`** — `fake.NewClientset` with: an Unschedulable pod (set
+2. **`TestPending`** - `fake.NewClientset` with: an Unschedulable pod (set
    `Status.Conditions` `PodScheduled=False`, `Message=...`), an
    `ImagePullBackOff` pod (container status waiting + spec image), a `Running`
    pod (must be excluded). Assert the unschedulable cause, the bad image string,
    and that the running pod is absent. Run with `kube.Flags{}` (color off).
-3. **`TestPendingColor`** — `kube.Flags{Color: true}`; assert
+3. **`TestPendingColor`** - `kube.Flags{Color: true}`; assert
    `\x1b[31mUnschedulable\x1b[0m` and `\x1b[31mImagePullBackOff\x1b[0m`.
 
 The fake client does not run the scheduler, so set pod `Status` explicitly.

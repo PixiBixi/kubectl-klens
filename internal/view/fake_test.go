@@ -85,7 +85,7 @@ func filterNodes(all runtime.Object, selector fields.Selector) runtime.Object {
 
 // podFields mirrors the pod field selectors the apiserver supports, so the fake
 // rejects a selector on an unsupported field the same way a real cluster would
-// reject it — silently matching nothing rather than everything.
+// reject it - silently matching nothing rather than everything.
 func podFields(p *corev1.Pod) fields.Set {
 	return fields.Set{
 		"metadata.name":            p.Name,

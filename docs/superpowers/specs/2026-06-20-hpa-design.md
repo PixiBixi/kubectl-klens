@@ -1,4 +1,4 @@
-# kubectl-klens — `hpa` command design
+# kubectl-klens - `hpa` command design
 
 Date: 2026-06-20
 
@@ -47,7 +47,7 @@ NS  NAME  REF  MIN  MAX  CURRENT  DESIRED  VERDICT
 | REF     | `Spec.ScaleTargetRef.Kind + "/" + Name` (e.g. `Deployment/api`) |
 | MIN     | `*Spec.MinReplicas` (defaults to `1` when nil)                |
 | MAX     | `Spec.MaxReplicas`                                            |
-| CURRENT | `Status.CurrentReplicas` — colored `Bad` when `>= MAX`        |
+| CURRENT | `Status.CurrentReplicas` - colored `Bad` when `>= MAX`        |
 | DESIRED | `Status.DesiredReplicas`                                      |
 | VERDICT | `hpaVerdict` (colored by severity)                           |
 
@@ -61,10 +61,10 @@ Rules in precedence order (first match wins, so the helper is total):
 
 | # | Verdict      | Condition                                                | Severity | Meaning                                              |
 |---|--------------|----------------------------------------------------------|----------|------------------------------------------------------|
-| 1 | `NO-METRICS` | `ScalingActive` condition present and `False`            | bad      | HPA can't read metrics — it's flying blind.          |
+| 1 | `NO-METRICS` | `ScalingActive` condition present and `False`            | bad      | HPA can't read metrics - it's flying blind.          |
 | 2 | `MAXED`      | `CurrentReplicas >= MaxReplicas`                         | bad      | Pinned at the ceiling: no headroom to scale up.      |
 | 3 | `SCALING`    | `CurrentReplicas != DesiredReplicas`                    | warn     | Actively converging toward desired.                  |
-| 4 | `AT-MIN`     | `CurrentReplicas <= effective MinReplicas`              | muted    | Idle at the floor (low load) — informational.        |
+| 4 | `AT-MIN`     | `CurrentReplicas <= effective MinReplicas`              | muted    | Idle at the floor (low load) - informational.        |
 | 5 | `OK`         | otherwise                                                | ok       | Healthy mid-range.                                   |
 
 `sev` is one of `ok|warn|bad|muted`, mapped to `paint.OK/Warn/Bad/Muted` (reuse
@@ -87,13 +87,13 @@ NAME (bespoke, like `pdb`); `t.SortBy(f.Sort)` applies any explicit `--sort`.
 
 `internal/view/hpa_test.go`:
 
-1. **`TestHpaVerdict`** — table-driven, one case per rule plus boundaries:
+1. **`TestHpaVerdict`** - table-driven, one case per rule plus boundaries:
    no-metrics (ScalingActive False), maxed (`current == max`), scaling
    (`current != desired`), at-min (nil min defaults to 1; explicit min), ok.
    Asserts `verdict` and `sev`.
-2. **`TestHpa`** — `fake.NewClientset` with a MAXED and an OK HPA; assert
+2. **`TestHpa`** - `fake.NewClientset` with a MAXED and an OK HPA; assert
    verdicts, the `Deployment/<name>` REF, and risk-descending order.
-3. **`TestHpaColor`** — `kube.Flags{Color: true}`; assert
+3. **`TestHpaColor`** - `kube.Flags{Color: true}`; assert
    `\x1b[31mMAXED\x1b[0m` and `\x1b[32mOK\x1b[0m`.
 
 Set `Status` fields explicitly (the fake client runs no HPA controller).

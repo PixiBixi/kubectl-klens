@@ -21,7 +21,7 @@ without a real cluster; `NewApp` wires the production versions
 subcommand. `App.Run` (`cli.go`):
 
 1. Intercepts `__complete` (shell completion), `--help`/`--version`, and
-   `completion install` — none of these need a cluster.
+   `completion install` - none of these need a cluster.
 2. `lookup`s the subcommand (honoring singular/plural aliases via a trailing
    `s` toggle).
 3. Registers the global flags, plus `--sort` if the command declares
@@ -50,7 +50,7 @@ type Command struct {
 Everything registry-driven flows from here: dispatch, the `--help` listing, and
 shell completion candidates all read the same slice, so they cannot drift.
 
-### Global flags — one source of truth
+### Global flags - one source of truth
 
 Global flags (`--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
 `--color`, `--request-timeout`) live once in the `globalFlags` table in `cli.go`.
@@ -80,7 +80,7 @@ node" error).
 `complete.go` implements the cobra-compatible `__complete` protocol kubectl
 invokes through the `completion/kubectl_complete-klens` shim. It completes
 subcommand names, global flags, `--sort` columns (per the chosen command), and
-`--color` values — all derived from the same `commands` registry. `completion
+`--color` values - all derived from the same `commands` registry. `completion
 install` writes the shim into krew's bin dir (or `--dir`) and needs no cluster.
 
 ## Namespace defaulting
@@ -98,7 +98,7 @@ list scope: `-A` → all namespaces (`""`), otherwise the resolved `Namespace`.
 
 The authoritative set of `CurrentNSDefault: true` commands is locked by
 `TestCurrentNSDefaultFlags` in `cli_test.go`. **Update that test's map whenever
-you change a command's scoping** — it is the source of truth, and CI fails if
+you change a command's scoping** - it is the source of truth, and CI fails if
 the registry and the map disagree.
 
 ## The `kube` package
@@ -126,7 +126,7 @@ field selector instead of listing everything and filtering in the loop:
 | `node-ips <node>` | `metadata.name=<node>` (only when a node is named) |
 
 Pushdown only works for the [field selectors the apiserver actually
-supports](../internal/view/fake_test.go) — `podFields` mirrors the pod set, and
+supports](../internal/view/fake_test.go) - `podFields` mirrors the pod set, and
 nodes are indexed on `metadata.name` alone. An unsupported field matches nothing
 rather than everything, so it fails silently: verify against a real cluster, and
 see the Testing section for the fake that honors selectors.
@@ -140,7 +140,7 @@ All columnar output goes through `kube.NewTable(out, painter, headers...)`.
   (`stripANSI`), so colored cells still line up.
 - **Named-column sort.** `SortBy(column)` sorts ascending by a header name at
   `Flush`, auto-detecting numeric columns so counts order by value. `SortRank`
-  registers a custom key for a column whose alphabetical order is meaningless —
+  registers a custom key for a column whose alphabetical order is meaningless -
   used by verdict commands to order a `VERDICT` column worst-first.
 
 Headers are bolded via the `Painter`. `kube.Label(painter, labels, key)` renders
@@ -149,7 +149,7 @@ a label value or a muted `<none>`.
 ### `Painter` (`internal/kube/color.go`)
 
 `paint := kube.NewPainter(f)` yields a `Painter` whose methods
-(`OK`/`Warn`/`Bad`/`Muted`/`Header`) wrap a string in ANSI color — or return it
+(`OK`/`Warn`/`Bad`/`Muted`/`Header`) wrap a string in ANSI color - or return it
 unchanged when color is disabled or the string is empty. `Painter.Status`
 classifies well-known status tokens (`Ready`/`Running` → green, `Pending` →
 yellow, `CrashLoopBackOff`/`Unknown`/… → red).
@@ -163,12 +163,12 @@ detection. `IsTTY` checks whether the writer is a terminal.
 `clientConfig` builds a deferred-loading `clientcmd.ClientConfig` from the
 default loading rules plus the explicit `--kubeconfig` path and `--context`
 override. `Client` builds the clientset and sets `rest.Config.Timeout` from
-`Flags.RequestTimeout` (`--request-timeout`, default 1m0s, `0` disables) — without
+`Flags.RequestTimeout` (`--request-timeout`, default 1m0s, `0` disables) - without
 it, a hung control plane hangs the command indefinitely, since nothing else sets
 a deadline. `CurrentNamespace` reads the active context's namespace (defaulting
 to `default`).
 
-> **Protobuf is already the default — do not "optimise" it.** Setting
+> **Protobuf is already the default - do not "optimise" it.** Setting
 > `ContentType`/`AcceptContentTypes` to protobuf on the config is a **no-op**: the
 > typed clientset negotiates it on its own. Measured over every pod on a 6300-pod
 > cluster, the default transfers 85.7 MiB in 3.0s and the response comes back as
@@ -197,7 +197,7 @@ to `default`).
    prompt.
 
 A design principle to preserve: **a control that exists but gives zero
-protection must read as bad, not OK** — e.g. a PDB with `DesiredHealthy == 0` on
+protection must read as bad, not OK** - e.g. a PDB with `DesiredHealthy == 0` on
 a multi-replica workload is `NO-GUARD` (red), because a drain can evict every
 replica at once. See `pdbVerdict` for the canonical example.
 
@@ -209,14 +209,14 @@ and only needs `SortBy`).
 ## Shared view helpers (`internal/view/view.go`)
 
 - `podContainers(p)` / `podContainerStatuses(p)` enumerate a pod's containers in
-  startup order — **init, then app, then ephemeral** — each tagged with its kind
+  startup order - **init, then app, then ephemeral** - each tagged with its kind
   (`app`/`init`/`eph`, surfaced as the `KIND` column). Pod views must use these
   rather than walking `p.Spec.Containers`: init containers carry the same
   security context, images and resource requests as app containers, and walking
   only `spec.containers` is exactly the blind spot that made `privileged` report
   "clean" on a privileged init container.
 - `skipNamespace(f, ns)` drops kube-system **only from the cluster-wide (`-A`)
-  listing**. An explicit `-n kube-system` must still return rows — filtering it
+  listing**. An explicit `-n kube-system` must still return rows - filtering it
   out regardless of scope silently answers a different question than the one
   asked.
 - `nodeStatus(n)` returns `Ready` / `NotReady` / `Unknown`. `Unknown` is kept
@@ -236,17 +236,17 @@ and only needs `SortBy`).
    directly, or you lose paging), push any filter the apiserver can evaluate
    into the `ListOptions` field selector, and enumerate containers via
    `podContainers`/`podContainerStatuses`. **Iterate API objects by index, not by
-   value** — `for i := range pods { p := &pods[i] }`, and take `*corev1.Pod` in
+   value** - `for i := range pods { p := &pods[i] }`, and take `*corev1.Pod` in
    helpers. gocritic's `performance` tag is enabled in `.golangci.yml` and fails
    CI on `for _, p := range pods`, because `corev1.Pod` is 1192 bytes (`Node` 768,
    `Container` 408). Two things this rule deliberately does *not* cover:
    `hugeParam`'s threshold is raised to 256 so `kube.Flags` (104 B) and `cli.App`
-   (96 B) stay by-value — they are threaded through every `RunFunc` by design and
+   (96 B) stay by-value - they are threaded through every `RunFunc` by design and
    copied once per process, and making them pointers would invite mutation of
    shared flags for nothing. And it is not a speed optimisation: measured on a
    6400-pod cluster the conversion was inside run-to-run noise, since wall time
    is apiserver-bound and loop copies never reach peak RSS. It exists to stop the
-   copy from being reintroduced where it *would* matter — a long-lived slice of
+   copy from being reintroduced where it *would* matter - a long-lived slice of
    Pods, or a nested loop.
 2. Register it in the `commands` slice in `internal/cli/cli.go`:
    - set `CurrentNSDefault: true` if it should scope to the current namespace
@@ -255,13 +255,13 @@ and only needs `SortBy`).
      `t.SortBy(f.Sort)` in the view. `TestSortColumnsMatchHeaders` guards that
      those columns actually exist as headers.
 3. Add a `_test.go` next to it. Completion, `--help`, and dispatch are all
-   registry-driven — no extra wiring.
+   registry-driven - no extra wiring.
 4. To color cells, build `paint := kube.NewPainter(f)`, wrap status cells
    (`paint.OK/Warn/Bad/Muted` or `paint.Status`), and pass `paint` to
    `kube.NewTable`. **Name the painter `paint`, not `p`**, to avoid shadowing the
    `p` pod loop variable. Color is off in tests (they pass `kube.Flags{}`), so
-   plain-output assertions stay byte-identical — add separate `...Color` tests.
-5. Update the docs before committing — all of the ones the change reaches, not
+   plain-output assertions stay byte-identical - add separate `...Color` tests.
+5. Update the docs before committing - all of the ones the change reaches, not
    just the README:
    - `README.md`'s usage section (repo convention);
    - the command catalog in [quickstart.md](quickstart.md);
@@ -282,8 +282,8 @@ inspect `clientset.Actions()` to assert the namespace a list was scoped to
 `kube.Flags{}`, plain-output assertions are byte-stable across the color
 feature.
 
-`fake.NewClientset` **ignores field selectors** — it returns every object
-regardless — so a view that pushes filtering down would pass its test no matter
+`fake.NewClientset` **ignores field selectors** - it returns every object
+regardless - so a view that pushes filtering down would pass its test no matter
 what it asked for. `internal/view/fake_test.go` supplies both halves of that
 contract: `newClientsetWithFieldSelectors` installs list reactors (pods and
 nodes) that apply the selector the way the apiserver would, and

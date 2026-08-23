@@ -1,4 +1,4 @@
-# kubectl-klens — `spread` command design
+# kubectl-klens - `spread` command design
 
 Date: 2026-06-20
 
@@ -73,7 +73,7 @@ func spreadVerdict(replicas, nodes, zones int) (verdict, sev string)
 
 | # | Verdict      | Condition                          | Severity | Meaning                                          |
 |---|--------------|------------------------------------|----------|--------------------------------------------------|
-| 1 | `SINGLE`     | `replicas <= 1`                    | muted    | One replica — non-HA by design, informational.   |
+| 1 | `SINGLE`     | `replicas <= 1`                    | muted    | One replica - non-HA by design, informational.   |
 | 2 | `SPOF-NODE`  | `nodes <= 1` (and `replicas >= 2`) | bad      | All replicas on one node: node loss = full outage.|
 | 3 | `SPREAD`     | `zones >= 2`                       | ok       | Replicas across multiple zones.                  |
 | 4 | `SPOF-ZONE`  | `zones == 1`                       | warn     | Multiple nodes but a single zone.                |
@@ -92,22 +92,22 @@ insertion order first to keep output deterministic before the sort.
 ## Coloring
 
 `paint := kube.NewPainter(f)`. VERDICT colored by severity (green for `SPREAD`,
-red for `SPOF-NODE`, etc.). Numeric cells plain — the verdict already carries the
+red for `SPOF-NODE`, etc.). Numeric cells plain - the verdict already carries the
 signal.
 
 ## Testing
 
 `internal/view/spread_test.go`:
 
-1. **`TestSpreadVerdict`** — table-driven: single (`1,1,0`), spof-node (`3,1,1`),
+1. **`TestSpreadVerdict`** - table-driven: single (`1,1,0`), spof-node (`3,1,1`),
    spof-zone (`3,2,1`), spread (`2,2,2`), multi-node (`2,2,0`). Asserts verdict
    and sev.
-2. **`TestSpread`** — `fake.NewClientset` with three nodes (zones `a`,`b`,`a`),
+2. **`TestSpread`** - `fake.NewClientset` with three nodes (zones `a`,`b`,`a`),
    a Deployment (`web` via ReplicaSet `web-abc123`, 2 pods on different zones →
    `SPREAD`), a StatefulSet (`db`, 2 pods on the same node → `SPOF-NODE`), and a
    DaemonSet pod (must be excluded). Assert verdicts, `Deployment/web` label,
    DaemonSet absence, and risk-descending order (`db` before `web`).
-3. **`TestSpreadColor`** — `kube.Flags{Color: true}`; assert
+3. **`TestSpreadColor`** - `kube.Flags{Color: true}`; assert
    `\x1b[31mSPOF-NODE\x1b[0m` and `\x1b[32mSPREAD\x1b[0m`.
 
 ## README

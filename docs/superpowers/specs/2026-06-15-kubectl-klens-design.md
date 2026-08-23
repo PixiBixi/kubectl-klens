@@ -1,4 +1,4 @@
-# kubectl-klens — Design Spec
+# kubectl-klens - Design Spec
 
 Date: 2026-06-15
 Status: Approved
@@ -14,8 +14,8 @@ Invocation: `kubectl klens <subcommand>`.
 
 - **Krew-ready from day one**: ships a `.krew.yaml` manifest, GitHub release
   archives (`tar.gz`), and `checksums.txt`.
-- **Phase 1 — personal install**: `kubectl krew install --manifest=.krew.yaml --archive=<tarball>`.
-- **Phase 2 — upstream (later)**: PR to `kubernetes-sigs/krew-index` via
+- **Phase 1 - personal install**: `kubectl krew install --manifest=.krew.yaml --archive=<tarball>`.
+- **Phase 2 - upstream (later)**: PR to `kubernetes-sigs/krew-index` via
   `krew-release-bot`. Wired in the release workflow but only triggers when the
   user decides to point it upstream.
 - **Shell completion**: ships a `kubectl_complete-klens` shim that forwards to
@@ -27,7 +27,7 @@ Invocation: `kubectl klens <subcommand>`.
 
 - Go 1.26, module `github.com/PixiBixi/kubectl-klens`.
 - Cluster access via **client-go** (`k8s.io/client-go` v0.35.x, `k8s.io/api`,
-  `k8s.io/apimachinery`). No shell-out to `kubectl` — self-contained binary.
+  `k8s.io/apimachinery`). No shell-out to `kubectl` - self-contained binary.
 - CLI: stdlib `flag` + manual subcommand dispatch (no cobra). `slog` for errors.
 - Kubeconfig/context/namespace via `clientcmd.NewNonInteractiveDeferredLoadingClientConfig`
   + `ConfigOverrides` (same pattern as kubearch `buildK8sClient`). Exposes the
@@ -67,14 +67,14 @@ All re-implemented against the API via client-go. Output is a tabwriter table.
 | `capacity`        | nodes                      | NAME, CPU_CAP, CPU_ALLOC, MEM_CAP, MEM_ALLOC                                        |
 | `zones`           | nodes                      | NAME, REGION (`topology.kubernetes.io/region`), ZONE (`topology.kubernetes.io/zone`) |
 | `pods-per-node`   | pods (all ns)              | NODE, PODS (count), sorted desc                                                     |
-| `reqlim`          | pods (current ns)          | NS, POD, CONTAINER, REQ_CPU, LIM_CPU, REQ_MEM, LIM_MEM — excludes `kube-system`; current namespace by default, `-A` for all |
-| `images`          | pods (all ns)              | COUNT, IMAGE — occurrences across the cluster, sorted desc                          |
-| `on-node <node>`  | pods (field selector)      | NS, POD, STATUS, NODE — pods scheduled on `<node>`; node arg required               |
-| `pvc`             | pods + pvc (current ns)    | NS, POD, NODE, PVC — PVCs bound to a pod and its node; current namespace by default, `-A` for all |
-| `default-sa`      | pods (all ns)              | NS, POD — pods whose `spec.serviceAccountName == "default"`                         |
+| `reqlim`          | pods (current ns)          | NS, POD, CONTAINER, REQ_CPU, LIM_CPU, REQ_MEM, LIM_MEM - excludes `kube-system`; current namespace by default, `-A` for all |
+| `images`          | pods (all ns)              | COUNT, IMAGE - occurrences across the cluster, sorted desc                          |
+| `on-node <node>`  | pods (field selector)      | NS, POD, STATUS, NODE - pods scheduled on `<node>`; node arg required               |
+| `pvc`             | pods + pvc (current ns)    | NS, POD, NODE, PVC - PVCs bound to a pod and its node; current namespace by default, `-A` for all |
+| `default-sa`      | pods (all ns)              | NS, POD - pods whose `spec.serviceAccountName == "default"`                         |
 | `svc-fqdn`        | services (current ns)      | NS, SERVICE, FQDN (`<svc>.<ns>.svc.cluster.local`); current namespace by default, `-A` for all |
 | `autoscaler`      | configmap `kube-system`    | prints the `status` field of the `cluster-autoscaler-status` configmap verbatim; ignores namespace flags |
-| `secret <name>`   | secret (current ns)        | KEY, VALUE — decoded data of the named secret; name arg required; current namespace by default, `-n` to target another |
+| `secret <name>`   | secret (current ns)        | KEY, VALUE - decoded data of the named secret; name arg required; current namespace by default, `-n` to target another |
 
 ## Global flags & behavior
 
@@ -124,7 +124,7 @@ All re-implemented against the API via client-go. Output is a tabwriter table.
   (those belong to a daemon like kubearch, not a short-lived CLI plugin).
 - No arbitrary kubectl flag pass-through beyond the standard ones above.
 - Destructive wiki commands (delete pods, force-refresh ExternalSecrets) are
-  intentionally excluded — this plugin is read-only.
+  intentionally excluded - this plugin is read-only.
 
 ## Implementation phases & model selection
 

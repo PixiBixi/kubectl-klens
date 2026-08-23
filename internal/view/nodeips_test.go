@@ -76,7 +76,7 @@ func TestNodeIPsUnknownNode(t *testing.T) {
 
 func TestNodeIPsEmptyArgListsEverything(t *testing.T) {
 	// An empty positional arg (e.g. `node-ips ""`) must not become a selector
-	// matching nothing — it lists the fleet like no arg at all.
+	// matching nothing - it lists the fleet like no arg at all.
 	c := newClientsetWithFieldSelectors(
 		nodeWithAddresses("a", corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "10.0.0.4"}),
 		nodeWithAddresses("b", corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "10.0.0.5"}),

@@ -23,9 +23,9 @@ Date : 2026-07-25
 
 - **Portée release** : `minor` + `patch` + `digest` des modules **Go** déclenchent
   une release (le binaire compile la dépendance → l'artefact change).
-- **GitHub Actions** : automergées mais **jamais de release** — un bump d'action CI
+- **GitHub Actions** : automergées mais **jamais de release** - un bump d'action CI
   ne change pas le binaire livré (choix FinOps, évite les releases inutiles).
-- **Outil de versioning** : `mathieudutour/github-tag-action` (SHA-pinned) — calcule
+- **Outil de versioning** : `mathieudutour/github-tag-action` (SHA-pinned) - calcule
   le prochain `vX.Y.Z` depuis les commits conventionnels et pose le tag. goreleaser
   reste seul responsable de la publication (changelog, release, krew). Pas de
   semantic-release Node (surface de maintenance inutile pour un repo Go).

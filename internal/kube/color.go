@@ -84,7 +84,7 @@ func visibleWidth(s string) int {
 	}
 	n := 0
 	for i := 0; i < len(s); {
-		// Recognize exactly what ansiSeq matches — ESC '[' [0-9;]* 'm' — so a
+		// Recognize exactly what ansiSeq matches - ESC '[' [0-9;]* 'm' - so a
 		// truncated or malformed sequence is counted as visible text rather than
 		// silently swallowed. Cell values are not all ours (scheduler messages
 		// and secret values reach the table verbatim), so the two forms must

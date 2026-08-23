@@ -14,7 +14,7 @@ import (
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
-// NodeIPs lists the internal and external addresses of every node — what a
+// NodeIPs lists the internal and external addresses of every node - what a
 // `-o jsonpath` over .status.addresses gives you, without the jsonpath. A node
 // name narrows the listing to that node.
 func NodeIPs(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {

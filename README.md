@@ -45,11 +45,11 @@ cluster-scoped. See [Namespace scope](#namespace-scope) for details.
 The `STATUS` column of `nodes` and `node-conditions` separates the two ways a
 node can be unhealthy: `NotReady` is a kubelet that is answering and reporting
 itself unready, while `Unknown` is a kubelet that has **stopped reporting
-altogether** — the state that starts the eviction clock once the `unreachable`
+altogether** - the state that starts the eviction clock once the `unreachable`
 toleration expires. Both are red.
 
-`node-ips` reads `.status.addresses` — the data you would otherwise dig out with
-a `-o jsonpath` filter on `@.type=="ExternalIP"` — and reports the internal
+`node-ips` reads `.status.addresses` - the data you would otherwise dig out with
+a `-o jsonpath` filter on `@.type=="ExternalIP"` - and reports the internal
 address next to it. Passing a node name (`kubectl klens node-ips <node>`) narrows
 the listing to that node; the filter is a `metadata.name` field selector, so the
 apiserver returns that one node instead of the whole fleet, and an unknown name
@@ -57,7 +57,7 @@ is an error rather than an empty table. A dual-stack node shows both of its
 addresses comma-joined (`10.0.0.4,fd00::4`). Color reads the two columns
 differently: a missing
 `INTERNAL-IP` is red (the control plane has no route to that kubelet), while a
-missing `EXTERNAL-IP` is a muted `<none>` — the normal, wanted state on private
+missing `EXTERNAL-IP` is a muted `<none>` - the normal, wanted state on private
 nodes. A public address is yellow, because it is internet-reachable surface.
 
 ### Workloads & resources
@@ -144,7 +144,7 @@ CA 1.30+ and the older legacy text) into a cluster-wide summary plus a
 per-nodegroup table, falling back to the raw status when neither format is
 recognized. The table's `LAST-CHANGE` column shows each nodegroup's most recent
 `lastTransitionTime` (across its health/scale-up/scale-down conditions), so a
-recent scaling event is easy to spot — it is only populated from the
+recent scaling event is easy to spot - it is only populated from the
 structured-YAML format.
 
 ## Container kinds
@@ -176,7 +176,7 @@ three kinds into its totals (it has no per-container column).
 | --- | --- |
 | `privileged` | `securityContext.privileged: true` |
 | `privesc` | `allowPrivilegeEscalation: true`, set explicitly |
-| `privesc-default` | `allowPrivilegeEscalation` unset — resolved to **true** |
+| `privesc-default` | `allowPrivilegeEscalation` unset - resolved to **true** |
 | `caps=A+B` | added host-level capabilities (`SYS_ADMIN`, `BPF`, …) |
 | `root` | `runAsUser: 0`, from the container or pod security context |
 | `hostPort` | a container port bound on the node |
@@ -196,10 +196,10 @@ nodepool`). Sorting is ascending, with numeric columns ordered by value.
 
 Defaults that differ from ascending:
 
-- `image-count` and `restarts` — count-descending.
-- `autoscaler` — `LAST-CHANGE` descending (most recently changed nodegroup
+- `image-count` and `restarts` - count-descending.
+- `autoscaler` - `LAST-CHANGE` descending (most recently changed nodegroup
   first). Sortable columns: `nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change`.
-- Verdict commands (`pdb`, `hpa`, `spread`, `probes`) — `VERDICT` by severity
+- Verdict commands (`pdb`, `hpa`, `spread`, `probes`) - `VERDICT` by severity
   (least-risky first), so the riskiest rows land at the bottom, nearest the
   prompt.
 
@@ -212,10 +212,10 @@ klens colorizes its tables:
 
 | Color | Meaning |
 | --- | --- |
-| green | good — Ready/Healthy/Bound/Running, roomy free pod slots |
-| yellow | warning — Pending, high restart counts, floating `latest` tags, <25% free pod slots, `NoSchedule` taints |
-| red | bad — NotReady/Unknown/CrashLoopBackOff, node pressure, privileged flags, <10% free pod slots, `NoExecute` taints |
-| gray | muted placeholders — `<none>`/`none`, `PreferNoSchedule` taints |
+| green | good - Ready/Healthy/Bound/Running, roomy free pod slots |
+| yellow | warning - Pending, high restart counts, floating `latest` tags, <25% free pod slots, `NoSchedule` taints |
+| red | bad - NotReady/Unknown/CrashLoopBackOff, node pressure, privileged flags, <10% free pod slots, `NoExecute` taints |
+| gray | muted placeholders - `<none>`/`none`, `PreferNoSchedule` taints |
 | bold | headers |
 
 Verdict coloring per command:
@@ -225,7 +225,7 @@ Verdict coloring per command:
 | `pdb` | `OK` | `AT-FLOOR` | `BLOCKED`/`PERMABLOCK`/`NO-GUARD` | `ORPHAN` |
 | `hpa` | `OK` | `SCALING` | `MAXED`/`NO-METRICS` | `AT-MIN` |
 | `spread` | `SPREAD` | `SPOF-ZONE` | `SPOF-NODE` | `SINGLE`/`MULTI-NODE` |
-| `probes` | `OK` | `NO-LIVENESS` | `NO-READINESS`/`NO-PROBES` | — |
+| `probes` | `OK` | `NO-LIVENESS` | `NO-READINESS`/`NO-PROBES` | - |
 
 - `pdb` also colors its `ALLOWED` count: red at 0, yellow at 1, green above.
 - `probes` colors each probe cell by handler type (`http`/`grpc`/`tcp`/`exec`)
@@ -237,7 +237,7 @@ default via the environment.
 
 **Under kubecolor** (`alias kubectl=kubecolor`) klens' stdout is a pipe, so
 `auto` turns color off. kubecolor passes plugin output through unchanged, so
-klens' own colors survive — force them on with `--color=always` or
+klens' own colors survive - force them on with `--color=always` or
 `export KLENS_COLOR=always`.
 
 ## Shell completion
@@ -249,7 +249,7 @@ it for candidates. This repo ships that shim
 hidden `__complete` command. Load kubectl's own completion first (e.g.
 `source <(kubectl completion zsh)`).
 
-**Easiest** — let klens drop the shim for you. It writes `kubectl_complete-klens`
+**Easiest** - let klens drop the shim for you. It writes `kubectl_complete-klens`
 into krew's bin dir (already on your `PATH`), or pass `--dir` to target another
 directory on your `PATH`:
 
@@ -258,7 +258,7 @@ kubectl klens completion install
 kubectl klens completion install --dir /usr/local/bin   # non-krew install
 ```
 
-**Standalone** — drop both executables on your `PATH` (from the extracted
+**Standalone** - drop both executables on your `PATH` (from the extracted
 archive):
 
 ```bash

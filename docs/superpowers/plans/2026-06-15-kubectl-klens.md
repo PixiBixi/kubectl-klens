@@ -1425,7 +1425,7 @@ func lookup(name string) (Command, bool) {
 }
 
 func (a App) usage(w io.Writer) {
-	fmt.Fprintln(w, "klens — kubectl plugin for quick cluster inspection")
+	fmt.Fprintln(w, "klens - kubectl plugin for quick cluster inspection")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  kubectl klens <command> [flags]")
@@ -1647,7 +1647,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Phase 2 — upstream to krew-index. Disabled until we decide to publish.
+      # Phase 2 - upstream to krew-index. Disabled until we decide to publish.
       # Enable by removing `if: false` and adding a KREW_RELEASE_BOT token if needed.
       - name: Update krew-index
         if: false
@@ -1834,5 +1834,5 @@ git commit -m "docs: README, license, changelog, gitignore, pre-commit"
 ## Self-Review
 
 - **Spec coverage:** distribution (Task 14 krew + release), stack/client-go (Tasks 1,3-11), stdlib flag dispatch (Task 12), tabwriter (Task 1), all 9 subcommands (Tasks 3-11), global flags + behavior (Task 12), fake-clientset tests (every view + cli task), staticcheck/test-race CI (Task 14), goreleaser archives + changelog + krew manifest (Task 14), versioning ldflags (Tasks 13,14). No gaps.
-- **Placeholder scan:** LICENSE references "standard MIT text" — acceptable (well-known boilerplate). No TBD/TODO in code.
+- **Placeholder scan:** LICENSE references "standard MIT text" - acceptable (well-known boilerplate). No TBD/TODO in code.
 - **Type consistency:** every `view.*` func matches `RunFunc` `(ctx, kubernetes.Interface, kube.Flags, []string, io.Writer) error`; registry in Task 12 references exactly the funcs defined in Tasks 3-11; `kube.Flags`, `kube.NewTable`, `kube.Label`, `qtyOrNone`, `nodeStatus`, `pod()` helper used consistently.

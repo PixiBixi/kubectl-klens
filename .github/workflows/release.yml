@@ -43,7 +43,7 @@ jobs:
           current=$("$svu" current)
           next=$("$svu" next --v0)
           if [ "$next" = "$current" ]; then
-            echo "No releasable commit since ${current} — nothing to do."
+            echo "No releasable commit since ${current} - nothing to do."
             exit 0
           fi
 

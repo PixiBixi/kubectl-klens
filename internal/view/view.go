@@ -49,8 +49,8 @@ type podContainer struct {
 	Kind string
 }
 
-// podContainers enumerates a pod's containers in startup order — init, then
-// app, then ephemeral (debug) — tagged with their kind. The returned pointers
+// podContainers enumerates a pod's containers in startup order - init, then
+// app, then ephemeral (debug) - tagged with their kind. The returned pointers
 // alias p, so they stay valid only as long as p does.
 func podContainers(p *corev1.Pod) []podContainer {
 	out := make([]podContainer, 0, len(p.Spec.InitContainers)+len(p.Spec.Containers)+len(p.Spec.EphemeralContainers))
@@ -113,7 +113,7 @@ func bothLists[A, B any](listA func() (A, error), listB func() (B, error)) (A, B
 
 // skipNamespace reports whether a pod's namespace should be dropped from a
 // cluster-wide listing. kube-system is excluded from the -A view so operator
-// noise doesn't bury workload rows — but only there: when the user scoped to a
+// noise doesn't bury workload rows - but only there: when the user scoped to a
 // single namespace they asked for it explicitly, and silently returning nothing
 // for `-n kube-system` would be a lie.
 func skipNamespace(f kube.Flags, namespace string) bool {
