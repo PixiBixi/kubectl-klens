@@ -10,6 +10,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -63,7 +64,7 @@ func TestUnusedConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	for _, want := range []string{"NS", "KIND", "NAME", "TYPE", "KEYS", "SIZE", "AGE", "leftover", "2.0KiB", "stale-creds"} {
+	for _, want := range []string{"NS", "KIND", "NAME", "TYPE", "OWNER", "SIZE", "AGE", "leftover", "2.0KiB", "stale-creds"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output missing %q:\n%s", want, out)
 		}
@@ -195,5 +196,91 @@ func TestUnusedConfigExcludesKubeSystemClusterWide(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "app") {
 		t.Fatalf("workload namespace missing:\n%s", buf.String())
+	}
+}
+
+// TestUnusedConfigNamesOwner points the reader at the object to act on: deleting
+// a Secret an ExternalSecret owns just has it recreated.
+func TestUnusedConfigNamesOwner(t *testing.T) {
+	owned := secretWith("pullsecret-default", "app", corev1.SecretTypeDockerConfigJson, map[string][]byte{"a": []byte("x")})
+	owned.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "external-secrets.io/v1", Kind: "ExternalSecret", Name: "cluster-secrets-pullsecret",
+	}}
+	var buf bytes.Buffer
+	if err := UnusedConfig(context.Background(), clients(fake.NewClientset(owned)), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "OWNER") || !strings.Contains(out, "ExternalSecret/cluster-secrets-pullsecret") {
+		t.Fatalf("want the owning controller named:\n%s", out)
+	}
+}
+
+// TestUnusedConfigSkipsSidecarSelected covers the objects a sidecar loads by
+// label selector: every kube-prometheus-stack ships dozens of dashboards no pod
+// names, and listing them buries everything else.
+func TestUnusedConfigSkipsSidecarSelected(t *testing.T) {
+	dash := cmWith("prometheus-k8s-resources-pod", "monitoring", map[string]string{"dash.json": "{}"})
+	dash.Labels = map[string]string{"grafana_dashboard": "1"}
+	ds := secretWith("grafana-datasource", "monitoring", corev1.SecretTypeOpaque, map[string][]byte{"d": []byte("x")})
+	ds.Labels = map[string]string{"grafana_datasource": "1"}
+	var buf bytes.Buffer
+	if err := UnusedConfig(context.Background(), clients(fake.NewClientset(dash, ds)), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "prometheus-k8s-resources-pod") || strings.Contains(buf.String(), "grafana-datasource") {
+		t.Fatalf("a sidecar-selected object is not unused:\n%s", buf.String())
+	}
+}
+
+// TestUnusedConfigCountsArgReference covers the --configmap=ns/name flag several
+// ingress controllers take, the one reference form that is neither a mount nor
+// an env var.
+func TestUnusedConfigCountsArgReference(t *testing.T) {
+	pod := &corev1.Pod{
+		Name: "haproxy", Namespace: "app",
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{
+			Name: "controller",
+			Args: []string{"--configmap=app/haproxy-kubernetes-ingress", "--default-ssl-certificate=app/default-cert"},
+		}}},
+	}
+	c := fake.NewClientset(pod,
+		cmWith("haproxy-kubernetes-ingress", "app", map[string]string{"a": "1"}),
+		secretWith("default-cert", "app", corev1.SecretTypeTLS, map[string][]byte{"tls.crt": []byte("x")}),
+		cmWith("really-unused", "app", map[string]string{"a": "1"}),
+	)
+	var buf bytes.Buffer
+	if err := UnusedConfig(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, referenced := range []string{"haproxy-kubernetes-ingress", "default-cert"} {
+		if strings.Contains(out, referenced) {
+			t.Fatalf("%s is named on a command line:\n%s", referenced, out)
+		}
+	}
+	if !strings.Contains(out, "really-unused") {
+		t.Fatalf("a name no argument mentions must still be listed:\n%s", out)
+	}
+}
+
+// TestUnusedConfigArgMatchIsWholeToken keeps the argument scan from swallowing a
+// real leftover: a substring match would consider a Secret named "operator"
+// referenced by any flag containing the word.
+func TestUnusedConfigArgMatchIsWholeToken(t *testing.T) {
+	pod := &corev1.Pod{
+		Name: "app", Namespace: "app",
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{
+			Name: "app",
+			Args: []string{"--leader-election-id=my-operator-lock"},
+		}}},
+	}
+	c := fake.NewClientset(pod, secretWith("operator", "app", corev1.SecretTypeOpaque, map[string][]byte{"a": []byte("x")}))
+	var buf bytes.Buffer
+	if err := UnusedConfig(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "operator") {
+		t.Fatalf("a substring must not count as a reference:\n%s", buf.String())
 	}
 }

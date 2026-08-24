@@ -6,6 +6,7 @@ import (
 	"io"
 	"slices"
 	"strconv"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -23,9 +24,15 @@ import (
 //
 // The reference scan is the whole value of this command, so it reads pod
 // templates as well as live pods (a CronJob between runs and a workload scaled to
-// zero have no pods, and calling their config unused would be wrong), and it
-// ignores the objects the platform manages: the kube-root-ca.crt ConfigMap,
-// service-account tokens, and Helm release history. Rows are biggest first.
+// zero have no pods, and calling their config unused would be wrong), it counts a
+// name cited in a container's args or command (the `--configmap=ns/name` flag
+// several ingress controllers take), and it ignores what the platform manages:
+// the kube-root-ca.crt ConfigMap, service-account tokens, Helm release history,
+// and the objects a sidecar consumes by label selector rather than by name.
+//
+// An object a controller created keeps its OWNER, because that is the object to
+// act on: deleting a Secret an ExternalSecret owns just has it recreated a minute
+// later. Rows are biggest first.
 func UnusedConfig(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	var (
 		cms      []corev1.ConfigMap
@@ -86,7 +93,7 @@ func UnusedConfig(ctx context.Context, c kube.Clients, f kube.Flags, args []stri
 
 	type entry struct {
 		ns, kind, name, typ string
-		keys                int
+		owner               string
 		size                int
 		created             metav1.Time
 	}
@@ -98,7 +105,8 @@ func UnusedConfig(ctx context.Context, c kube.Clients, f kube.Flags, args []stri
 		}
 		list = append(list, entry{
 			ns: cm.Namespace, kind: "ConfigMap", name: cm.Name, typ: paint.Muted("-"),
-			keys: len(cm.Data) + len(cm.BinaryData), size: configMapSize(cm), created: cm.CreationTimestamp,
+			owner: ownerCell(paint, cm.Name, cm.OwnerReferences),
+			size:  configMapSize(cm), created: cm.CreationTimestamp,
 		})
 	}
 	for i := range secrets {
@@ -107,8 +115,9 @@ func UnusedConfig(ctx context.Context, c kube.Clients, f kube.Flags, args []stri
 			continue
 		}
 		list = append(list, entry{
-			ns: s.Namespace, kind: "Secret", name: s.Name, typ: string(s.Type),
-			keys: len(s.Data) + len(s.StringData), size: secretSize(s), created: s.CreationTimestamp,
+			ns: s.Namespace, kind: "Secret", name: s.Name, typ: secretTypeCell(s.Type),
+			owner: ownerCell(paint, s.Name, s.OwnerReferences),
+			size:  secretSize(s), created: s.CreationTimestamp,
 		})
 	}
 	// Biggest first: the size is what makes one leftover worth deleting before
@@ -122,10 +131,10 @@ func UnusedConfig(ctx context.Context, c kube.Clients, f kube.Flags, args []stri
 		)
 	})
 
-	t := kube.NewTable(out, paint, "NS", "KIND", "NAME", "TYPE", "KEYS", "SIZE", "AGE")
+	t := kube.NewTable(out, paint, "NS", "KIND", "NAME", "TYPE", "OWNER", "SIZE", "AGE")
 	for i := range list {
 		e := &list[i]
-		t.Row(e.ns, e.kind, e.name, e.typ, strconv.Itoa(e.keys), humanBytes(e.size), age(e.created))
+		t.Row(e.ns, e.kind, e.name, e.typ, e.owner, humanBytes(e.size), age(e.created))
 	}
 	t.SortBy(f.Sort)
 	return t.Flush()
@@ -140,10 +149,16 @@ const (
 )
 
 // refSet collects every ConfigMap and Secret name something in the cluster
-// points at, keyed by kind and namespace.
-type refSet struct{ seen map[string]bool }
+// points at, keyed by kind and namespace. args holds the names cited in a
+// container's args or command, which cannot be attributed to a kind.
+type refSet struct {
+	seen map[string]bool
+	args map[string]bool
+}
 
-func newRefSet() refSet { return refSet{seen: map[string]bool{}} }
+func newRefSet() refSet {
+	return refSet{seen: map[string]bool{}, args: map[string]bool{}}
+}
 
 func (r refSet) add(kind refKind, ns, name string) {
 	if name != "" {
@@ -152,7 +167,7 @@ func (r refSet) add(kind refKind, ns, name string) {
 }
 
 func (r refSet) has(kind refKind, ns, name string) bool {
-	return r.seen[string(kind)+"|"+ns+"/"+name]
+	return r.seen[string(kind)+"|"+ns+"/"+name] || r.args[ns+"|"+name]
 }
 
 // addPodSpec collects every reference a pod spec can carry: volumes (including
@@ -167,6 +182,32 @@ func (r refSet) addPodSpec(ns string, spec *corev1.PodSpec) {
 	}
 	for _, c := range podSpecContainers(spec) {
 		r.addContainer(ns, c)
+		r.addArgs(ns, c)
+	}
+}
+
+// nameRune reports whether c can appear in a Kubernetes object name, which is
+// what splits an argument into candidate names: `--configmap=ns/name` yields
+// "ns" and "name", so the flag several ingress controllers take counts as a
+// reference to the ConfigMap it points at.
+func nameRune(c rune) bool {
+	return c == '-' || c == '.' || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+}
+
+// addArgs indexes the whole tokens of a container's command line. Whole tokens,
+// not substrings: an object named "operator" would otherwise be considered
+// referenced by any argument that merely contains the word, hiding a real
+// leftover. The reverse mistake is the cheaper one here - a name that happens to
+// appear on a command line is left off the list rather than proposed for
+// deletion - which is the right way round for a command that says what to
+// delete.
+func (r refSet) addArgs(ns string, c *corev1.Container) {
+	for _, list := range [][]string{c.Command, c.Args} {
+		for _, arg := range list {
+			for _, token := range strings.FieldsFunc(arg, func(c rune) bool { return !nameRune(c) }) {
+				r.args[ns+"|"+token] = true
+			}
+		}
 	}
 }
 
@@ -259,7 +300,49 @@ func podSpecContainers(spec *corev1.PodSpec) []*corev1.Container {
 const rootCAConfigMap = "kube-root-ca.crt"
 
 func platformConfigMap(cm *corev1.ConfigMap) bool {
-	return cm.Name == rootCAConfigMap
+	return cm.Name == rootCAConfigMap || sidecarSelected(cm.Labels)
+}
+
+// sidecarLabels are the label keys a sidecar selects on to load an object it
+// never mounts. The Grafana sidecar convention is the one that matters in
+// practice: every kube-prometheus-stack ships dozens of dashboard ConfigMaps
+// that no pod references by name, and reporting them buries everything else.
+var sidecarLabels = []string{
+	"grafana_dashboard",
+	"grafana_datasource",
+	"grafana_alert",
+	"grafana_folder",
+}
+
+func sidecarSelected(labels map[string]string) bool {
+	for _, k := range sidecarLabels {
+		if _, ok := labels[k]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// ownerCell names the controller that created the object, which is what has to
+// be deleted for the object to stay gone. The owner's name is dropped when it
+// matches the object's, which is the common case and pure width otherwise.
+func ownerCell(paint kube.Painter, name string, refs []metav1.OwnerReference) string {
+	if len(refs) == 0 {
+		return paint.Muted("-")
+	}
+	if refs[0].Name == name {
+		return refs[0].Kind
+	}
+	return refs[0].Kind + "/" + refs[0].Name
+}
+
+// secretTypeCell drops the kubernetes.io/ prefix every built-in secret type
+// carries: 14 columns that say nothing, on a table already wide enough to wrap.
+func secretTypeCell(t corev1.SecretType) string {
+	if short, ok := strings.CutPrefix(string(t), "kubernetes.io/"); ok {
+		return short
+	}
+	return string(t)
 }
 
 // platformSecret reports the secrets the platform owns: a service-account token
@@ -270,7 +353,7 @@ func platformSecret(s *corev1.Secret) bool {
 	case corev1.SecretTypeServiceAccountToken, "helm.sh/release.v1":
 		return true
 	}
-	return false
+	return sidecarSelected(s.Labels)
 }
 
 func configMapSize(cm *corev1.ConfigMap) int {

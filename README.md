@@ -136,18 +136,31 @@ rather than failing the command.
 
 `unused-config` lists ConfigMaps and Secrets nothing points at. The reference
 scan is the whole value of it, so it reads **pod templates** as well as live
-pods - a CronJob between runs and a workload scaled to zero own no pods, and
-calling their config unused would be wrong - covering volumes (projected sources
+pods (a CronJob between runs and a workload scaled to zero own no pods, and
+calling their config unused would be wrong), covering volumes (projected sources
 included), `env.valueFrom`, `envFrom`, `imagePullSecrets`, CSI node-publish
-secrets, the secrets a ServiceAccount holds, and Ingress TLS certificates. It
-ignores what the platform owns: the `kube-root-ca.crt` ConfigMap,
-`kubernetes.io/service-account-token` secrets and `helm.sh/release.v1` release
-history. Rows are biggest first, since size is what decides which leftover to
-delete first. It skips kube-system in the `-A` view.
+secrets, the secrets a ServiceAccount holds, Ingress TLS certificates, and names
+cited in a container's `args`/`command` (the `--configmap=ns/name` flag several
+ingress controllers take). Argument matching is on whole tokens, never
+substrings: a Secret named `operator` must not be considered referenced by any
+flag containing the word.
 
-One reference it cannot see: an object read through the API by an operator
-rather than mounted (an external-secrets `SecretStore`, a controller reading a
-ConfigMap by name). Check before deleting.
+It leaves out what the platform owns: the `kube-root-ca.crt` ConfigMap,
+`kubernetes.io/service-account-token` secrets, `helm.sh/release.v1` release
+history, and what a sidecar loads by label selector rather than by name
+(`grafana_dashboard`, `grafana_datasource`, `grafana_alert`, `grafana_folder`),
+which on any kube-prometheus-stack is dozens of dashboards no pod references.
+
+The `OWNER` column is the actionable part when a controller created the object:
+deleting a Secret an `ExternalSecret` owns just has it recreated a minute later,
+so the row is telling you to review the `ExternalSecret`. Rows are biggest first,
+since size is what decides which leftover to delete. It skips kube-system in the
+`-A` view.
+
+What it cannot see is an object a controller reads **by fixed name** through the
+API, or one an app writes to itself: an `argo-rollouts-config`, an operator's
+own state secret, a `metricsConfig` a `Kafka` CR points at. Those stay on the
+list, so read it as a review queue, not a delete script.
 
 `qos` rolls the per-container view up to the pod: it prints the class the
 apiserver assigned (`Guaranteed`/`Burstable`/`BestEffort`) next to what the pod
