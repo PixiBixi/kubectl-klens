@@ -70,6 +70,7 @@ var commands = []Command{
 	{Name: "qos", Summary: "Show each pod's QoS class and effective requests/limits with an eviction-risk verdict in the current namespace (-A for all; -A excludes kube-system)", Run: view.Qos, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "qos", "req_cpu", "lim_cpu", "req_mem", "lim_mem", "verdict"}},
 	{Name: "rollouts", Summary: "List workloads that are not finished rolling out, incl. Argo Rollouts, in the current namespace (-A for all)", Run: view.Rollouts, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "desired", "ready", "updated", "available", "state", "verdict"}},
 	{Name: "probes", Summary: "List containers' readiness/liveness/startup probes with a reliability verdict in the current namespace (-A for all; -A excludes kube-system)", Run: view.Probes, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "readiness", "liveness", "startup", "verdict"}},
+	{Name: "terminating", Summary: "List pods and namespaces stuck being deleted, with the blocker (cluster-wide)", Run: view.Terminating, SortColumns: []string{"kind", "ns", "name", "stuck-for", "blocker", "finalizers", "verdict"}},
 	{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler, SortColumns: []string{"nodegroup", "health", "ready", "target", "min", "max", "scaleup", "scaledown", "last-change"}},
 	{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},
 }
