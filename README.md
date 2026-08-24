@@ -70,6 +70,7 @@ nodes. A public address is yellow, because it is internet-reachable surface.
 | `qos` † | QoS class + pod totals + eviction-risk verdict |
 | `images` † | image per container per pod |
 | `image-count` | image counts, split registry/image/tag (cluster-wide) |
+| `unused-config` † | ConfigMaps/Secrets nothing references |
 | `restarts` † | restarted containers + crash reason + last exit code |
 
 ### Storage & networking
@@ -128,6 +129,21 @@ rather than failing the command.
 | `probes` † | readiness/liveness/startup probes + verdict |
 | `terminating` | pods/namespaces stuck being deleted + blocker |
 | `rollouts` † | workloads not finished rolling out (+ Argo Rollouts) |
+
+`unused-config` lists ConfigMaps and Secrets nothing points at. The reference
+scan is the whole value of it, so it reads **pod templates** as well as live
+pods - a CronJob between runs and a workload scaled to zero own no pods, and
+calling their config unused would be wrong - covering volumes (projected sources
+included), `env.valueFrom`, `envFrom`, `imagePullSecrets`, CSI node-publish
+secrets, the secrets a ServiceAccount holds, and Ingress TLS certificates. It
+ignores what the platform owns: the `kube-root-ca.crt` ConfigMap,
+`kubernetes.io/service-account-token` secrets and `helm.sh/release.v1` release
+history. Rows are biggest first, since size is what decides which leftover to
+delete first. It skips kube-system in the `-A` view.
+
+One reference it cannot see: an object read through the API by an operator
+rather than mounted (an external-secrets `SecretStore`, a controller reading a
+ConfigMap by name). Check before deleting.
 
 `qos` rolls the per-container view up to the pod: it prints the class the
 apiserver assigned (`Guaranteed`/`Burstable`/`BestEffort`) next to what the pod
