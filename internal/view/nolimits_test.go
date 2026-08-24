@@ -35,7 +35,7 @@ func TestNoLimits(t *testing.T) {
 		podWithLimits("system", "kube-system", nil),
 	)
 	var buf bytes.Buffer
-	if err := NoLimits(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := NoLimits(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -70,7 +70,7 @@ func TestNoLimitsInitContainer(t *testing.T) {
 		},
 	})
 	var buf bytes.Buffer
-	if err := NoLimits(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := NoLimits(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -87,7 +87,7 @@ func TestNoLimitsInitContainer(t *testing.T) {
 func TestNoLimitsExplicitKubeSystem(t *testing.T) {
 	c := fake.NewClientset(podWithLimits("coredns", "kube-system", nil))
 	var buf bytes.Buffer
-	if err := NoLimits(context.Background(), c, kube.Flags{Namespace: "kube-system"}, nil, &buf); err != nil {
+	if err := NoLimits(context.Background(), clients(c), kube.Flags{Namespace: "kube-system"}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "coredns") {
@@ -98,7 +98,7 @@ func TestNoLimitsExplicitKubeSystem(t *testing.T) {
 func TestNoLimitsColor(t *testing.T) {
 	c := fake.NewClientset(podWithLimits("none", "team-a", nil)) // no limits at all
 	var buf bytes.Buffer
-	if err := NoLimits(context.Background(), c, kube.Flags{Color: true, AllNamespaces: true}, nil, &buf); err != nil {
+	if err := NoLimits(context.Background(), clients(c), kube.Flags{Color: true, AllNamespaces: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "\x1b[33mcpu,memory\x1b[0m") {

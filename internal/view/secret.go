@@ -29,7 +29,7 @@ import (
 //	secret <name>        pick a key of <name> (list its keys when piped)
 //	secret <name> <key>  print the decoded value of <key>
 //	secret <name> all    print all decoded key/value pairs
-func Secret(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func Secret(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	paint := kube.NewPainter(f)
 	switch {
 	case len(args) >= 2:

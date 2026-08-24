@@ -6,14 +6,13 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
 // NodeConditions shows each node's readiness and its pressure conditions, where
 // a "True" memory/disk/pid column flags a node under that pressure.
-func NodeConditions(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func NodeConditions(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
 	if err != nil {
 		return err

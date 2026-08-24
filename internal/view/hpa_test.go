@@ -59,7 +59,7 @@ func TestHpa(t *testing.T) {
 	c := fake.NewClientset(maxed, ok)
 
 	var buf bytes.Buffer
-	if err := Hpa(context.Background(), c, kube.Flags{Namespace: "default"}, nil, &buf); err != nil {
+	if err := Hpa(context.Background(), clients(c), kube.Flags{Namespace: "default"}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -81,7 +81,7 @@ func TestHpaColor(t *testing.T) {
 	c := fake.NewClientset(maxed, ok)
 
 	var buf bytes.Buffer
-	if err := Hpa(context.Background(), c, kube.Flags{Namespace: "default", Color: true}, nil, &buf); err != nil {
+	if err := Hpa(context.Background(), clients(c), kube.Flags{Namespace: "default", Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

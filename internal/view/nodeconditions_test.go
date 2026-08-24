@@ -26,7 +26,7 @@ func TestNodeConditions(t *testing.T) {
 		corev1.NodeCondition{Type: corev1.NodeDiskPressure, Status: corev1.ConditionFalse},
 	))
 	var buf bytes.Buffer
-	if err := NodeConditions(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := NodeConditions(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -48,7 +48,7 @@ func TestNodeConditionsColor(t *testing.T) {
 		corev1.NodeCondition{Type: corev1.NodeDiskPressure, Status: corev1.ConditionFalse},
 	))
 	var buf bytes.Buffer
-	if err := NodeConditions(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := NodeConditions(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

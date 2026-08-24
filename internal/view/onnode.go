@@ -7,13 +7,12 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
 // OnNode lists pods scheduled on the given node.
-func OnNode(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func OnNode(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	if len(args) < 1 || args[0] == "" {
 		return errors.New("on-node requires a node name: kubectl klens on-node <node>")
 	}

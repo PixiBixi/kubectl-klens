@@ -10,7 +10,6 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -18,7 +17,7 @@ import (
 // Hpa lists HorizontalPodAutoscalers with a computed autoscaling verdict, so a
 // maxed-out (no headroom) or metric-blind HPA is readable at a glance. Rows
 // default to VERDICT (risk) order, riskiest at the bottom.
-func Hpa(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func Hpa(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	hpas, err := kube.ListHorizontalPodAutoscalers(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err

@@ -25,7 +25,7 @@ func TestNodes(t *testing.T) {
 	}
 	c := fake.NewClientset(node)
 	var buf bytes.Buffer
-	if err := Nodes(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Nodes(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -47,7 +47,7 @@ func TestNodesColor(t *testing.T) {
 	}
 	c := fake.NewClientset(ready, down)
 	var buf bytes.Buffer
-	if err := Nodes(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := Nodes(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -63,7 +63,7 @@ func TestNodesColorUnknownAndPlaceholders(t *testing.T) {
 	// Node with no Ready condition → status "Unknown"; no labels → muted <none>.
 	c := fake.NewClientset(&corev1.Node{Name: "n"})
 	var buf bytes.Buffer
-	if err := Nodes(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := Nodes(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

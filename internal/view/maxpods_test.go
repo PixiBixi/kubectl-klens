@@ -32,7 +32,7 @@ func TestMaxPods(t *testing.T) {
 		pod("b", "kube-system", "n1"),
 	)
 	var buf bytes.Buffer
-	if err := MaxPods(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := MaxPods(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -56,7 +56,7 @@ func TestMaxPodsIgnoresTerminatedPods(t *testing.T) {
 		terminated,
 	)
 	var buf bytes.Buffer
-	if err := MaxPods(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := MaxPods(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	// n1: max 10, 2 non-terminated pods, 8 free.
@@ -74,7 +74,7 @@ func TestMaxPodsColorWhenFull(t *testing.T) {
 	// Node ceiling of 1 with one pod scheduled → FREE == 0.
 	c := fake.NewClientset(nodeMaxPods("node-a", 1), pod("p1", "ns", "node-a"))
 	var buf bytes.Buffer
-	if err := MaxPods(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := MaxPods(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "\x1b[31m0\x1b[0m") {
@@ -86,7 +86,7 @@ func TestMaxPodsColorBySaturation(t *testing.T) {
 	// Healthy node: 110 ceiling, no pods → 110 free, green.
 	healthy := fake.NewClientset(nodeMaxPods("roomy", 110))
 	var buf bytes.Buffer
-	if err := MaxPods(context.Background(), healthy, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := MaxPods(context.Background(), clients(healthy), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "\x1b[32m110\x1b[0m") {
@@ -98,7 +98,7 @@ func TestMaxPodsColorBySaturation(t *testing.T) {
 		pod("d", "ns", "tight"), pod("e", "ns", "tight"), pod("f", "ns", "tight"),
 		pod("g", "ns", "tight"), pod("h", "ns", "tight"), pod("i", "ns", "tight"))
 	buf.Reset()
-	if err := MaxPods(context.Background(), tight, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := MaxPods(context.Background(), clients(tight), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "\x1b[33m1\x1b[0m") {
@@ -109,7 +109,7 @@ func TestMaxPodsColorBySaturation(t *testing.T) {
 func TestMaxPodsUnknownAllocatable(t *testing.T) {
 	c := fake.NewClientset(&corev1.Node{Name: "n1"})
 	var buf bytes.Buffer
-	if err := MaxPods(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := MaxPods(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "none") {

@@ -29,7 +29,7 @@ func TestCapacity(t *testing.T) {
 	}
 	c := fake.NewClientset(node)
 	var buf bytes.Buffer
-	if err := Capacity(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Capacity(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -44,7 +44,7 @@ func TestCapacityColorMutesMissing(t *testing.T) {
 	// Node reporting no capacity/allocatable → every cell is a muted "none".
 	c := fake.NewClientset(&corev1.Node{Name: "n1"})
 	var buf bytes.Buffer
-	if err := Capacity(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := Capacity(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "\x1b[90mnone\x1b[0m") {

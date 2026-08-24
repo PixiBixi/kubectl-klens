@@ -26,7 +26,7 @@ func TestPodsPerNode(t *testing.T) {
 		pod("c", "default", "n2"),
 	)
 	var buf bytes.Buffer
-	if err := PodsPerNode(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := PodsPerNode(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

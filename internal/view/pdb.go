@@ -9,7 +9,6 @@ import (
 
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -18,7 +17,7 @@ import (
 // stuck-drain or misconfigured PDB is readable at a glance instead of inferred
 // from raw status fields. Rows default to VERDICT (risk) order, riskiest at the
 // bottom.
-func Pdb(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func Pdb(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	pdbs, err := kube.ListPodDisruptionBudgets(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err

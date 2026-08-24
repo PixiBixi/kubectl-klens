@@ -30,7 +30,7 @@ func TestReqlim(t *testing.T) {
 	}
 	c := fake.NewClientset(app, sys)
 	var buf bytes.Buffer
-	if err := Reqlim(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Reqlim(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -59,7 +59,7 @@ func TestReqlimInitContainer(t *testing.T) {
 		},
 	})
 	var buf bytes.Buffer
-	if err := Reqlim(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Reqlim(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -79,7 +79,7 @@ func TestReqlimExplicitKubeSystem(t *testing.T) {
 		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "kube-proxy"}}},
 	})
 	var buf bytes.Buffer
-	if err := Reqlim(context.Background(), c, kube.Flags{Namespace: "kube-system"}, nil, &buf); err != nil {
+	if err := Reqlim(context.Background(), clients(c), kube.Flags{Namespace: "kube-system"}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "kube-proxy") {

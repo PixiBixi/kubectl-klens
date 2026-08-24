@@ -1,13 +1,27 @@
 package kube
 
 import (
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// Clients bundles the API clients a view can reach. kubernetes.Interface is
+// embedded rather than named so a view keeps calling c.CoreV1() directly and
+// stays passable to the List* helpers; Dynamic is what reads resources the
+// typed clientset has no scheme for - CRDs such as Argo Rollouts.
+//
+// Dynamic is nil in tests that never touch a CRD, so a view must treat a
+// missing dynamic client as "CRD unavailable" instead of dereferencing it.
+type Clients struct {
+	kubernetes.Interface
+	Dynamic dynamic.Interface
+}
+
 // clientConfig builds the deferred loading config from the default loading
 // rules plus the explicit kubeconfig path and context override. Same pattern
-// as kubearch. Shared by Client and CurrentNamespace.
+// as kubearch. Shared by NewClients and CurrentNamespace.
 func clientConfig(f Flags) clientcmd.ClientConfig {
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	if f.Kubeconfig != "" {
@@ -20,8 +34,8 @@ func clientConfig(f Flags) clientcmd.ClientConfig {
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
 }
 
-// Client builds a clientset from the resolved kubeconfig.
-func Client(f Flags) (kubernetes.Interface, error) {
+// restConfig resolves the kubeconfig into a REST config both clients share.
+func restConfig(f Flags) (*rest.Config, error) {
 	cfg, err := clientConfig(f).ClientConfig()
 	if err != nil {
 		return nil, err
@@ -36,7 +50,26 @@ func Client(f Flags) (kubernetes.Interface, error) {
 	// Bound the wait on an unresponsive apiserver. Without this a hung control
 	// plane hangs the command indefinitely, since nothing else sets a deadline.
 	cfg.Timeout = f.RequestTimeout
-	return kubernetes.NewForConfig(cfg)
+	return cfg, nil
+}
+
+// NewClients builds the typed and dynamic clients from the resolved kubeconfig.
+// Both are created up front: it costs two structs and no round trip, and the
+// dynamic client only talks to the apiserver when a view lists a CRD.
+func NewClients(f Flags) (Clients, error) {
+	cfg, err := restConfig(f)
+	if err != nil {
+		return Clients{}, err
+	}
+	typed, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return Clients{}, err
+	}
+	dyn, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		return Clients{}, err
+	}
+	return Clients{Interface: typed, Dynamic: dyn}, nil
 }
 
 // CurrentNamespace returns the namespace of the active kubeconfig context - the

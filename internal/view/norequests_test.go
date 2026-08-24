@@ -31,7 +31,7 @@ func TestNoRequests(t *testing.T) {
 		podWithRequests("none", "default", nil),
 	)
 	var buf bytes.Buffer
-	if err := NoRequests(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := NoRequests(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

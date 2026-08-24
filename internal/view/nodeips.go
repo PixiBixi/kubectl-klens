@@ -9,7 +9,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -17,7 +16,7 @@ import (
 // NodeIPs lists the internal and external addresses of every node - what a
 // `-o jsonpath` over .status.addresses gives you, without the jsonpath. A node
 // name narrows the listing to that node.
-func NodeIPs(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func NodeIPs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	var opts metav1.ListOptions
 	node := ""
 	if len(args) > 0 && args[0] != "" {

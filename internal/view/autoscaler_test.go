@@ -115,7 +115,7 @@ func renderToSorted(t *testing.T, status, sortCol string) string {
 	t.Helper()
 	c := fake.NewClientset(autoscalerCM(status))
 	var buf bytes.Buffer
-	if err := Autoscaler(context.Background(), c, kube.Flags{Sort: sortCol}, nil, &buf); err != nil {
+	if err := Autoscaler(context.Background(), clients(c), kube.Flags{Sort: sortCol}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	return buf.String()
@@ -211,7 +211,7 @@ func TestAutoscalerFallsBackToVerbatim(t *testing.T) {
 func TestAutoscalerColor(t *testing.T) {
 	c := fake.NewClientset(autoscalerCM(yamlStatus))
 	var buf bytes.Buffer
-	if err := Autoscaler(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := Autoscaler(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -224,7 +224,7 @@ func TestAutoscalerColor(t *testing.T) {
 func TestAutoscalerMissingConfigMap(t *testing.T) {
 	c := fake.NewClientset()
 	var buf bytes.Buffer
-	if err := Autoscaler(context.Background(), c, kube.Flags{}, nil, &buf); err == nil {
+	if err := Autoscaler(context.Background(), clients(c), kube.Flags{}, nil, &buf); err == nil {
 		t.Fatal("expected error when configmap is missing, got nil")
 	}
 }

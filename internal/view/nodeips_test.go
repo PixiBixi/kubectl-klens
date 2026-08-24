@@ -30,7 +30,7 @@ func TestNodeIPs(t *testing.T) {
 	)
 	c := fake.NewClientset(public, private)
 	var buf bytes.Buffer
-	if err := NodeIPs(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := NodeIPs(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -52,7 +52,7 @@ func TestNodeIPsSingleNode(t *testing.T) {
 		nodeWithAddresses("other", corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "10.0.0.5"}),
 	)
 	var buf bytes.Buffer
-	if err := NodeIPs(context.Background(), c, kube.Flags{}, []string{"wanted"}, &buf); err != nil {
+	if err := NodeIPs(context.Background(), clients(c), kube.Flags{}, []string{"wanted"}, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -68,7 +68,7 @@ func TestNodeIPsSingleNode(t *testing.T) {
 func TestNodeIPsUnknownNode(t *testing.T) {
 	c := newClientsetWithFieldSelectors(nodeWithAddresses("n1"))
 	var buf bytes.Buffer
-	err := NodeIPs(context.Background(), c, kube.Flags{}, []string{"typo"}, &buf)
+	err := NodeIPs(context.Background(), clients(c), kube.Flags{}, []string{"typo"}, &buf)
 	if err == nil || !strings.Contains(err.Error(), `node "typo" not found`) {
 		t.Fatalf("expected not-found error, got %v (output %q)", err, buf.String())
 	}
@@ -82,7 +82,7 @@ func TestNodeIPsEmptyArgListsEverything(t *testing.T) {
 		nodeWithAddresses("b", corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "10.0.0.5"}),
 	)
 	var buf bytes.Buffer
-	if err := NodeIPs(context.Background(), c, kube.Flags{}, []string{""}, &buf); err != nil {
+	if err := NodeIPs(context.Background(), clients(c), kube.Flags{}, []string{""}, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -97,7 +97,7 @@ func TestNodeIPsDualStack(t *testing.T) {
 		corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "fd00::4"},
 	)
 	var buf bytes.Buffer
-	if err := NodeIPs(context.Background(), fake.NewClientset(n), kube.Flags{}, nil, &buf); err != nil {
+	if err := NodeIPs(context.Background(), clients(fake.NewClientset(n)), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if out := buf.String(); !strings.Contains(out, "10.0.0.4,fd00::4") {
@@ -114,7 +114,7 @@ func TestNodeIPsColor(t *testing.T) {
 	broken := nodeWithAddresses("broken")
 	c := fake.NewClientset(public, broken)
 	var buf bytes.Buffer
-	if err := NodeIPs(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := NodeIPs(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -134,7 +134,7 @@ func TestNodeIPsSort(t *testing.T) {
 	a := nodeWithAddresses("a", corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "10.0.0.9"})
 	b := nodeWithAddresses("b", corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "10.0.0.1"})
 	var buf bytes.Buffer
-	if err := NodeIPs(context.Background(), fake.NewClientset(a, b), kube.Flags{Sort: "internal-ip"}, nil, &buf); err != nil {
+	if err := NodeIPs(context.Background(), clients(fake.NewClientset(a, b)), kube.Flags{Sort: "internal-ip"}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

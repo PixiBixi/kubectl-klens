@@ -29,7 +29,7 @@ func TestSecretListsWhenNoName(t *testing.T) {
 		&corev1.Secret{Name: "tls", Namespace: "default", Type: corev1.SecretTypeTLS},
 	)
 	var buf bytes.Buffer
-	if err := Secret(context.Background(), c, kube.Flags{Namespace: "default"}, nil, &buf); err != nil {
+	if err := Secret(context.Background(), clients(c), kube.Flags{Namespace: "default"}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -46,7 +46,7 @@ func TestSecretListsWhenNoName(t *testing.T) {
 func TestSecretListsKeys(t *testing.T) {
 	c := fake.NewClientset(dbCreds())
 	var buf bytes.Buffer
-	if err := Secret(context.Background(), c, kube.Flags{Namespace: "default"}, []string{"db-creds"}, &buf); err != nil {
+	if err := Secret(context.Background(), clients(c), kube.Flags{Namespace: "default"}, []string{"db-creds"}, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -65,7 +65,7 @@ func TestSecretListsKeys(t *testing.T) {
 func TestSecretShowsOneKey(t *testing.T) {
 	c := fake.NewClientset(dbCreds())
 	var buf bytes.Buffer
-	if err := Secret(context.Background(), c, kube.Flags{Namespace: "default"}, []string{"db-creds", "username"}, &buf); err != nil {
+	if err := Secret(context.Background(), clients(c), kube.Flags{Namespace: "default"}, []string{"db-creds", "username"}, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -80,7 +80,7 @@ func TestSecretShowsOneKey(t *testing.T) {
 func TestSecretAllDumpsValues(t *testing.T) {
 	c := fake.NewClientset(dbCreds())
 	var buf bytes.Buffer
-	if err := Secret(context.Background(), c, kube.Flags{Namespace: "default"}, []string{"db-creds", "all"}, &buf); err != nil {
+	if err := Secret(context.Background(), clients(c), kube.Flags{Namespace: "default"}, []string{"db-creds", "all"}, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -108,7 +108,7 @@ func TestPickKeyAutoSelectsSingleKey(t *testing.T) {
 func TestSecretKeyNotFound(t *testing.T) {
 	c := fake.NewClientset(dbCreds())
 	var buf bytes.Buffer
-	err := Secret(context.Background(), c, kube.Flags{Namespace: "default"}, []string{"db-creds", "nope"}, &buf)
+	err := Secret(context.Background(), clients(c), kube.Flags{Namespace: "default"}, []string{"db-creds", "nope"}, &buf)
 	if err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("expected not-found error, got %v", err)
 	}

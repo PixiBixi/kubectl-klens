@@ -9,7 +9,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -20,7 +19,7 @@ import (
 // containers are included - an init container looping in CrashLoopBackOff is a
 // classic cause of a pod that never starts, and it used to be invisible here.
 // Containers with zero restarts are omitted.
-func Restarts(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func Restarts(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err
