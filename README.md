@@ -67,6 +67,7 @@ nodes. A public address is yellow, because it is internet-reachable surface.
 | `reqlim` † | requests/limits per container (`-A` excl. kube-system) |
 | `no-limits` † | containers missing CPU/mem limits |
 | `no-requests` † | containers missing CPU/mem requests |
+| `qos` † | QoS class + pod totals + eviction-risk verdict |
 | `images` † | image per container per pod |
 | `image-count` | image counts, split registry/image/tag (cluster-wide) |
 | `restarts` † | restarted containers + crash reason + last exit code |
@@ -94,6 +95,16 @@ nodes. A public address is yellow, because it is internet-reachable surface.
 | `hpa` † | HorizontalPodAutoscalers + autoscaling verdict |
 | `spread` † | replica placement across nodes/zones + SPOF verdict |
 | `probes` † | readiness/liveness/startup probes + verdict |
+
+`qos` rolls the per-container view up to the pod: it prints the class the
+apiserver assigned (`Guaranteed`/`Burstable`/`BestEffort`) next to what the pod
+actually reserves in steady state - app containers plus native sidecars (init
+containers with `restartPolicy: Always`), since a plain init container's spike
+ends before the pod is up. The verdict adds what the class alone hides: a
+`Burstable` pod with **no memory request** (`NO-MEM-FLOOR`) is ranked with the
+`BestEffort` ones when the kubelet starts evicting on memory pressure, however
+small its real footprint. It skips kube-system in the `-A` view, like `reqlim`
+and `no-limits`.
 
 `probes` skips kube-system in the `-A` view, like `reqlim` and `no-limits`.
 
@@ -199,7 +210,7 @@ Defaults that differ from ascending:
 - `image-count` and `restarts` - count-descending.
 - `autoscaler` - `LAST-CHANGE` descending (most recently changed nodegroup
   first). Sortable columns: `nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change`.
-- Verdict commands (`pdb`, `hpa`, `spread`, `probes`) - `VERDICT` by severity
+- Verdict commands (`pdb`, `hpa`, `spread`, `probes`, `qos`) - `VERDICT` by severity
   (least-risky first), so the riskiest rows land at the bottom, nearest the
   prompt.
 
@@ -226,6 +237,7 @@ Verdict coloring per command:
 | `hpa` | `OK` | `SCALING` | `MAXED`/`NO-METRICS` | `AT-MIN` |
 | `spread` | `SPREAD` | `SPOF-ZONE` | `SPOF-NODE` | `SINGLE`/`MULTI-NODE` |
 | `probes` | `OK` | `NO-LIVENESS` | `NO-READINESS`/`NO-PROBES` | - |
+| `qos` | `GUARANTEED` | `BURSTABLE` | `NO-MEM-FLOOR`/`EVICT-FIRST` | - |
 
 - `pdb` also colors its `ALLOWED` count: red at 0, yellow at 1, green above.
 - `probes` colors each probe cell by handler type (`http`/`grpc`/`tcp`/`exec`)

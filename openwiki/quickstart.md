@@ -4,7 +4,7 @@
 ~25 read-only cluster-inspection shortcuts behind one dispatcher. It is the
 codified form of a pile of "quick look at the cluster" one-liners: nodes,
 capacity, requests/limits, images, restarts, PVCs, and a set of *verdict*
-commands (`pdb`, `hpa`, `spread`, `probes`, `pending`) that classify a
+commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `pending`) that classify a
 resource's health at a glance instead of making you read raw status fields.
 
 - **Language / runtime:** Go 1.27, compiled to a static `kubectl-klens` binary.
@@ -55,6 +55,7 @@ The authoritative list is the `commands` slice in
 - `images` - image per container per pod
 - `image-count` - image occurrence counts split registry/image/tag (cluster-wide)
 - `restarts` - restarted containers + crash reason + last exit code (137/143 = SIGKILL/SIGTERM)
+- `qos` - QoS class + pod requests/limits totals + eviction-risk verdict
 - `pvc` - PVCs bound to pod + node
 - `default-sa` - pods still on the default service account
 - `privileged` - containers with privileged/host security flags
@@ -64,8 +65,8 @@ The authoritative list is the `commands` slice in
 report **every** container of a pod - init and ephemeral ones included - and name
 the role in a `KIND` column (`app`/`init`/`eph`), because an init container's
 requests, images and security context count exactly as much as an app
-container's. `reqlim`, `no-limits`, `no-requests` and `probes` drop kube-system
-from the `-A` view only; an explicit `-n kube-system` still returns its rows. The
+container's. `reqlim`, `no-limits`, `no-requests`, `probes` and `qos` drop
+kube-system from the `-A` view only; an explicit `-n kube-system` still returns its rows. The
 README's [Container kinds](../README.md#container-kinds) and
 [Security flags](../README.md#security-flags) sections are the reference for the
 `KIND` and `FLAGS` values.
@@ -76,6 +77,8 @@ README's [Container kinds](../README.md#container-kinds) and
 - `hpa` - HorizontalPodAutoscaler autoscaling verdict
 - `spread` - replica placement single-point-of-failure verdict
 - `probes` - readiness/liveness/startup probe reliability verdict
+- `qos` - QoS class + eviction-risk verdict (`NO-MEM-FLOOR` is the finding the
+  class itself hides: no memory request means eviction alongside `BestEffort`)
 
 **Interactive**
 - `secret` - browse secrets interactively (pick secret, then key); positional
@@ -96,7 +99,7 @@ kubens/kubectx); the rest default to **all namespaces**.
 
 - Current-namespace-by-default: `reqlim`, `no-limits`, `no-requests`, `images`,
   `restarts`, `pvc`, `svc-fqdn`, `secret`, `privileged`, `pdb`, `pending`, `hpa`,
-  `spread`, `probes`.
+  `spread`, `probes`, `qos`.
 - `-A` / `--all-namespaces` widens to all; `-n <ns>` targets one.
 - `autoscaler` ignores namespace flags entirely (always `kube-system`).
 
