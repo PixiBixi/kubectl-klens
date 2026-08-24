@@ -81,7 +81,7 @@ func TestPending(t *testing.T) {
 	c := newClientsetWithFieldSelectors(unsched, badimg, running)
 
 	var buf bytes.Buffer
-	if err := Pending(context.Background(), c, kube.Flags{Namespace: "default"}, nil, &buf); err != nil {
+	if err := Pending(context.Background(), clients(c), kube.Flags{Namespace: "default"}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -120,7 +120,7 @@ func TestPendingColor(t *testing.T) {
 	c := fake.NewClientset(unsched, badimg)
 
 	var buf bytes.Buffer
-	if err := Pending(context.Background(), c, kube.Flags{Namespace: "default", Color: true}, nil, &buf); err != nil {
+	if err := Pending(context.Background(), clients(c), kube.Flags{Namespace: "default", Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

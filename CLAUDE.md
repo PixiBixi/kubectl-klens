@@ -56,15 +56,16 @@ Three packages under `internal/`, layered cli → view → kube:
   `completion/kubectl_complete-klens` shim, plus `completion install` (writes
   the shim to krew's bin dir, needs no cluster).
 - **`internal/view`** - one file per subcommand, each a `RunFunc`:
-  `func(ctx, kubernetes.Interface, kube.Flags, args []string, out io.Writer) error`.
+  `func(ctx, kube.Clients, kube.Flags, args []string, out io.Writer) error`.
   Shared node helpers live in `view.go`. `secret.go` is the only interactive
   command: `kube.IsTTY(out)` gates promptui pickers vs. plain piped listings.
   Sortable views call `t.SortBy(f.Sort)` before `Flush`; `image-count` and
   `restarts` keep a bespoke count-descending default (overridden by `--sort`).
   Views colorize status cells by building `paint := kube.NewPainter(f)` and
   wrapping cells (`paint.OK/Warn/Bad/Muted` or the `paint.Status` classifier).
-- **`internal/kube`** - kubeconfig plumbing (`Client`, `CurrentNamespace`,
-  `clientConfig` via deferred loading rules + context override), the `Flags`
+- **`internal/kube`** - kubeconfig plumbing (`NewClients`, `CurrentNamespace`,
+  `clientConfig` via deferred loading rules + context override), the `Clients`
+  bundle (embedded `kubernetes.Interface` + `Dynamic` for CRDs), the `Flags`
   struct with `NamespaceScope()`, the `Table` helper used for all columnar
   output, and `color.go` (`Painter` + `ResolveColor` + `IsTTY`). `Table` buffers
   rows and, via `SortBy(column)`, sorts ascending by a named header at `Flush`

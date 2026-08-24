@@ -60,7 +60,7 @@ func TestSpread(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	if err := Spread(context.Background(), c, kube.Flags{Namespace: "default"}, nil, &buf); err != nil {
+	if err := Spread(context.Background(), clients(c), kube.Flags{Namespace: "default"}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -91,7 +91,7 @@ func TestSpreadColor(t *testing.T) {
 	)
 
 	var buf bytes.Buffer
-	if err := Spread(context.Background(), c, kube.Flags{Namespace: "default", Color: true}, nil, &buf); err != nil {
+	if err := Spread(context.Background(), clients(c), kube.Flags{Namespace: "default", Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

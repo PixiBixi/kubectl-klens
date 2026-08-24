@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -25,7 +24,7 @@ type imageCount struct {
 // count too - they are real pulls against the registry, so omitting them
 // understated usage. The --sort column selects the primary order (count desc by
 // default, the others ascending).
-func ImageCount(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func ImageCount(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	compare, err := imageCountCmp(f.Sort)
 	if err != nil {
 		return err

@@ -57,7 +57,7 @@ func TestPdb(t *testing.T) {
 	c := fake.NewClientset(permablock, ok)
 
 	var buf bytes.Buffer
-	if err := Pdb(context.Background(), c, kube.Flags{Namespace: "default"}, nil, &buf); err != nil {
+	if err := Pdb(context.Background(), clients(c), kube.Flags{Namespace: "default"}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -81,7 +81,7 @@ func TestPdbColor(t *testing.T) {
 	c := fake.NewClientset(blocked, orphan, ok)
 
 	var buf bytes.Buffer
-	if err := Pdb(context.Background(), c, kube.Flags{Namespace: "default", Color: true}, nil, &buf); err != nil {
+	if err := Pdb(context.Background(), clients(c), kube.Flags{Namespace: "default", Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

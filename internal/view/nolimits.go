@@ -15,7 +15,7 @@ import (
 // NoLimits lists containers missing CPU and/or memory limits (kube-system
 // excluded from the -A view), the usual source of noisy-neighbour and eviction
 // surprises.
-func NoLimits(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func NoLimits(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	return reportMissing(ctx, c, f, out, func(ctr *corev1.Container) corev1.ResourceList {
 		return ctr.Resources.Limits
 	})

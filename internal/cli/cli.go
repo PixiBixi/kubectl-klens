@@ -13,8 +13,6 @@ import (
 	"syscall"
 	"text/tabwriter"
 
-	"k8s.io/client-go/kubernetes"
-
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 	"github.com/PixiBixi/kubectl-klens/internal/view"
 )
@@ -25,7 +23,7 @@ type BuildInfo struct {
 }
 
 // RunFunc is the signature every subcommand implements.
-type RunFunc func(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error
+type RunFunc func(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error
 
 // Command is a registry entry. CurrentNSDefault means that, absent -n and -A,
 // the command scopes to the current kubeconfig namespace instead of all
@@ -107,7 +105,7 @@ var globalFlags = []globalFlag{
 // App wires dependencies so dispatch is testable with an injected client.
 type App struct {
 	Info      BuildInfo
-	NewClient func(kube.Flags) (kubernetes.Interface, error)
+	NewClient func(kube.Flags) (kube.Clients, error)
 	Namespace func(kube.Flags) (string, error)
 	Out       io.Writer
 	Err       io.Writer
@@ -115,7 +113,7 @@ type App struct {
 
 // NewApp returns an App backed by the real kube client and os streams.
 func NewApp(info BuildInfo) App {
-	return App{Info: info, NewClient: kube.Client, Namespace: kube.CurrentNamespace, Out: os.Stdout, Err: os.Stderr}
+	return App{Info: info, NewClient: kube.NewClients, Namespace: kube.CurrentNamespace, Out: os.Stdout, Err: os.Stderr}
 }
 
 // Run parses args, dispatches the subcommand, and returns a process exit code.
@@ -168,7 +166,7 @@ func (a App) Run(args []string) int {
 	f.Color = kube.ResolveColor(f.ColorMode, a.Out)
 	client, err := a.NewClient(f)
 	if err != nil {
-		fmt.Fprintln(a.Err, "error: failed to build kubernetes client:", err)
+		fmt.Fprintln(a.Err, "error: failed to build kubernetes clients:", err)
 		return 1
 	}
 	if cmd.CurrentNSDefault && !f.AllNamespaces && f.Namespace == "" {

@@ -15,7 +15,7 @@ import (
 func TestOnNodeRequiresArg(t *testing.T) {
 	c := fake.NewClientset()
 	var buf bytes.Buffer
-	err := OnNode(context.Background(), c, kube.Flags{}, nil, &buf)
+	err := OnNode(context.Background(), clients(c), kube.Flags{}, nil, &buf)
 	if err == nil || !strings.Contains(err.Error(), "requires a node") {
 		t.Fatalf("expected node-required error, got %v", err)
 	}
@@ -29,7 +29,7 @@ func TestOnNodeFilters(t *testing.T) {
 		pod("b", "default", "n2"),
 	)
 	var buf bytes.Buffer
-	if err := OnNode(context.Background(), c, kube.Flags{}, []string{"n1"}, &buf); err != nil {
+	if err := OnNode(context.Background(), clients(c), kube.Flags{}, []string{"n1"}, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -50,7 +50,7 @@ func TestOnNodeColor(t *testing.T) {
 	}
 	c := fake.NewClientset(running)
 	var buf bytes.Buffer
-	if err := OnNode(context.Background(), c, kube.Flags{Color: true, AllNamespaces: true}, []string{"node-a"}, &buf); err != nil {
+	if err := OnNode(context.Background(), clients(c), kube.Flags{Color: true, AllNamespaces: true}, []string{"node-a"}, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "\x1b[32mRunning\x1b[0m") {

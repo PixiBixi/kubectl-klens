@@ -42,7 +42,7 @@ func TestRestartsInitContainer(t *testing.T) {
 		},
 	})
 	var buf bytes.Buffer
-	if err := Restarts(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Restarts(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -60,7 +60,7 @@ func TestRestarts(t *testing.T) {
 		podRestarts("worst", "app", 9, "CrashLoopBackOff"),
 	)
 	var buf bytes.Buffer
-	if err := Restarts(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Restarts(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -95,7 +95,7 @@ func TestRestartsExitCode(t *testing.T) {
 		podRestarts("waiting", "app", 2, "CrashLoopBackOff"),
 	)
 	var buf bytes.Buffer
-	if err := Restarts(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Restarts(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -114,7 +114,7 @@ func TestRestartsExitCode(t *testing.T) {
 func TestRestartsExitCodeColor(t *testing.T) {
 	c := fake.NewClientset(podRestartsExit("oom", "web-api", 1, 137))
 	var buf bytes.Buffer
-	if err := Restarts(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := Restarts(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if out := buf.String(); !strings.Contains(out, "\x1b[31m137\x1b[0m") {
@@ -125,7 +125,7 @@ func TestRestartsExitCodeColor(t *testing.T) {
 func TestRestartsColor(t *testing.T) {
 	c := fake.NewClientset(podRestarts("flaky", "app", 5, "CrashLoopBackOff"))
 	var buf bytes.Buffer
-	if err := Restarts(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := Restarts(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

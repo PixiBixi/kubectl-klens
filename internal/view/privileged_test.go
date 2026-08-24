@@ -34,7 +34,7 @@ func TestPrivileged(t *testing.T) {
 		},
 	)
 	var buf bytes.Buffer
-	if err := Privileged(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Privileged(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -67,7 +67,7 @@ func TestPrivilegedInitAndEphemeral(t *testing.T) {
 		},
 	})
 	var buf bytes.Buffer
-	if err := Privileged(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Privileged(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -101,7 +101,7 @@ func TestPrivilegedPrivEscDefaultEnrichesOnly(t *testing.T) {
 		},
 	)
 	var buf bytes.Buffer
-	if err := Privileged(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Privileged(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -141,7 +141,7 @@ func TestPrivilegedHostIPCAndCapabilities(t *testing.T) {
 		},
 	)
 	var buf bytes.Buffer
-	if err := Privileged(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Privileged(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -164,7 +164,7 @@ func TestPrivilegedColor(t *testing.T) {
 		}},
 	})
 	var buf bytes.Buffer
-	if err := Privileged(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := Privileged(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	// Assert the FLAGS cell opens red without pinning the flag list, so adding a

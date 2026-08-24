@@ -27,7 +27,7 @@ func TestImages(t *testing.T) {
 		podImg("cache-0", "redis:7"),
 	)
 	var buf bytes.Buffer
-	if err := Images(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Images(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -45,7 +45,7 @@ func TestImages(t *testing.T) {
 func TestImagesColorLatest(t *testing.T) {
 	c := fake.NewClientset(podImg("p1", "nginx")) // implicit :latest
 	var buf bytes.Buffer
-	if err := Images(context.Background(), c, kube.Flags{Color: true, AllNamespaces: true}, nil, &buf); err != nil {
+	if err := Images(context.Background(), clients(c), kube.Flags{Color: true, AllNamespaces: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "\x1b[33mlatest\x1b[0m") {

@@ -32,7 +32,7 @@ func TestPvc(t *testing.T) {
 	}
 	c := fake.NewClientset(withPVC, noPVC)
 	var buf bytes.Buffer
-	if err := Pvc(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Pvc(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

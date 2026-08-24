@@ -10,7 +10,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -20,7 +19,7 @@ import (
 // (all replicas on one node, or one zone). It complements pdb's drain-safety
 // view with the placement side of availability. Rows default to VERDICT (risk)
 // order, riskiest at the bottom.
-func Spread(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func Spread(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	pods, nodes, err := bothLists(
 		func() ([]corev1.Pod, error) { return kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{}) },
 		func() ([]corev1.Node, error) { return kube.ListNodes(ctx, c, metav1.ListOptions{}) },

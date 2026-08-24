@@ -25,7 +25,7 @@ func TestDefaultSAFilters(t *testing.T) {
 		},
 	)
 	var buf bytes.Buffer
-	if err := DefaultSA(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := DefaultSA(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

@@ -22,7 +22,7 @@ func TestZones(t *testing.T) {
 	}
 	c := fake.NewClientset(node)
 	var buf bytes.Buffer
-	if err := Zones(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Zones(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

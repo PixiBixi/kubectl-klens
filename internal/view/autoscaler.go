@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/yaml"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -23,7 +22,7 @@ import (
 // both the structured-YAML status (cluster-autoscaler 1.30+) and the older
 // legacy text status, falling back to printing the raw value verbatim when
 // neither format is recognized.
-func Autoscaler(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func Autoscaler(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	cm, err := c.CoreV1().ConfigMaps("kube-system").Get(ctx, "cluster-autoscaler-status", metav1.GetOptions{})
 	if err != nil {
 		return err

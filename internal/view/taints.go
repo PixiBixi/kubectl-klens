@@ -7,13 +7,12 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
 // Taints lists each node's taints as key=value:effect, comma-joined.
-func Taints(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func Taints(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
 	if err != nil {
 		return err

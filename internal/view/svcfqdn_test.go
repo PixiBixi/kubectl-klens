@@ -19,7 +19,7 @@ func TestSvcFQDN(t *testing.T) {
 		},
 	)
 	var buf bytes.Buffer
-	if err := SvcFQDN(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := SvcFQDN(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

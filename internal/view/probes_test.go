@@ -71,7 +71,7 @@ func TestProbes(t *testing.T) {
 	c := fake.NewClientset(healthy, noReadiness, noProbes, batch, system)
 
 	var buf bytes.Buffer
-	if err := Probes(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Probes(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -102,7 +102,7 @@ func TestProbesSortVerdict(t *testing.T) {
 	c := fake.NewClientset(healthy, noReadiness, noLiveness, noProbes)
 
 	var buf bytes.Buffer
-	if err := Probes(context.Background(), c, kube.Flags{Sort: "verdict"}, nil, &buf); err != nil {
+	if err := Probes(context.Background(), clients(c), kube.Flags{Sort: "verdict"}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -134,7 +134,7 @@ func TestProbesColor(t *testing.T) {
 	c := fake.NewClientset(healthy, noReadiness, noLiveness)
 
 	var buf bytes.Buffer
-	if err := Probes(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := Probes(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()

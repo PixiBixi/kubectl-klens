@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -14,7 +13,7 @@ import (
 // Images lists every container image per pod, one row per container, including
 // init and ephemeral containers - their images are pulled and run on the node
 // like any other, so an unpatched init image has to be visible here.
-func Images(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error {
+func Images(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
 	if err != nil {
 		return err

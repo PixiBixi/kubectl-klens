@@ -9,7 +9,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
@@ -19,7 +18,7 @@ import (
 func testApp(out, errw *bytes.Buffer) App {
 	return App{
 		Info:      BuildInfo{Version: "test", Commit: "abc", Date: "today"},
-		NewClient: func(kube.Flags) (kubernetes.Interface, error) { return fake.NewClientset(), nil },
+		NewClient: func(kube.Flags) (kube.Clients, error) { return kube.Clients{Interface: fake.NewClientset()}, nil },
 		Namespace: func(kube.Flags) (string, error) { return "current-ns", nil },
 		Out:       out,
 		Err:       errw,
@@ -104,7 +103,7 @@ func reqlimApp(out, errw *bytes.Buffer, resolved string) (App, *fake.Clientset, 
 	called := false
 	return App{
 		Info:      BuildInfo{Version: "test"},
-		NewClient: func(kube.Flags) (kubernetes.Interface, error) { return c, nil },
+		NewClient: func(kube.Flags) (kube.Clients, error) { return kube.Clients{Interface: c}, nil },
 		Namespace: func(kube.Flags) (string, error) { called = true; return resolved, nil },
 		Out:       out,
 		Err:       errw,
@@ -181,7 +180,7 @@ func TestSortColumnsMatchHeaders(t *testing.T) {
 		// The positional arg is a node name for the commands that take one, and
 		// node-ips errors out when it names nothing, so back it with a node.
 		objs := []runtime.Object{&corev1.Node{Name: "dummy"}}
-		if err := c.Run(context.Background(), fake.NewClientset(objs...), kube.Flags{}, []string{"dummy"}, &buf); err != nil {
+		if err := c.Run(context.Background(), kube.Clients{Interface: fake.NewClientset(objs...)}, kube.Flags{}, []string{"dummy"}, &buf); err != nil {
 			t.Fatalf("%s: run failed: %v", c.Name, err)
 		}
 		header, _, _ := strings.Cut(buf.String(), "\n")
@@ -229,7 +228,7 @@ nodeGroups:
       maxSize: 3
 `
 	var buf bytes.Buffer
-	if err := cmd.Run(context.Background(), fake.NewClientset(autoscalerStatusCM(status)), kube.Flags{}, nil, &buf); err != nil {
+	if err := cmd.Run(context.Background(), kube.Clients{Interface: fake.NewClientset(autoscalerStatusCM(status))}, kube.Flags{}, nil, &buf); err != nil {
 		t.Fatalf("run failed: %v", err)
 	}
 	var header string
@@ -321,7 +320,7 @@ func TestCurrentNSDefaultFlags(t *testing.T) {
 }
 
 // TestRequestTimeoutReachesClient checks the flag is wired through to the client
-// builder: the timeout only protects anything if kube.Client sees it.
+// builder: the timeout only protects anything if kube.NewClients sees it.
 func TestRequestTimeoutReachesClient(t *testing.T) {
 	tests := []struct {
 		name string
@@ -337,9 +336,9 @@ func TestRequestTimeoutReachesClient(t *testing.T) {
 			var got time.Duration
 			var out, errw bytes.Buffer
 			app := testApp(&out, &errw)
-			app.NewClient = func(f kube.Flags) (kubernetes.Interface, error) {
+			app.NewClient = func(f kube.Flags) (kube.Clients, error) {
 				got = f.RequestTimeout
-				return fake.NewClientset(), nil
+				return kube.Clients{Interface: fake.NewClientset()}, nil
 			}
 			if code := app.Run(tc.args); code != 0 {
 				t.Fatalf("exit %d: %s", code, errw.String())
@@ -376,13 +375,13 @@ func TestRequestTimeoutInHelp(t *testing.T) {
 func TestCanceledContextExits130(t *testing.T) {
 	var out, errw bytes.Buffer
 	app := testApp(&out, &errw)
-	app.NewClient = func(kube.Flags) (kubernetes.Interface, error) {
+	app.NewClient = func(kube.Flags) (kube.Clients, error) {
 		c := fake.NewClientset()
 		c.PrependReactor("list", "nodes", func(k8stesting.Action) (bool, runtime.Object, error) {
 			// Stand in for the signal arriving mid-request.
 			return true, nil, context.Canceled
 		})
-		return c, nil
+		return kube.Clients{Interface: c}, nil
 	}
 	code := app.Run([]string{"nodes"})
 	if code != 130 {
@@ -398,12 +397,12 @@ func TestCanceledContextExits130(t *testing.T) {
 func TestTimeoutErrorNamesTheFlag(t *testing.T) {
 	var out, errw bytes.Buffer
 	app := testApp(&out, &errw)
-	app.NewClient = func(kube.Flags) (kubernetes.Interface, error) {
+	app.NewClient = func(kube.Flags) (kube.Clients, error) {
 		c := fake.NewClientset()
 		c.PrependReactor("list", "nodes", func(k8stesting.Action) (bool, runtime.Object, error) {
 			return true, nil, context.DeadlineExceeded
 		})
-		return c, nil
+		return kube.Clients{Interface: c}, nil
 	}
 	if code := app.Run([]string{"nodes", "--request-timeout", "3s"}); code != 1 {
 		t.Fatalf("want exit 1 on timeout, got %d", code)

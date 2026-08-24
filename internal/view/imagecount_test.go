@@ -19,7 +19,7 @@ func TestImageCount(t *testing.T) {
 		podImg("c", "registry.k8s.io/pause:3.9"),
 	)
 	var buf bytes.Buffer
-	if err := ImageCount(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := ImageCount(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -49,7 +49,7 @@ func TestImageCountCountsInitImages(t *testing.T) {
 		},
 	})
 	var buf bytes.Buffer
-	if err := ImageCount(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := ImageCount(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -63,7 +63,7 @@ func TestImageCountCountsInitImages(t *testing.T) {
 func TestImageCountColorLatest(t *testing.T) {
 	c := fake.NewClientset(podImg("p1", "nginx:latest"))
 	var buf bytes.Buffer
-	if err := ImageCount(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := ImageCount(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(buf.String(), "\x1b[33mlatest\x1b[0m") {
@@ -77,7 +77,7 @@ func TestImageCountSortByTag(t *testing.T) {
 		podImg("b", "nginx:1"),
 	)
 	var buf bytes.Buffer
-	if err := ImageCount(context.Background(), c, kube.Flags{Sort: "tag"}, nil, &buf); err != nil {
+	if err := ImageCount(context.Background(), clients(c), kube.Flags{Sort: "tag"}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -91,7 +91,7 @@ func TestImageCountSortByTag(t *testing.T) {
 func TestImageCountInvalidSort(t *testing.T) {
 	c := fake.NewClientset(podImg("a", "nginx:1"))
 	var buf bytes.Buffer
-	err := ImageCount(context.Background(), c, kube.Flags{Sort: "bogus"}, nil, &buf)
+	err := ImageCount(context.Background(), clients(c), kube.Flags{Sort: "bogus"}, nil, &buf)
 	if err == nil || !strings.Contains(err.Error(), "invalid --sort") {
 		t.Fatalf("want invalid --sort error, got %v", err)
 	}

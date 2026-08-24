@@ -7,14 +7,14 @@ Nothing in `view` or `kube` imports `cli`; `cli` orchestrates the other two.
 main.go                 wires BuildInfo + os streams → cli.NewApp → App.Run
   └─ internal/cli       the dispatcher: registry, flag parsing, namespace defaulting, completion
        └─ internal/view one file per subcommand (a RunFunc) + shared node helpers
-            └─ internal/kube  kubeconfig plumbing, Flags, the Table renderer, the color Painter
+            └─ internal/kube  kubeconfig plumbing, Clients, Flags, the Table renderer, the color Painter
 ```
 
 ## The dispatcher (`internal/cli`)
 
 `App` holds injected `NewClient` and `Namespace` functions so `Run` is testable
 without a real cluster; `NewApp` wires the production versions
-(`kube.Client`, `kube.CurrentNamespace`) and `os.Stdout/os.Stderr`. See
+(`kube.NewClients`, `kube.CurrentNamespace`) and `os.Stdout/os.Stderr`. See
 [`cli.go`](../internal/cli/cli.go).
 
 `commands` (a package-level `[]Command`) is the **single registry** of every
@@ -67,13 +67,20 @@ documented but silently uncompletable.
 Every subcommand implements one signature (defined in `cli.go`):
 
 ```go
-type RunFunc func(ctx context.Context, c kubernetes.Interface, f kube.Flags, args []string, out io.Writer) error
+type RunFunc func(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error
 ```
 
-It receives the `kubernetes.Interface` (a real clientset in production, a fake
-in tests), the resolved `Flags`, positional args, and the output writer. It
-validates its own required positional args (e.g. `on-node` returns a "requires a
-node" error).
+It receives `kube.Clients` (a real clientset in production, a fake in tests),
+the resolved `Flags`, positional args, and the output writer. It validates its
+own required positional args (e.g. `on-node` returns a "requires a node" error).
+
+`kube.Clients` embeds `kubernetes.Interface` and adds `Dynamic
+dynamic.Interface`. The embedding is what keeps every view calling
+`c.CoreV1()` unchanged and passable to the `kube.List*` helpers; `Dynamic` is
+only for resources the typed clientset has no scheme for - CRDs such as Argo
+Rollouts, read by `rollouts`. `Dynamic` is nil in tests that never touch a CRD,
+so a view must treat a missing dynamic client as "CRD unavailable" rather than
+dereference it.
 
 ### Completion (`complete.go`)
 

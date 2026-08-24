@@ -22,7 +22,7 @@ func TestTaints(t *testing.T) {
 	clean := &corev1.Node{Name: "n2"}
 	c := fake.NewClientset(tainted, clean)
 	var buf bytes.Buffer
-	if err := Taints(context.Background(), c, kube.Flags{}, nil, &buf); err != nil {
+	if err := Taints(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
@@ -46,7 +46,7 @@ func TestTaintsColor(t *testing.T) {
 	clean := &corev1.Node{Name: "n2"}
 	c := fake.NewClientset(node, clean)
 	var buf bytes.Buffer
-	if err := Taints(context.Background(), c, kube.Flags{Color: true}, nil, &buf); err != nil {
+	if err := Taints(context.Background(), clients(c), kube.Flags{Color: true}, nil, &buf); err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
