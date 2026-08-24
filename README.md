@@ -92,14 +92,18 @@ it. `ORPHAN` is the one to reclaim (no pod, no owner that could mount it again),
 `STS-RESERVED` is a slot inside the set's replica count whose pod is expected
 back. A claim held by a pod that is still terminating counts as in use.
 
-`svc-backends` answers "is anything actually behind this service": it counts the
-ready and not-ready endpoints per service from its EndpointSlices and prints the
-selector next to them, so a mistyped label (`NO-PODS`) or a workload whose pods
-all fail readiness (`NO-READY`) reads as a fault instead of an empty
-`get endpoints`. A selector-less service is `UNWIRED` when nothing filled its
-endpoints in and `MANUAL` when another controller did; `ExternalName` is a DNS
-alias and stays muted. Endpoints are counted per pod, so a dual-stack service
-(one EndpointSlice per address family) is not double-counted.
+`svc-backends` answers "is anything actually behind this service": it counts
+the ready and not-ready endpoints per service from its EndpointSlices, so a
+mistyped label (`NO-PODS`) or a workload whose pods all fail readiness
+(`NO-READY`) reads as a fault instead of an empty `get endpoints`. The
+`SELECTOR` column is spelled out only on a `NO-PODS` row, where the typo is
+what you came to read; elsewhere it is a label count, because the usual Helm
+selector (three `app.kubernetes.io` keys repeating one value) spends 110
+columns saying nothing and wraps the row. A selector-less service is `UNWIRED`
+when nothing filled its endpoints in and `MANUAL` when another controller did;
+`ExternalName` is a DNS alias and stays muted. Endpoints are counted per pod,
+so a dual-stack service (one EndpointSlice per address family) is not
+double-counted.
 
 `ingress` flattens every rule to one row per host+path and checks it against the
 cluster: that the backend service exists (`NO-SERVICE`) and exposes the port the

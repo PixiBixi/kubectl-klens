@@ -5,8 +5,8 @@
 codified form of a pile of "quick look at the cluster" one-liners: nodes,
 capacity, requests/limits, images, restarts, PVCs, and a set of *verdict*
 commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `rollouts`,
-`ingress`, `terminating`, `pending`) that classify a resource's health at a glance instead of making you
-read raw status fields.
+`ingress`, `terminating`, `pending`) that classify a resource's health at a
+glance instead of making you read raw status fields.
 
 - **Language / runtime:** Go 1.27, compiled to a static `kubectl-klens` binary.
 - **Key deps:** `k8s.io/client-go` (cluster access), `manifoldco/promptui`
@@ -71,10 +71,11 @@ report **every** container of a pod - init and ephemeral ones included - and nam
 the role in a `KIND` column (`app`/`init`/`eph`), because an init container's
 requests, images and security context count exactly as much as an app
 container's. `reqlim`, `no-limits`, `no-requests`, `probes`, `qos` and
-`unused-config` drop kube-system from the `-A` view only; an explicit `-n kube-system` still returns
-its rows. The README's [Container kinds](../README.md#container-kinds) and
-[Security flags](../README.md#security-flags) sections are the reference for the
-`KIND` and `FLAGS` values.
+`unused-config` drop kube-system from the `-A` view only; an explicit
+`-n kube-system` still returns its rows. The README's
+[Container kinds](../README.md#container-kinds) and
+[Security flags](../README.md#security-flags) sections are the reference for
+the `KIND` and `FLAGS` values.
 
 **Verdict commands** (compute a health classification, default-sorted worst-last)
 - `pdb` - PodDisruptionBudget drain-safety verdict
@@ -86,7 +87,7 @@ its rows. The README's [Container kinds](../README.md#container-kinds) and
   class itself hides: no memory request means eviction alongside `BestEffort`)
 - `svc-backends` - services + ready/not-ready endpoint counts + wiring verdict
   (`NO-PODS` is a selector matching nothing, `UNWIRED` a service nothing can
-  ever answer for)
+  ever answer for); the selector is printed in full only on a `NO-PODS` row
 - `rollouts` - Deployments/StatefulSets/DaemonSets and Argo Rollouts that are
   not finished rolling out (`STALLED` will not recover on its own,
   `NOT-OBSERVED` points at the controller, not the workload)
