@@ -62,7 +62,7 @@ func SvcBackends(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 			e.svc.Namespace,
 			e.svc.Name,
 			string(e.svc.Spec.Type),
-			selectorCell(paint, e.svc.Spec.Selector),
+			selectorCell(paint, e.svc.Spec.Selector, e.verdict == "NO-PODS"),
 			readyCell(paint, e.eps.ready),
 			notReadyCell(paint, e.eps.notReady),
 			sevPaint(paint, e.sev)(e.verdict),
@@ -154,13 +154,22 @@ func endpointReady(ep *discoveryv1.Endpoint) bool {
 	return ep.Conditions.Ready == nil || *ep.Conditions.Ready
 }
 
-// selectorCell renders the pod selector as the comma-joined form a `get pods -l`
-// would take, or a muted placeholder when the service has none.
-func selectorCell(paint kube.Painter, sel map[string]string) string {
+// selectorCell prints the full selector only where it is the thing to read: a
+// NO-PODS row, where the answer is the typo in it. Everywhere else it is a
+// label count, because the Helm convention (three app.kubernetes.io keys
+// repeating the same value) spends 110 columns saying nothing and wraps the row,
+// taking READY, NOTREADY and VERDICT down with it.
+func selectorCell(paint kube.Painter, sel map[string]string, full bool) string {
 	if len(sel) == 0 {
 		return paint.Muted("<none>")
 	}
-	return labels.Set(sel).String()
+	if full {
+		return labels.Set(sel).String()
+	}
+	if len(sel) == 1 {
+		return paint.Muted("1 label")
+	}
+	return paint.Muted(strconv.Itoa(len(sel)) + " labels")
 }
 
 // readyCell colors the serving count: none is bad, anything else is healthy.

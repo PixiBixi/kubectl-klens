@@ -61,7 +61,7 @@ func TestSvcBackends(t *testing.T) {
 	out := buf.String()
 	for _, want := range []string{
 		"NS", "SERVICE", "TYPE", "SELECTOR", "READY", "NOTREADY", "VERDICT",
-		"healthy", "OK", "app=web",
+		"healthy", "OK", "1 label",
 		"rolling", "DEGRADED",
 		"unready", "NO-READY",
 		"typo", "NO-PODS", "app=wbe",
@@ -71,6 +71,33 @@ func TestSvcBackends(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+// TestSvcBackendsSelectorOnlyWhenBroken pins the readability rule: a healthy
+// row shows a label count (a Helm selector is 110 columns of nothing and wraps
+// the table), a NO-PODS row shows the selector, which is where the typo is.
+func TestSvcBackendsSelectorOnlyWhenBroken(t *testing.T) {
+	c := fake.NewClientset(
+		svcFor("healthy", "app", corev1.ServiceTypeClusterIP, map[string]string{
+			"app.kubernetes.io/name": "web", "app.kubernetes.io/instance": "web",
+		}),
+		sliceFor("healthy", "app", discoveryv1.AddressTypeIPv4, true),
+		svcFor("typo", "app", corev1.ServiceTypeClusterIP, map[string]string{"app.kubernetes.io/name": "wbe"}),
+	)
+	var buf bytes.Buffer
+	if err := SvcBackends(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "2 labels") {
+		t.Fatalf("a healthy row must show the label count:\n%s", out)
+	}
+	if strings.Contains(out, "app.kubernetes.io/name=web") {
+		t.Fatalf("a healthy row must not spell the selector out:\n%s", out)
+	}
+	if !strings.Contains(out, "app.kubernetes.io/name=wbe") {
+		t.Fatalf("a NO-PODS row must spell the selector out:\n%s", out)
 	}
 }
 
@@ -88,9 +115,10 @@ func TestSvcBackendsDualStackCountsPodsOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	fields := strings.Fields(strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")[1])
-	// NS SERVICE TYPE SELECTOR READY NOTREADY VERDICT
-	if fields[4] != "2" {
-		t.Fatalf("READY = %s, want 2 (one row per pod, not per slice):\n%s", fields[4], buf.String())
+	// The last three columns are READY, NOTREADY, VERDICT; counting from the end
+	// keeps this from breaking on a SELECTOR cell that contains a space.
+	if ready := fields[len(fields)-3]; ready != "2" {
+		t.Fatalf("READY = %s, want 2 (one row per pod, not per slice):\n%s", ready, buf.String())
 	}
 }
 
