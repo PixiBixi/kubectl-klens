@@ -205,3 +205,14 @@ func ListIngresses(ctx context.Context, c kubernetes.Interface, ns string, opts 
 		return l.Items, l.ListMeta, nil
 	})
 }
+
+// ListNamespaces returns every namespace matching opts.
+func ListNamespaces(ctx context.Context, c kubernetes.Interface, opts metav1.ListOptions) ([]corev1.Namespace, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]corev1.Namespace, metav1.ListMeta, error) {
+		l, err := c.CoreV1().Namespaces().List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
+	})
+}

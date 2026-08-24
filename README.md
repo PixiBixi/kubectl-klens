@@ -116,6 +116,7 @@ rather than failing the command.
 | `hpa` † | HorizontalPodAutoscalers + autoscaling verdict |
 | `spread` † | replica placement across nodes/zones + SPOF verdict |
 | `probes` † | readiness/liveness/startup probes + verdict |
+| `terminating` | pods/namespaces stuck being deleted + blocker |
 | `rollouts` † | workloads not finished rolling out (+ Argo Rollouts) |
 
 `qos` rolls the per-container view up to the pod: it prints the class the
@@ -139,6 +140,18 @@ recover on its own. `NOT-OBSERVED` means the controller has not acted on the
 current spec yet, which points at a wedged or missing controller rather than at
 the workload. For a canary the `STATE` column carries the step it sits on
 (`Paused 2/5`).
+
+`terminating` is `pending` at the other end of a resource's life: everything
+carrying a `deletionTimestamp` that is still there, plus namespaces in the
+`Terminating` phase, with the blocker named. The three that matter are a
+finalizer nobody will clear, a node whose kubelet stopped answering (the pod
+cannot be confirmed dead, so it hangs until force-deleted), and, for a
+namespace, the condition the controller records and `get ns` never prints
+(`NamespaceContentRemaining`, `NamespaceFinalizersRemaining`,
+`NamespaceDeletionDiscoveryFailure`). A deletion inside its grace period is
+`GRACE`; past five minutes it is `STUCK`, which is well beyond any sane
+`terminationGracePeriodSeconds`. Cluster-wide by default, since a stuck
+namespace is not scoped to one.
 
 Argo Rollouts are read through the dynamic client. A cluster without the CRD, or
 a user without RBAC on it, gets the three built-in kinds and no `Rollout` rows -
@@ -247,7 +260,7 @@ Defaults that differ from ascending:
 - `autoscaler` - `LAST-CHANGE` descending (most recently changed nodegroup
   first). Sortable columns: `nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change`.
 - Verdict commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`,
-  `rollouts`, `ingress`) - `VERDICT` by severity
+  `rollouts`, `ingress`, `terminating`) - `VERDICT` by severity
   (least-risky first), so the riskiest rows land at the bottom, nearest the
   prompt.
 
@@ -278,6 +291,7 @@ Verdict coloring per command:
 | `svc-backends` | `OK` | `DEGRADED` | `NO-PODS`/`NO-READY`/`UNWIRED` | `EXTERNAL`/`MANUAL` |
 | `rollouts` | `OK` | `PROGRESSING`/`PAUSED` | `STALLED`/`DOWN`/`NOT-OBSERVED` | `SCALED-ZERO` |
 | `ingress` | `OK` | `NO-TLS` | `NO-SERVICE`/`NO-PORT`/`NO-SECRET` | `RESOURCE` |
+| `terminating` | - | `DELETING` | `STUCK` | `GRACE` |
 
 - `pdb` also colors its `ALLOWED` count: red at 0, yellow at 1, green above.
 - `svc-backends` colors `READY` red at 0 and green above, and `NOTREADY` green at
