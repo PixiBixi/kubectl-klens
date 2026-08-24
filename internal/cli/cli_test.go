@@ -300,6 +300,7 @@ func TestCurrentNSDefaultFlags(t *testing.T) {
 		"reqlim":       true,
 		"svc-fqdn":     true,
 		"svc-backends": true,
+		"ingress":      true,
 		"secret":       true,
 		"pvc":          true,
 		"images":       true,

@@ -5,7 +5,7 @@
 codified form of a pile of "quick look at the cluster" one-liners: nodes,
 capacity, requests/limits, images, restarts, PVCs, and a set of *verdict*
 commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `rollouts`,
-`pending`) that classify a resource's health at a glance instead of making you
+`ingress`, `pending`) that classify a resource's health at a glance instead of making you
 read raw status fields.
 
 - **Language / runtime:** Go 1.27, compiled to a static `kubectl-klens` binary.
@@ -86,6 +86,8 @@ its rows. The README's [Container kinds](../README.md#container-kinds) and
 - `rollouts` - Deployments/StatefulSets/DaemonSets and Argo Rollouts that are
   not finished rolling out (`STALLED` will not recover on its own,
   `NOT-OBSERVED` points at the controller, not the workload)
+- `ingress` - ingress rules flattened per host+path, each checked against its
+  backend service/port and its TLS secret
 
 **Interactive**
 - `secret` - browse secrets interactively (pick secret, then key); positional
@@ -106,7 +108,7 @@ kubens/kubectx); the rest default to **all namespaces**.
 
 - Current-namespace-by-default: `reqlim`, `no-limits`, `no-requests`, `images`,
   `restarts`, `pvc`, `svc-fqdn`, `svc-backends`, `secret`, `privileged`, `pdb`,
-  `pending`, `hpa`, `spread`, `probes`, `qos`, `rollouts`.
+  `pending`, `hpa`, `spread`, `probes`, `qos`, `rollouts`, `ingress`.
 - `-A` / `--all-namespaces` widens to all; `-n <ns>` targets one.
 - `autoscaler` ignores namespace flags entirely (always `kube-system`).
 

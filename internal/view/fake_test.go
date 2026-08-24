@@ -1,9 +1,11 @@
 package view
 
 import (
+	"errors"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -134,4 +136,10 @@ func assertFieldSelector(t *testing.T, c *fake.Clientset, resource, want string)
 // tests that do exercise one build their own bundle with a dynamic fake.
 func clients(c kubernetes.Interface) kube.Clients {
 	return kube.Clients{Interface: c}
+}
+
+// apiForbidden is the error the apiserver returns when RBAC denies a list, used
+// by the views that must degrade instead of failing on it.
+func apiForbidden() error {
+	return apierrors.NewForbidden(schema.GroupResource{Resource: "secrets"}, "", errors.New("access denied"))
 }
