@@ -58,6 +58,7 @@ var commands = []Command{
 	{Name: "on-node", Summary: "List pods scheduled on a given node", Run: view.OnNode, SortColumns: []string{"ns", "pod", "status", "node"}},
 	{Name: "restarts", Summary: "List containers that have restarted, with the crash reason, in the current namespace (-A for all)", Run: view.Restarts, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "restarts", "state", "exit"}},
 	{Name: "pvc", Summary: "List PVCs bound to a pod and node in the current namespace (-A for all)", Run: view.Pvc, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "node", "pvc"}},
+	{Name: "pvc-unused", Summary: "List PVCs no pod mounts, with the reason they are still around, in the current namespace (-A for all)", Run: view.PvcUnused, CurrentNSDefault: true, SortColumns: []string{"ns", "pvc", "status", "capacity", "class", "volume", "verdict"}},
 	{Name: "default-sa", Summary: "List pods still using the default service account", Run: view.DefaultSA, SortColumns: []string{"ns", "pod"}},
 	{Name: "privileged", Summary: "List containers with privileged/host security flags in the current namespace (-A for all)", Run: view.Privileged, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "flags"}},
 	{Name: "svc-fqdn", Summary: "Show in-cluster FQDN of services in the current namespace (-A for all)", Run: view.SvcFQDN, CurrentNSDefault: true, SortColumns: []string{"ns", "service", "fqdn"}},

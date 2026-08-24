@@ -58,6 +58,8 @@ The authoritative list is the `commands` slice in
 - `restarts` - restarted containers + crash reason + last exit code (137/143 = SIGKILL/SIGTERM)
 - `qos` - QoS class + pod requests/limits totals + eviction-risk verdict
 - `pvc` - PVCs bound to pod + node
+- `pvc-unused` - PVCs no pod mounts (`ORPHAN` is reclaimable, `SCALED-DOWN` a
+  StatefulSet leftover), with capacity and storage class
 - `default-sa` - pods still on the default service account
 - `privileged` - containers with privileged/host security flags
 - `svc-fqdn` - in-cluster FQDN of services
@@ -110,7 +112,8 @@ kubens/kubectx); the rest default to **all namespaces**.
 
 - Current-namespace-by-default: `reqlim`, `no-limits`, `no-requests`, `images`,
   `restarts`, `pvc`, `svc-fqdn`, `svc-backends`, `secret`, `privileged`, `pdb`,
-  `pending`, `hpa`, `spread`, `probes`, `qos`, `rollouts`, `ingress`.
+  `pending`, `hpa`, `spread`, `probes`, `qos`, `rollouts`, `ingress`,
+  `pvc-unused`.
 - `-A` / `--all-namespaces` widens to all; `-n <ns>` targets one.
 - `autoscaler` ignores namespace flags entirely (always `kube-system`).
 

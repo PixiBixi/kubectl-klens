@@ -303,6 +303,7 @@ func TestCurrentNSDefaultFlags(t *testing.T) {
 		"ingress":      true,
 		"secret":       true,
 		"pvc":          true,
+		"pvc-unused":   true,
 		"images":       true,
 		"restarts":     true,
 		"no-limits":    true,

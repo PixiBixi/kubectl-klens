@@ -216,3 +216,14 @@ func ListNamespaces(ctx context.Context, c kubernetes.Interface, opts metav1.Lis
 		return l.Items, l.ListMeta, nil
 	})
 }
+
+// ListPersistentVolumeClaims returns every PVC in ns matching opts.
+func ListPersistentVolumeClaims(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]corev1.PersistentVolumeClaim, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]corev1.PersistentVolumeClaim, metav1.ListMeta, error) {
+		l, err := c.CoreV1().PersistentVolumeClaims(ns).List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
+	})
+}
