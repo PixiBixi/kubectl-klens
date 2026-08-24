@@ -73,7 +73,7 @@ var commands = []Command{
 	{Name: "probes", Summary: "List containers' readiness/liveness/startup probes with a reliability verdict in the current namespace (-A for all; -A excludes kube-system)", Run: view.Probes, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "readiness", "liveness", "startup", "verdict"}},
 	{Name: "terminating", Summary: "List pods and namespaces stuck being deleted, with the blocker (cluster-wide)", Run: view.Terminating, SortColumns: []string{"kind", "ns", "name", "stuck-for", "blocker", "finalizers", "verdict"}},
 	{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler, SortColumns: []string{"nodegroup", "health", "ready", "target", "min", "max", "scaleup", "scaledown", "last-change"}},
-	{Name: "unused-config", Summary: "List ConfigMaps and Secrets nothing references in the current namespace (-A for all; -A excludes kube-system)", Run: view.UnusedConfig, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "type", "keys"}},
+	{Name: "unused-config", Summary: "List ConfigMaps and Secrets nothing references in the current namespace (-A for all; -A excludes kube-system)", Run: view.UnusedConfig, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "type", "owner"}},
 	{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},
 }
 

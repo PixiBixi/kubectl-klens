@@ -55,8 +55,11 @@ The authoritative list is the `commands` slice in
 - `no-limits` / `no-requests` - containers missing limits / requests
 - `images` - image per container per pod
 - `image-count` - image occurrence counts split registry/image/tag (cluster-wide)
-- `unused-config` - ConfigMaps/Secrets nothing references (pod templates
-  included, so a CronJob between runs is not a false positive), biggest first
+- `unused-config` - ConfigMaps/Secrets nothing references (pod templates and
+  container args included, so a CronJob between runs and a
+  `--configmap=ns/name` flag are not false positives), biggest first, with the
+  owning controller named - an object owned by an `ExternalSecret` or a `Kafka`
+  CR is reviewed there, not deleted here
 - `restarts` - restarted containers + crash reason + last exit code (137/143 = SIGKILL/SIGTERM)
 - `qos` - QoS class + pod requests/limits totals + eviction-risk verdict
 - `pvc` - PVCs bound to pod + node
