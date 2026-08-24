@@ -56,6 +56,11 @@ jobs:
       - name: Fetch tags
         if: github.ref_type == 'tag' || steps.tag.outputs.new_tag != ''
         run: git fetch --tags --force
+      # goreleaser-action verifies the cosign signature of the goreleaser
+      # binary it downloads; without cosign on PATH it silently skips that check.
+      - name: Install cosign
+        if: github.ref_type == 'tag' || steps.tag.outputs.new_tag != ''
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Run GoReleaser
         if: github.ref_type == 'tag' || steps.tag.outputs.new_tag != ''
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
