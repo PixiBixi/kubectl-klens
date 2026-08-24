@@ -15,10 +15,10 @@ When working in this repository, read the OpenWiki quickstart first, then follow
 
 ## What this is
 
-`kubectl-klens` is a single-binary kubectl plugin (`kubectl klens`) bundling ~25
-read-only cluster-inspection shortcuts. Go 1.27, depends on `client-go`,
-`promptui` (interactive pickers), and `golang.org/x/term` (TTY detection). No
-cobra - dispatch is a hand-rolled flag-based switch.
+`kubectl-klens` is a single-binary kubectl plugin (`kubectl klens`) bundling ~30
+read-only cluster-inspection shortcuts. Go 1.27, depends on `client-go` (typed
+and dynamic clients), `promptui` (interactive pickers), and `golang.org/x/term`
+(TTY detection). No cobra - dispatch is a hand-rolled flag-based switch.
 
 ## Common commands
 
@@ -80,8 +80,9 @@ Three packages under `internal/`, layered cli → view → kube:
 neither `-n` nor `-A`, the dispatcher resolves the current kubeconfig namespace
 (kubens/kubectx) before running. When `false`, the command lists all namespaces
 by default. The current `CurrentNSDefault` set (`reqlim`, `no-limits`,
-`no-requests`, `images`, `restarts`, `pvc`, `svc-fqdn`, `secret`, `privileged`,
-`pdb`, `pending`, `hpa`, `spread`, `probes`) is locked in by
+`no-requests`, `images`, `restarts`, `pvc`, `pvc-unused`, `svc-fqdn`,
+`svc-backends`, `ingress`, `secret`, `privileged`, `pdb`, `pending`, `hpa`,
+`spread`, `probes`, `qos`, `rollouts`, `unused-config`) is locked in by
 `TestCurrentNSDefaultFlags` in `cli_test.go`, which is the authoritative list -
 update that map whenever you change a command's scoping.
 
