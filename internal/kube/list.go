@@ -5,6 +5,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -221,6 +222,50 @@ func ListNamespaces(ctx context.Context, c kubernetes.Interface, opts metav1.Lis
 func ListPersistentVolumeClaims(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]corev1.PersistentVolumeClaim, error) {
 	return listAll(opts, func(o metav1.ListOptions) ([]corev1.PersistentVolumeClaim, metav1.ListMeta, error) {
 		l, err := c.CoreV1().PersistentVolumeClaims(ns).List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
+	})
+}
+
+// ListConfigMaps returns every ConfigMap in ns matching opts.
+func ListConfigMaps(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]corev1.ConfigMap, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]corev1.ConfigMap, metav1.ListMeta, error) {
+		l, err := c.CoreV1().ConfigMaps(ns).List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
+	})
+}
+
+// ListServiceAccounts returns every ServiceAccount in ns matching opts.
+func ListServiceAccounts(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]corev1.ServiceAccount, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]corev1.ServiceAccount, metav1.ListMeta, error) {
+		l, err := c.CoreV1().ServiceAccounts(ns).List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
+	})
+}
+
+// ListJobs returns every Job in ns matching opts.
+func ListJobs(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]batchv1.Job, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]batchv1.Job, metav1.ListMeta, error) {
+		l, err := c.BatchV1().Jobs(ns).List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
+	})
+}
+
+// ListCronJobs returns every CronJob in ns matching opts.
+func ListCronJobs(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]batchv1.CronJob, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]batchv1.CronJob, metav1.ListMeta, error) {
+		l, err := c.BatchV1().CronJobs(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
 		}

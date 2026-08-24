@@ -55,6 +55,8 @@ The authoritative list is the `commands` slice in
 - `no-limits` / `no-requests` - containers missing limits / requests
 - `images` - image per container per pod
 - `image-count` - image occurrence counts split registry/image/tag (cluster-wide)
+- `unused-config` - ConfigMaps/Secrets nothing references (pod templates
+  included, so a CronJob between runs is not a false positive), biggest first
 - `restarts` - restarted containers + crash reason + last exit code (137/143 = SIGKILL/SIGTERM)
 - `qos` - QoS class + pod requests/limits totals + eviction-risk verdict
 - `pvc` - PVCs bound to pod + node
@@ -68,8 +70,8 @@ The authoritative list is the `commands` slice in
 report **every** container of a pod - init and ephemeral ones included - and name
 the role in a `KIND` column (`app`/`init`/`eph`), because an init container's
 requests, images and security context count exactly as much as an app
-container's. `reqlim`, `no-limits`, `no-requests`, `probes` and `qos` drop
-kube-system from the `-A` view only; an explicit `-n kube-system` still returns
+container's. `reqlim`, `no-limits`, `no-requests`, `probes`, `qos` and
+`unused-config` drop kube-system from the `-A` view only; an explicit `-n kube-system` still returns
 its rows. The README's [Container kinds](../README.md#container-kinds) and
 [Security flags](../README.md#security-flags) sections are the reference for the
 `KIND` and `FLAGS` values.
@@ -113,7 +115,7 @@ kubens/kubectx); the rest default to **all namespaces**.
 - Current-namespace-by-default: `reqlim`, `no-limits`, `no-requests`, `images`,
   `restarts`, `pvc`, `svc-fqdn`, `svc-backends`, `secret`, `privileged`, `pdb`,
   `pending`, `hpa`, `spread`, `probes`, `qos`, `rollouts`, `ingress`,
-  `pvc-unused`.
+  `pvc-unused`, `unused-config`.
 - `-A` / `--all-namespaces` widens to all; `-n <ns>` targets one.
 - `autoscaler` ignores namespace flags entirely (always `kube-system`).
 
