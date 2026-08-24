@@ -190,8 +190,9 @@ to `default`).
 
 ## The verdict-command pattern
 
-`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `pending` share a shape
-(see [`internal/view/pdb.go`](../internal/view/pdb.go) as the reference):
+`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `rollouts` and
+`pending` share a shape (see
+[`internal/view/pdb.go`](../internal/view/pdb.go) as the reference):
 
 1. List the resource, then classify each item with a pure `xVerdict(...)`
    function returning `(verdict, severity)`. The rules are **total** (first match
@@ -210,8 +211,8 @@ replica at once. See `pdbVerdict` for the canonical example.
 
 Shared helpers (`orDefault`, `sevPaint`, `verdictRank`) live in
 [`internal/view/verdict.go`](../internal/view/verdict.go); `pdb`, `hpa`,
-`spread`, `probes`, `qos`, and `svc-backends` reuse them (`pending` renders a
-plain `REASON` column and only needs `SortBy`).
+`spread`, `probes`, `qos`, `svc-backends`, and `rollouts` reuse them (`pending`
+renders a plain `REASON` column and only needs `SortBy`).
 
 ## Shared view helpers (`internal/view/view.go`)
 

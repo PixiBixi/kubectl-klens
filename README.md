@@ -105,6 +105,7 @@ alias and stays muted. Endpoints are counted per pod, so a dual-stack service
 | `hpa` † | HorizontalPodAutoscalers + autoscaling verdict |
 | `spread` † | replica placement across nodes/zones + SPOF verdict |
 | `probes` † | readiness/liveness/startup probes + verdict |
+| `rollouts` † | workloads not finished rolling out (+ Argo Rollouts) |
 
 `qos` rolls the per-container view up to the pod: it prints the class the
 apiserver assigned (`Guaranteed`/`Burstable`/`BestEffort`) next to what the pod
@@ -117,6 +118,20 @@ small its real footprint. It skips kube-system in the `-A` view, like `reqlim`
 and `no-limits`.
 
 `probes` skips kube-system in the `-A` view, like `reqlim` and `no-limits`.
+
+`rollouts` answers "is everything finished deploying": one row per Deployment,
+StatefulSet, DaemonSet and - when the CRD is installed - Argo Rollout, with the
+desired/ready/updated/available counts and a verdict. `STALLED` is the one to
+look for: a Deployment whose `Progressing` condition went `False`
+(`ProgressDeadlineExceeded`) or a Rollout Argo called `Degraded` will not
+recover on its own. `NOT-OBSERVED` means the controller has not acted on the
+current spec yet, which points at a wedged or missing controller rather than at
+the workload. For a canary the `STATE` column carries the step it sits on
+(`Paused 2/5`).
+
+Argo Rollouts are read through the dynamic client. A cluster without the CRD, or
+a user without RBAC on it, gets the three built-in kinds and no `Rollout` rows -
+not an error, since that is the normal case on most clusters.
 
 ### Cluster autoscaler
 
@@ -220,8 +235,8 @@ Defaults that differ from ascending:
 - `image-count` and `restarts` - count-descending.
 - `autoscaler` - `LAST-CHANGE` descending (most recently changed nodegroup
   first). Sortable columns: `nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change`.
-- Verdict commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`) -
-  `VERDICT` by severity
+- Verdict commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`,
+  `rollouts`) - `VERDICT` by severity
   (least-risky first), so the riskiest rows land at the bottom, nearest the
   prompt.
 
@@ -250,10 +265,13 @@ Verdict coloring per command:
 | `probes` | `OK` | `NO-LIVENESS` | `NO-READINESS`/`NO-PROBES` | - |
 | `qos` | `GUARANTEED` | `BURSTABLE` | `NO-MEM-FLOOR`/`EVICT-FIRST` | - |
 | `svc-backends` | `OK` | `DEGRADED` | `NO-PODS`/`NO-READY`/`UNWIRED` | `EXTERNAL`/`MANUAL` |
+| `rollouts` | `OK` | `PROGRESSING`/`PAUSED` | `STALLED`/`DOWN`/`NOT-OBSERVED` | `SCALED-ZERO` |
 
 - `pdb` also colors its `ALLOWED` count: red at 0, yellow at 1, green above.
 - `svc-backends` colors `READY` red at 0 and green above, and `NOTREADY` green at
   0, yellow above.
+- `rollouts` colors its `READY`/`UPDATED`/`AVAILABLE` counts against `DESIRED`:
+  green at full count, red at zero, yellow in between.
 - `probes` colors each probe cell by handler type (`http`/`grpc`/`tcp`/`exec`)
   green when set, a muted `-` when absent.
 
