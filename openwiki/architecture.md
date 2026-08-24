@@ -112,9 +112,10 @@ the registry and the map disagree.
 
 ### Listing: paging and pushdown (`internal/kube/list.go`)
 
-**Views never call the clientset's `List` directly.** They go through
-`kube.ListPods` / `ListNodes` / `ListSecrets` / `ListServices` /
-`ListPodDisruptionBudgets` / `ListHorizontalPodAutoscalers`, thin wrappers over
+**Views never call the clientset's `List` directly.** They go through one
+`kube.List<Kind>` wrapper per resource kind (`ListPods`, `ListNodes`,
+`ListServices`, `ListIngresses`, `ListConfigMaps`, ... - `list.go` is the
+inventory, plus `ListCustom` for a dynamic-client GVR), thin wrappers over
 a generic `listAll` that sets `Limit = ChunkSize` (500, the same chunk kubectl
 uses) and follows the server's `continue` token until it stops handing one out.
 An unlimited `List` makes the apiserver materialize the whole collection in one

@@ -1,7 +1,7 @@
 # kubectl-klens - Quickstart
 
 `kubectl-klens` is a single-binary **kubectl plugin** (`kubectl klens`) bundling
-~25 read-only cluster-inspection shortcuts behind one dispatcher. It is the
+~33 read-only cluster-inspection shortcuts behind one dispatcher. It is the
 codified form of a pile of "quick look at the cluster" one-liners: nodes,
 capacity, requests/limits, images, restarts, PVCs, and a set of *verdict*
 commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `rollouts`,
@@ -232,6 +232,12 @@ artifact was built - which repo, workflow and commit. Verify a download with:
 gh attestation verify kubectl-klens_<version>_Darwin_arm64.tar.gz \
   --repo PixiBixi/kubectl-klens
 ```
+
+The job also installs **cosign** before running goreleaser-action: the action
+verifies the cosign signature of the goreleaser binary it downloads, but skips
+that check silently when cosign is absent from `PATH`. Removing the install step
+does not fail the build, it just stops verifying the tool that produces the
+release.
 
 Renovate drives the version bumps (`renovate.json`): minor Go-module updates map
 to `feat(deps)` (minor release), patch/digest to `fix(deps)` (patch release),
