@@ -4,8 +4,9 @@
 ~25 read-only cluster-inspection shortcuts behind one dispatcher. It is the
 codified form of a pile of "quick look at the cluster" one-liners: nodes,
 capacity, requests/limits, images, restarts, PVCs, and a set of *verdict*
-commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `pending`) that classify a
-resource's health at a glance instead of making you read raw status fields.
+commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `pending`)
+that classify a resource's health at a glance instead of making you read raw
+status fields.
 
 - **Language / runtime:** Go 1.27, compiled to a static `kubectl-klens` binary.
 - **Key deps:** `k8s.io/client-go` (cluster access), `manifoldco/promptui`
@@ -66,8 +67,8 @@ report **every** container of a pod - init and ephemeral ones included - and nam
 the role in a `KIND` column (`app`/`init`/`eph`), because an init container's
 requests, images and security context count exactly as much as an app
 container's. `reqlim`, `no-limits`, `no-requests`, `probes` and `qos` drop
-kube-system from the `-A` view only; an explicit `-n kube-system` still returns its rows. The
-README's [Container kinds](../README.md#container-kinds) and
+kube-system from the `-A` view only; an explicit `-n kube-system` still returns
+its rows. The README's [Container kinds](../README.md#container-kinds) and
 [Security flags](../README.md#security-flags) sections are the reference for the
 `KIND` and `FLAGS` values.
 
@@ -79,6 +80,9 @@ README's [Container kinds](../README.md#container-kinds) and
 - `probes` - readiness/liveness/startup probe reliability verdict
 - `qos` - QoS class + eviction-risk verdict (`NO-MEM-FLOOR` is the finding the
   class itself hides: no memory request means eviction alongside `BestEffort`)
+- `svc-backends` - services + ready/not-ready endpoint counts + wiring verdict
+  (`NO-PODS` is a selector matching nothing, `UNWIRED` a service nothing can
+  ever answer for)
 
 **Interactive**
 - `secret` - browse secrets interactively (pick secret, then key); positional
@@ -98,8 +102,8 @@ Some commands default to the **current kubeconfig namespace** (the one set by
 kubens/kubectx); the rest default to **all namespaces**.
 
 - Current-namespace-by-default: `reqlim`, `no-limits`, `no-requests`, `images`,
-  `restarts`, `pvc`, `svc-fqdn`, `secret`, `privileged`, `pdb`, `pending`, `hpa`,
-  `spread`, `probes`, `qos`.
+  `restarts`, `pvc`, `svc-fqdn`, `svc-backends`, `secret`, `privileged`, `pdb`,
+  `pending`, `hpa`, `spread`, `probes`, `qos`.
 - `-A` / `--all-namespaces` widens to all; `-n <ns>` targets one.
 - `autoscaler` ignores namespace flags entirely (always `kube-system`).
 

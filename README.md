@@ -78,6 +78,16 @@ nodes. A public address is yellow, because it is internet-reachable surface.
 | --- | --- |
 | `pvc` † | PVCs bound to pod + node |
 | `svc-fqdn` † | in-cluster FQDN of services |
+| `svc-backends` † | services + the pods behind them + wiring verdict |
+
+`svc-backends` answers "is anything actually behind this service": it counts the
+ready and not-ready endpoints per service from its EndpointSlices and prints the
+selector next to them, so a mistyped label (`NO-PODS`) or a workload whose pods
+all fail readiness (`NO-READY`) reads as a fault instead of an empty
+`get endpoints`. A selector-less service is `UNWIRED` when nothing filled its
+endpoints in and `MANUAL` when another controller did; `ExternalName` is a DNS
+alias and stays muted. Endpoints are counted per pod, so a dual-stack service
+(one EndpointSlice per address family) is not double-counted.
 
 ### Security
 
@@ -210,7 +220,8 @@ Defaults that differ from ascending:
 - `image-count` and `restarts` - count-descending.
 - `autoscaler` - `LAST-CHANGE` descending (most recently changed nodegroup
   first). Sortable columns: `nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change`.
-- Verdict commands (`pdb`, `hpa`, `spread`, `probes`, `qos`) - `VERDICT` by severity
+- Verdict commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`) -
+  `VERDICT` by severity
   (least-risky first), so the riskiest rows land at the bottom, nearest the
   prompt.
 
@@ -238,8 +249,11 @@ Verdict coloring per command:
 | `spread` | `SPREAD` | `SPOF-ZONE` | `SPOF-NODE` | `SINGLE`/`MULTI-NODE` |
 | `probes` | `OK` | `NO-LIVENESS` | `NO-READINESS`/`NO-PROBES` | - |
 | `qos` | `GUARANTEED` | `BURSTABLE` | `NO-MEM-FLOOR`/`EVICT-FIRST` | - |
+| `svc-backends` | `OK` | `DEGRADED` | `NO-PODS`/`NO-READY`/`UNWIRED` | `EXTERNAL`/`MANUAL` |
 
 - `pdb` also colors its `ALLOWED` count: red at 0, yellow at 1, green above.
+- `svc-backends` colors `READY` red at 0 and green above, and `NOTREADY` green at
+  0, yellow above.
 - `probes` colors each probe cell by handler type (`http`/`grpc`/`tcp`/`exec`)
   green when set, a muted `-` when absent.
 
