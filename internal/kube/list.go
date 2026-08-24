@@ -3,11 +3,15 @@ package kube
 import (
 	"context"
 
+	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -132,5 +136,60 @@ func ListEndpointSlices(ctx context.Context, c kubernetes.Interface, ns string, 
 			return nil, metav1.ListMeta{}, err
 		}
 		return l.Items, l.ListMeta, nil
+	})
+}
+
+// ListDeployments returns every Deployment in ns matching opts.
+func ListDeployments(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]appsv1.Deployment, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]appsv1.Deployment, metav1.ListMeta, error) {
+		l, err := c.AppsV1().Deployments(ns).List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
+	})
+}
+
+// ListStatefulSets returns every StatefulSet in ns matching opts.
+func ListStatefulSets(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]appsv1.StatefulSet, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]appsv1.StatefulSet, metav1.ListMeta, error) {
+		l, err := c.AppsV1().StatefulSets(ns).List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
+	})
+}
+
+// ListDaemonSets returns every DaemonSet in ns matching opts.
+func ListDaemonSets(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]appsv1.DaemonSet, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]appsv1.DaemonSet, metav1.ListMeta, error) {
+		l, err := c.AppsV1().DaemonSets(ns).List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
+	})
+}
+
+// ListCustom returns every object of a custom resource in ns (empty means all
+// namespaces) through the dynamic client, paginated like the typed lists.
+//
+// A nil client yields no objects and no error: that is how a view reading a CRD
+// stays runnable when the bundle carries no dynamic client (a test, or a caller
+// that never built one). Whether an absent CRD is an error is the caller's call
+// - see view.Rollouts.
+func ListCustom(ctx context.Context, d dynamic.Interface, gvr schema.GroupVersionResource, ns string, opts metav1.ListOptions) ([]unstructured.Unstructured, error) {
+	if d == nil {
+		return nil, nil
+	}
+	return listAll(opts, func(o metav1.ListOptions) ([]unstructured.Unstructured, metav1.ListMeta, error) {
+		l, err := d.Resource(gvr).Namespace(ns).List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		// An UnstructuredList keeps its list metadata in the object map, not in
+		// an embedded ListMeta; the two fields paging needs are accessors.
+		return l.Items, metav1.ListMeta{Continue: l.GetContinue(), RemainingItemCount: l.GetRemainingItemCount()}, nil
 	})
 }

@@ -312,6 +312,7 @@ func TestCurrentNSDefaultFlags(t *testing.T) {
 		"hpa":          true,
 		"spread":       true,
 		"probes":       true,
+		"rollouts":     true,
 		"qos":          true,
 	}
 	for _, c := range commands {

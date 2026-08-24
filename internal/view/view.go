@@ -111,6 +111,20 @@ func bothLists[A, B any](listA func() (A, error), listB func() (B, error)) (A, B
 	return a, b, cmp.Or(errA, errB)
 }
 
+// allLists runs independent list calls concurrently and returns the first error,
+// for the views that need more than the two bothLists covers. Each fn writes its
+// own result into a variable the caller captured.
+func allLists(fns ...func() error) error {
+	errs := make([]error, len(fns))
+	var wg sync.WaitGroup
+	wg.Add(len(fns))
+	for i, fn := range fns {
+		go func() { defer wg.Done(); errs[i] = fn() }()
+	}
+	wg.Wait()
+	return cmp.Or(errs...)
+}
+
 // skipNamespace reports whether a pod's namespace should be dropped from a
 // cluster-wide listing. kube-system is excluded from the -A view so operator
 // noise doesn't bury workload rows - but only there: when the user scoped to a

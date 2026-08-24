@@ -4,9 +4,9 @@
 ~25 read-only cluster-inspection shortcuts behind one dispatcher. It is the
 codified form of a pile of "quick look at the cluster" one-liners: nodes,
 capacity, requests/limits, images, restarts, PVCs, and a set of *verdict*
-commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `pending`)
-that classify a resource's health at a glance instead of making you read raw
-status fields.
+commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `rollouts`,
+`pending`) that classify a resource's health at a glance instead of making you
+read raw status fields.
 
 - **Language / runtime:** Go 1.27, compiled to a static `kubectl-klens` binary.
 - **Key deps:** `k8s.io/client-go` (cluster access), `manifoldco/promptui`
@@ -83,6 +83,9 @@ its rows. The README's [Container kinds](../README.md#container-kinds) and
 - `svc-backends` - services + ready/not-ready endpoint counts + wiring verdict
   (`NO-PODS` is a selector matching nothing, `UNWIRED` a service nothing can
   ever answer for)
+- `rollouts` - Deployments/StatefulSets/DaemonSets and Argo Rollouts that are
+  not finished rolling out (`STALLED` will not recover on its own,
+  `NOT-OBSERVED` points at the controller, not the workload)
 
 **Interactive**
 - `secret` - browse secrets interactively (pick secret, then key); positional
@@ -103,7 +106,7 @@ kubens/kubectx); the rest default to **all namespaces**.
 
 - Current-namespace-by-default: `reqlim`, `no-limits`, `no-requests`, `images`,
   `restarts`, `pvc`, `svc-fqdn`, `svc-backends`, `secret`, `privileged`, `pdb`,
-  `pending`, `hpa`, `spread`, `probes`, `qos`.
+  `pending`, `hpa`, `spread`, `probes`, `qos`, `rollouts`.
 - `-A` / `--all-namespaces` widens to all; `-n <ns>` targets one.
 - `autoscaler` ignores namespace flags entirely (always `kube-system`).
 
