@@ -79,6 +79,7 @@ nodes. A public address is yellow, because it is internet-reachable surface.
 | `pvc` † | PVCs bound to pod + node |
 | `svc-fqdn` † | in-cluster FQDN of services |
 | `svc-backends` † | services + the pods behind them + wiring verdict |
+| `ingress` † | ingress rules flattened + backend/TLS checks |
 
 `svc-backends` answers "is anything actually behind this service": it counts the
 ready and not-ready endpoints per service from its EndpointSlices and prints the
@@ -88,6 +89,16 @@ all fail readiness (`NO-READY`) reads as a fault instead of an empty
 endpoints in and `MANUAL` when another controller did; `ExternalName` is a DNS
 alias and stays muted. Endpoints are counted per pod, so a dual-stack service
 (one EndpointSlice per address family) is not double-counted.
+
+`ingress` flattens every rule to one row per host+path and checks it against the
+cluster: that the backend service exists (`NO-SERVICE`) and exposes the port the
+rule names (`NO-PORT`, by number or by name), and that the host is covered by a
+TLS block whose secret is actually there (`NO-SECRET` - the controller falls back
+to its own certificate, so browsers see a name mismatch while `get ing` looks
+fine). A host on plaintext only is `NO-TLS`. Wildcard certificates cover one
+label, as TLS name matching does. Reading secrets is a privilege many users lack:
+a refused secret list downgrades the `TLS` column to an unverified (muted) name
+rather than failing the command.
 
 ### Security
 
@@ -236,7 +247,7 @@ Defaults that differ from ascending:
 - `autoscaler` - `LAST-CHANGE` descending (most recently changed nodegroup
   first). Sortable columns: `nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change`.
 - Verdict commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`,
-  `rollouts`) - `VERDICT` by severity
+  `rollouts`, `ingress`) - `VERDICT` by severity
   (least-risky first), so the riskiest rows land at the bottom, nearest the
   prompt.
 
@@ -266,6 +277,7 @@ Verdict coloring per command:
 | `qos` | `GUARANTEED` | `BURSTABLE` | `NO-MEM-FLOOR`/`EVICT-FIRST` | - |
 | `svc-backends` | `OK` | `DEGRADED` | `NO-PODS`/`NO-READY`/`UNWIRED` | `EXTERNAL`/`MANUAL` |
 | `rollouts` | `OK` | `PROGRESSING`/`PAUSED` | `STALLED`/`DOWN`/`NOT-OBSERVED` | `SCALED-ZERO` |
+| `ingress` | `OK` | `NO-TLS` | `NO-SERVICE`/`NO-PORT`/`NO-SECRET` | `RESOURCE` |
 
 - `pdb` also colors its `ALLOWED` count: red at 0, yellow at 1, green above.
 - `svc-backends` colors `READY` red at 0 and green above, and `NOTREADY` green at

@@ -7,6 +7,7 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -191,5 +192,16 @@ func ListCustom(ctx context.Context, d dynamic.Interface, gvr schema.GroupVersio
 		// An UnstructuredList keeps its list metadata in the object map, not in
 		// an embedded ListMeta; the two fields paging needs are accessors.
 		return l.Items, metav1.ListMeta{Continue: l.GetContinue(), RemainingItemCount: l.GetRemainingItemCount()}, nil
+	})
+}
+
+// ListIngresses returns every Ingress in ns matching opts.
+func ListIngresses(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]networkingv1.Ingress, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]networkingv1.Ingress, metav1.ListMeta, error) {
+		l, err := c.NetworkingV1().Ingresses(ns).List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
 	})
 }
