@@ -77,9 +77,19 @@ nodes. A public address is yellow, because it is internet-reachable surface.
 | Command | Shows |
 | --- | --- |
 | `pvc` † | PVCs bound to pod + node |
+| `pvc-unused` † | PVCs no pod mounts + why they are still there |
 | `svc-fqdn` † | in-cluster FQDN of services |
 | `svc-backends` † | services + the pods behind them + wiring verdict |
 | `ingress` † | ingress rules flattened + backend/TLS checks |
+
+`pvc-unused` is the FinOps counterpart of `pvc`: disks that are provisioned and
+billed with nothing reading or writing them. A cloud-side audit cannot find
+these - the disk is attached to a live PV that a live PVC references, so the
+provider sees it as in use; only joining on the pod side shows nothing mounts
+it. `ORPHAN` is the one to reclaim (no pod, no owner that could mount it again),
+`SCALED-DOWN` is a StatefulSet leftover that scaling back up would reuse, and
+`STS-RESERVED` is a slot inside the set's replica count whose pod is expected
+back. A claim held by a pod that is still terminating counts as in use.
 
 `svc-backends` answers "is anything actually behind this service": it counts the
 ready and not-ready endpoints per service from its EndpointSlices and prints the
@@ -260,7 +270,7 @@ Defaults that differ from ascending:
 - `autoscaler` - `LAST-CHANGE` descending (most recently changed nodegroup
   first). Sortable columns: `nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change`.
 - Verdict commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`,
-  `rollouts`, `ingress`, `terminating`) - `VERDICT` by severity
+  `rollouts`, `ingress`, `terminating`, `pvc-unused`) - `VERDICT` by severity
   (least-risky first), so the riskiest rows land at the bottom, nearest the
   prompt.
 
@@ -292,6 +302,7 @@ Verdict coloring per command:
 | `rollouts` | `OK` | `PROGRESSING`/`PAUSED` | `STALLED`/`DOWN`/`NOT-OBSERVED` | `SCALED-ZERO` |
 | `ingress` | `OK` | `NO-TLS` | `NO-SERVICE`/`NO-PORT`/`NO-SECRET` | `RESOURCE` |
 | `terminating` | - | `DELETING` | `STUCK` | `GRACE` |
+| `pvc-unused` | - | `STS-RESERVED`/`SCALED-DOWN` | `ORPHAN`/`LOST` | `UNBOUND` |
 
 - `pdb` also colors its `ALLOWED` count: red at 0, yellow at 1, green above.
 - `svc-backends` colors `READY` red at 0 and green above, and `NOTREADY` green at
