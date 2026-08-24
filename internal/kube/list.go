@@ -5,6 +5,7 @@ import (
 
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -114,6 +115,19 @@ func ListPodDisruptionBudgets(ctx context.Context, c kubernetes.Interface, ns st
 func ListHorizontalPodAutoscalers(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]autoscalingv2.HorizontalPodAutoscaler, error) {
 	return listAll(opts, func(o metav1.ListOptions) ([]autoscalingv2.HorizontalPodAutoscaler, metav1.ListMeta, error) {
 		l, err := c.AutoscalingV2().HorizontalPodAutoscalers(ns).List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
+	})
+}
+
+// ListEndpointSlices returns every EndpointSlice in ns matching opts.
+// EndpointSlices, not the legacy Endpoints object: they carry the per-endpoint
+// ready/terminating conditions this needs, and Endpoints is deprecated.
+func ListEndpointSlices(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]discoveryv1.EndpointSlice, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]discoveryv1.EndpointSlice, metav1.ListMeta, error) {
+		l, err := c.DiscoveryV1().EndpointSlices(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
 		}
