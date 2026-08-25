@@ -139,6 +139,30 @@ kubectl klens image-count --sort registry
 kubectl klens pdb --sort verdict
 ```
 
+### Watch (`-w/--watch`)
+A command that sets `Watch: true` in the registry opts into `-w/--watch`, which
+re-polls it every `--interval` (default `2s`, floor `1s`) and redraws the screen
+with a status line above the table. It is deliberately not the whole catalog: the
+opted-in commands are the ones whose answer changes while you look at it -
+`pending`, `restarts`, `rollouts`, `terminating`, `autoscaler`,
+`node-conditions`, `svc-backends`, `max-pods`. Passing it elsewhere is refused by
+name (`error: nodes does not support --watch`).
+
+```console
+$ kubectl klens pending -A --watch --interval 5s
+Every 5s: klens pending -A --watch --interval 5s   14:03:22 (Ctrl-C to stop)
+
+NS     POD             REASON
+prod   api-7f9c-x2k    Insufficient cpu
+```
+
+It is a re-poll, not a Kubernetes watch stream: each tick re-runs the view's
+list calls, which is why the interval has a floor. A failed poll prints its
+error and the loop continues (a transient `503` mid-rollout is not a reason to
+drop out), `Ctrl-C` exits `0` and leaves the last frame on screen, and a
+non-TTY stdout refuses the flag instead of writing clear-screen escapes into a
+pipe.
+
 ### Color
 Tables colorize status cells: green = good, yellow = warning, red = bad, gray =
 muted placeholders, bold = headers. Control with
@@ -163,7 +187,8 @@ error: request timed out after 300ms; raise it or pass --request-timeout=0 to di
 
 `Ctrl-C` (SIGINT) and SIGTERM cancel in-flight requests and exit `130` with a
 plain `canceled`, so a cluster-wide listing stops when asked instead of first
-running to completion.
+running to completion. Under `--watch` the same signal is the intended way out,
+so it exits `0` and prints nothing.
 
 ### Shell completion
 `kubectl klens <TAB>` uses kubectl's plugin-completion mechanism (kubectl 1.26+):

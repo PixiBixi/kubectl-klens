@@ -12,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 	"text/tabwriter"
+	"time"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 	"github.com/PixiBixi/kubectl-klens/internal/view"
@@ -37,6 +38,10 @@ type Command struct {
 	// When non-empty the dispatcher registers --sort, validates the value, and
 	// the command sorts its output by that column.
 	SortColumns []string
+	// Watch opts the command into -w/--watch. Reserved for views whose answer
+	// changes while the user is looking at it (a rollout, a scale-up, a
+	// crashloop); a static inventory would just redraw the same table.
+	Watch bool
 }
 
 // commands is the registry of every subcommand. Built once at init; callers
@@ -48,31 +53,31 @@ var commands = []Command{
 	{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones, SortColumns: []string{"name", "region", "zone"}},
 	{Name: "node-ips", Summary: "Show internal and external IP per node; a node name narrows it to that node", Run: view.NodeIPs, SortColumns: []string{"name", "internal-ip", "external-ip"}},
 	{Name: "pods-per-node", Summary: "Count pods per node", Run: view.PodsPerNode, SortColumns: []string{"node", "pods"}},
-	{Name: "max-pods", Summary: "Show pod ceiling (allocatable), current count, and free slots per node", Run: view.MaxPods, SortColumns: []string{"node", "maxpods", "used", "free"}},
-	{Name: "node-conditions", Summary: "Show node readiness and memory/disk/pid pressure", Run: view.NodeConditions, SortColumns: []string{"name", "status", "memory", "disk", "pid"}},
+	{Name: "max-pods", Summary: "Show pod ceiling (allocatable), current count, and free slots per node", Run: view.MaxPods, SortColumns: []string{"node", "maxpods", "used", "free"}, Watch: true},
+	{Name: "node-conditions", Summary: "Show node readiness and memory/disk/pid pressure", Run: view.NodeConditions, SortColumns: []string{"name", "status", "memory", "disk", "pid"}, Watch: true},
 	{Name: "reqlim", Summary: "Show requests/limits per container in the current namespace (-A for all; -A excludes kube-system)", Run: view.Reqlim, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "req_cpu", "lim_cpu", "req_mem", "lim_mem"}},
 	{Name: "no-limits", Summary: "List containers missing CPU/memory limits in the current namespace (-A for all; -A excludes kube-system)", Run: view.NoLimits, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "missing"}},
 	{Name: "no-requests", Summary: "List containers missing CPU/memory requests in the current namespace (-A for all; -A excludes kube-system)", Run: view.NoRequests, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "missing"}},
 	{Name: "images", Summary: "List images per container per pod in the current namespace (-A for all)", Run: view.Images, CurrentNSDefault: true, SortColumns: []string{"podname", "container", "kind", "pull", "image", "tag"}},
 	{Name: "image-count", Summary: "Count image occurrences split by registry/image/tag across the cluster", Run: view.ImageCount, SortColumns: []string{"count", "registry", "image", "tag"}},
 	{Name: "on-node", Summary: "List pods scheduled on a given node", Run: view.OnNode, SortColumns: []string{"ns", "pod", "status", "node"}},
-	{Name: "restarts", Summary: "List containers that have restarted, with the crash reason, in the current namespace (-A for all)", Run: view.Restarts, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "restarts", "state", "exit"}},
+	{Name: "restarts", Summary: "List containers that have restarted, with the crash reason, in the current namespace (-A for all)", Run: view.Restarts, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "restarts", "state", "exit"}, Watch: true},
 	{Name: "pvc", Summary: "List PVCs bound to a pod and node in the current namespace (-A for all)", Run: view.Pvc, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "node", "pvc"}},
 	{Name: "pvc-unused", Summary: "List PVCs no pod mounts, with the reason they are still around, in the current namespace (-A for all)", Run: view.PvcUnused, CurrentNSDefault: true, SortColumns: []string{"ns", "pvc", "status", "capacity", "class", "volume", "verdict"}},
 	{Name: "default-sa", Summary: "List pods still using the default service account", Run: view.DefaultSA, SortColumns: []string{"ns", "pod"}},
 	{Name: "privileged", Summary: "List containers with privileged/host security flags in the current namespace (-A for all)", Run: view.Privileged, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "flags"}},
 	{Name: "svc-fqdn", Summary: "Show in-cluster FQDN of services in the current namespace (-A for all)", Run: view.SvcFQDN, CurrentNSDefault: true, SortColumns: []string{"ns", "service", "fqdn"}},
-	{Name: "svc-backends", Summary: "List services with the pods actually behind them and a wiring verdict in the current namespace (-A for all)", Run: view.SvcBackends, CurrentNSDefault: true, SortColumns: []string{"ns", "service", "type", "selector", "ready", "notready", "verdict"}},
+	{Name: "svc-backends", Summary: "List services with the pods actually behind them and a wiring verdict in the current namespace (-A for all)", Run: view.SvcBackends, CurrentNSDefault: true, SortColumns: []string{"ns", "service", "type", "selector", "ready", "notready", "verdict"}, Watch: true},
 	{Name: "ingress", Summary: "Flatten ingress rules with backend and TLS checks in the current namespace (-A for all)", Run: view.Ingress, CurrentNSDefault: true, SortColumns: []string{"ns", "ingress", "class", "host", "path", "backend", "tls", "verdict"}},
 	{Name: "pdb", Summary: "List PodDisruptionBudgets with a drain-safety verdict in the current namespace (-A for all)", Run: view.Pdb, CurrentNSDefault: true, SortColumns: []string{"ns", "name", "policy", "expected", "desired", "healthy", "allowed", "verdict"}},
-	{Name: "pending", Summary: "List Pending pods with the synthesized blocking reason in the current namespace (-A for all)", Run: view.Pending, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "reason"}},
+	{Name: "pending", Summary: "List Pending pods with the synthesized blocking reason in the current namespace (-A for all)", Run: view.Pending, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "reason"}, Watch: true},
 	{Name: "hpa", Summary: "List HorizontalPodAutoscalers with an autoscaling verdict in the current namespace (-A for all)", Run: view.Hpa, CurrentNSDefault: true, SortColumns: []string{"ns", "name", "ref", "min", "max", "current", "desired", "verdict"}},
 	{Name: "spread", Summary: "Show replica placement across nodes/zones with a single-point-of-failure verdict in the current namespace (-A for all)", Run: view.Spread, CurrentNSDefault: true, SortColumns: []string{"ns", "workload", "replicas", "nodes", "zones", "verdict"}},
 	{Name: "qos", Summary: "Show each pod's QoS class and effective requests/limits with an eviction-risk verdict in the current namespace (-A for all; -A excludes kube-system)", Run: view.Qos, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "qos", "req_cpu", "lim_cpu", "req_mem", "lim_mem", "verdict"}},
-	{Name: "rollouts", Summary: "List workloads that are not finished rolling out, incl. Argo Rollouts, in the current namespace (-A for all)", Run: view.Rollouts, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "desired", "ready", "updated", "available", "state", "verdict"}},
+	{Name: "rollouts", Summary: "List workloads that are not finished rolling out, incl. Argo Rollouts, in the current namespace (-A for all)", Run: view.Rollouts, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "desired", "ready", "updated", "available", "state", "verdict"}, Watch: true},
 	{Name: "probes", Summary: "List containers' readiness/liveness/startup probes with a reliability verdict in the current namespace (-A for all; -A excludes kube-system)", Run: view.Probes, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "readiness", "liveness", "startup", "verdict"}},
-	{Name: "terminating", Summary: "List pods and namespaces stuck being deleted, with the blocker (cluster-wide)", Run: view.Terminating, SortColumns: []string{"kind", "ns", "name", "stuck-for", "blocker", "finalizers", "verdict"}},
-	{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler, SortColumns: []string{"nodegroup", "health", "ready", "target", "min", "max", "scaleup", "scaledown", "last-change"}},
+	{Name: "terminating", Summary: "List pods and namespaces stuck being deleted, with the blocker (cluster-wide)", Run: view.Terminating, SortColumns: []string{"kind", "ns", "name", "stuck-for", "blocker", "finalizers", "verdict"}, Watch: true},
+	{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler, SortColumns: []string{"nodegroup", "health", "ready", "target", "min", "max", "scaleup", "scaledown", "last-change"}, Watch: true},
 	{Name: "unused-config", Summary: "List ConfigMaps and Secrets nothing references in the current namespace (-A for all; -A excludes kube-system)", Run: view.UnusedConfig, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "type", "owner"}},
 	{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},
 }
@@ -154,6 +159,18 @@ func (a App) Run(args []string) int {
 	for _, gf := range globalFlags {
 		gf.register(fs, &f, gf.help)
 	}
+	// --watch is registered per command, so it stays out of the shared help
+	// listing; catch it here to explain itself instead of letting the flag
+	// package print a bare "flag provided but not defined".
+	if !cmd.Watch && wantsWatch(args[1:]) {
+		fmt.Fprintf(a.Err, "error: %s does not support --watch\n", cmd.Name)
+		return 1
+	}
+	if cmd.Watch {
+		fs.BoolVar(&f.Watch, "watch", false, "re-run until interrupted")
+		fs.BoolVar(&f.Watch, "w", false, "re-run until interrupted")
+		fs.DurationVar(&f.Interval, "interval", kube.DefaultWatchInterval, "--watch poll period")
+	}
 	if len(cmd.SortColumns) > 0 {
 		fs.StringVar(&f.Sort, "sort", "", "sort by column: "+strings.Join(cmd.SortColumns, "|"))
 	}
@@ -163,6 +180,18 @@ func (a App) Run(args []string) int {
 	if f.Sort != "" && !slices.Contains(cmd.SortColumns, f.Sort) {
 		fmt.Fprintf(a.Err, "error: invalid --sort %q for %s (want %s)\n", f.Sort, cmd.Name, strings.Join(cmd.SortColumns, "|"))
 		return 1
+	}
+	if f.Watch {
+		if f.Interval < kube.MinWatchInterval {
+			fmt.Fprintf(a.Err, "error: --interval %s is below the %s minimum\n", f.Interval, kube.MinWatchInterval)
+			return 1
+		}
+		// Redrawing means clear-screen escapes, which are garbage in a pipe or a
+		// file. Refusing beats emitting them.
+		if !kube.IsTTY(a.Out) {
+			fmt.Fprintln(a.Err, "error: --watch needs a terminal, output is not a TTY")
+			return 1
+		}
 	}
 	switch f.ColorMode {
 	case "", "auto", "always", "never":
@@ -188,7 +217,15 @@ func (a App) Run(args []string) int {
 	// process exit, so a long cluster-wide list stops the moment the user asks.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	err = cmd.Run(ctx, client, f, fs.Args(), a.Out)
+	if f.Watch {
+		paint := kube.NewPainter(f)
+		header := func() string { return paint.Muted(watchHeader(f.Interval, args, time.Now())) }
+		err = watch(ctx, a.Out, f.Interval, header, func(w io.Writer) error {
+			return cmd.Run(ctx, client, f, fs.Args(), w)
+		})
+	} else {
+		err = cmd.Run(ctx, client, f, fs.Args(), a.Out)
+	}
 	var timeout interface{ Timeout() bool }
 	switch {
 	case err == nil:

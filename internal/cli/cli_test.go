@@ -419,3 +419,63 @@ func TestTimeoutErrorNamesTheFlag(t *testing.T) {
 		}
 	}
 }
+
+// TestWatchFlags locks the set of commands that offer -w/--watch: views whose
+// answer changes while you look at them. Update this map deliberately.
+func TestWatchFlags(t *testing.T) {
+	want := map[string]bool{
+		"pending":         true,
+		"restarts":        true,
+		"rollouts":        true,
+		"terminating":     true,
+		"autoscaler":      true,
+		"node-conditions": true,
+		"svc-backends":    true,
+		"max-pods":        true,
+	}
+	for _, c := range commands {
+		if got := c.Watch; got != want[c.Name] {
+			t.Errorf("%s: Watch = %v, want %v", c.Name, got, want[c.Name])
+		}
+	}
+}
+
+func TestWatchRejections(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		// A static inventory has nothing to redraw, and the message has to name
+		// the command rather than leave the flag package to say "not defined".
+		{"unsupported command", []string{"nodes", "--watch"}, "nodes does not support --watch"},
+		{"unsupported short flag", []string{"nodes", "-w"}, "nodes does not support --watch"},
+		{"interval floor", []string{"pending", "-w", "--interval", "500ms"}, "--interval 500ms is below the 1s minimum"},
+		// A bytes.Buffer is not a TTY, so this also covers the piped case.
+		{"needs a tty", []string{"pending", "--watch"}, "--watch needs a terminal"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errw bytes.Buffer
+			if code := testApp(&out, &errw).Run(tc.args); code != 1 {
+				t.Fatalf("want exit 1, got %d (stderr %q)", code, errw.String())
+			}
+			if !strings.Contains(errw.String(), tc.want) {
+				t.Fatalf("stderr %q, want it to contain %q", errw.String(), tc.want)
+			}
+		})
+	}
+}
+
+func TestWantsWatch(t *testing.T) {
+	for _, a := range []string{"-w", "--watch", "-watch", "--watch=true", "-w=false"} {
+		if !wantsWatch([]string{"-A", a}) {
+			t.Errorf("wantsWatch(%q) = false, want true", a)
+		}
+	}
+	for _, a := range []string{"-A", "--sort=name", "--wait", "worker-1"} {
+		if wantsWatch([]string{a}) {
+			t.Errorf("wantsWatch(%q) = true, want false", a)
+		}
+	}
+}
