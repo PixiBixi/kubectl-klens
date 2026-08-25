@@ -32,7 +32,7 @@ cluster-scoped. See [Namespace scope](#namespace-scope) for details.
 
 | Command | Shows |
 | --- | --- |
-| `nodes` | nodes + GKE nodepool + instance-type |
+| `nodes` | nodes + pool + instance-type + compute class + provisioning (spot/on-demand) |
 | `taints` | taints per node |
 | `capacity` | CPU/mem capacity + allocatable |
 | `zones` | region/zone per node |
@@ -41,6 +41,36 @@ cluster-scoped. See [Namespace scope](#namespace-scope) for details.
 | `max-pods` | pod ceiling, non-terminated count, free slots per node |
 | `node-conditions` | node readiness + memory/disk/pid pressure |
 | `on-node <node>` | pods on a node |
+
+`nodes` reads its `NODEPOOL`, `CLASS` and `PROVISIONING` columns from provider
+labels, so the same command works on GKE, EKS (managed node groups and
+Karpenter) and AKS:
+
+| Column | Labels read |
+| --- | --- |
+| `NODEPOOL` | `cloud.google.com/gke-nodepool`, `eks.amazonaws.com/nodegroup`, `karpenter.sh/nodepool`, `kubernetes.azure.com/agentpool` |
+| `CLASS` | `cloud.google.com/compute-class` (GKE Autopilot classes and custom ComputeClasses) |
+| `PROVISIONING` | `cloud.google.com/gke-spot`, `cloud.google.com/gke-preemptible`, `cloud.google.com/gke-provisioning`, `eks.amazonaws.com/capacityType`, `karpenter.sh/capacity-type`, `kubernetes.azure.com/priority`, `kubernetes.azure.com/scalesetpriority` |
+
+`PROVISIONING` is normalized to one vocabulary whatever the cloud
+(`spot`/`on-demand`/`preemptible`/`capacity-block`/`reserved`), so `SPOT` and
+`ON_DEMAND` from EKS do not read differently from GKE's booleans. The column is
+not named `CAPACITY` on purpose: `capacity` is already a klens command (CPU/mem)
+and already a `pvc-unused` column (volume size), so `--sort capacity` would have
+read as "sort by size". Two caveats worth knowing:
+
+- **`on-demand` is an inference**, not a label read: no cloud writes a
+  "this is on-demand" label. When no provisioning label matches but the node
+  carries other labels from a known provider namespace (`cloud.google.com/`,
+  `eks.amazonaws.com/`, `karpenter.sh/`, `kubernetes.azure.com/`), the node is
+  on-demand. A node from anywhere else (on-prem, another cloud) shows `<none>`
+  rather than a guess.
+- **`CLASS` is GKE-only** by design: AWS and Azure expose no equivalent, and
+  folding an instance family or a pool name in there would duplicate
+  `INSTANCE-TYPE`/`NODEPOOL` and misname it. Non-GKE nodes show `<none>`.
+
+On AKS, `kubernetes.azure.com/scalesetpriority` is deprecated in favor of
+`kubernetes.azure.com/priority`; both are read, `priority` first.
 
 The `STATUS` column of `nodes` and `node-conditions` separates the two ways a
 node can be unhealthy: `NotReady` is a kubelet that is answering and reporting
@@ -316,8 +346,8 @@ klens colorizes its tables:
 
 | Color | Meaning |
 | --- | --- |
-| green | good - Ready/Healthy/Bound/Running, roomy free pod slots |
-| yellow | warning - Pending, high restart counts, floating `latest` tags, <25% free pod slots, `NoSchedule` taints |
+| green | good - Ready/Healthy/Bound/Running, roomy free pod slots, `on-demand` nodes |
+| yellow | warning - Pending, high restart counts, floating `latest` tags, <25% free pod slots, `NoSchedule` taints, `spot`/`preemptible` nodes |
 | red | bad - NotReady/Unknown/CrashLoopBackOff, node pressure, privileged flags, <10% free pod slots, `NoExecute` taints |
 | gray | muted placeholders - `<none>`/`none`, `PreferNoSchedule` taints |
 | bold | headers |

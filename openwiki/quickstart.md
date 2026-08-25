@@ -38,7 +38,8 @@ The authoritative list is the `commands` slice in
 [`internal/cli/cli.go`](../internal/cli/cli.go). Grouped by what they inspect:
 
 **Nodes / capacity**
-- `nodes` - nodes + GKE nodepool + instance-type
+- `nodes` - nodes + pool + instance-type + compute class + provisioning
+  (spot/on-demand, from GKE, EKS/Karpenter and AKS labels)
 - `taints` - taints per node
 - `capacity` - CPU/mem capacity + allocatable per node
 - `zones` - region/zone per node
