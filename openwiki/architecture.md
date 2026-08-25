@@ -264,6 +264,37 @@ column and only needs `SortBy`).
   pure addition (measured ~14% and ~10% of total on a 6300-pod cluster).
 - `qtyOrNone(paint, rl, name)` renders a resource quantity or a muted `none`.
 
+## Cross-cloud node labels (`internal/view/nodelabels.go`)
+
+The `nodes` view answers "which pool, which class, spot or on-demand?" from node
+labels, and every cloud spells those differently. `nodelabels.go` holds that
+mapping in three ordered tables - `nodePoolLabels`, `computeClassLabels`,
+`provisioningLabels` - read by `firstLabel` (first key present wins) and
+`nodeProvisioning` (first key whose *value* is recognised wins). Order is the
+whole design, so append rather than reorder: GKE's boolean `gke-spot` /
+`gke-preemptible` are checked before `gke-provisioning`, which only exists on
+GKE 1.25.5+ nodes.
+
+Three rules the tables encode, worth keeping when adding a cloud:
+
+- **Never guess.** `nodeProvisioning` returns `""` when no cloud label at all is
+  present, and the caller draws a muted `<none>`. Reporting `on-demand` for a
+  node klens knows nothing about would be a confident wrong answer.
+- **But do infer the unlabeled default.** On-demand is usually implicit - an AKS
+  "regular" node carries no `scalesetpriority` label - so a node bearing *any*
+  label from a known cloud namespace (`cloudLabelPrefixes`) resolves to
+  `on-demand` rather than unknown.
+- **`CLASS` stays empty off GKE.** Only GKE has a real compute class (Autopilot
+  built-ins and custom ComputeClasses); synthesizing one from an AWS instance
+  family or an Azure pool name would invent a distinction that does not exist.
+
+Values are normalized into one lowercase vocabulary (`spot`, `preemptible`,
+`on-demand`, `capacity-block`, `reserved`) so `--sort provisioning` groups the
+same thing across clouds. `paintProvisioning` in
+[`nodes.go`](../internal/view/nodes.go) colors it: green `on-demand`, yellow
+`spot`/`preemptible`, unstyled for the rest - the healthy common state is
+colored too, not only the anomaly.
+
 ## Adding a subcommand
 
 1. Create `internal/view/<name>.go` implementing the `RunFunc` signature; build
@@ -345,4 +376,5 @@ apiserver indexes for it.
 | Change request bounds / interrupts | `cfg.Timeout` in `client.go` + the exit-code switch in `cli.go` |
 | Change the watch loop / which commands watch | `internal/cli/watch.go` + `Watch` in the registry + `TestWatchFlags` |
 | Add/adjust a health verdict | the command's `xVerdict` in `internal/view/<name>.go` |
+| Support another cloud's node-pool / spot labels | the ordered tables in `internal/view/nodelabels.go` |
 | Change completion behaviour | `internal/cli/complete.go` |
