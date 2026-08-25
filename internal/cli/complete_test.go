@@ -170,3 +170,18 @@ func TestCompletionOffersEveryGlobalFlag(t *testing.T) {
 		}
 	}
 }
+
+func TestCompletionOffersWatchOnlyWhereRegistered(t *testing.T) {
+	got := completions([]string{"pending"}, "-")
+	for _, want := range []string{"-w", "--watch", "--interval"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("pending completion missing %q: %v", want, got)
+		}
+	}
+	got = completions([]string{"nodes"}, "-")
+	for _, unwanted := range []string{"-w", "--watch", "--interval"} {
+		if slices.Contains(got, unwanted) {
+			t.Errorf("nodes completion offers %q, which it does not accept: %v", unwanted, got)
+		}
+	}
+}

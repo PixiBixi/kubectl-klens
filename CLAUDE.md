@@ -48,7 +48,12 @@ Three packages under `internal/`, layered cli → view → kube:
   client, applies namespace defaulting, then calls the command's `RunFunc`. A
   command that sets `SortColumns` opts into `--sort <column>`: the dispatcher
   registers the flag, validates the value against that list, and the value flows
-  through `kube.Flags.Sort`. Global flags (`-n`, `--context`, ...) live once in
+  through `kube.Flags.Sort`. A command that sets `Watch` opts into `-w/--watch` +
+  `--interval`: the dispatcher refuses both on a non-TTY stdout and hands
+  `cmd.Run` to the redraw loop in `watch.go`, which re-polls into a buffer every
+  interval; `TestWatchFlags` locks the watchable set (`pending`, `restarts`,
+  `rollouts`, `terminating`, `autoscaler`, `node-conditions`, `svc-backends`,
+  `max-pods`). Global flags (`-n`, `--context`, ...) live once in
   the `globalFlags` table, which drives both FlagSet registration and the
   `--help` listing so the two can't drift - add a global flag there, not in two
   places. `complete.go`
@@ -94,7 +99,9 @@ update that map whenever you change a command's scoping.
 2. Register it in the `commands` slice in `internal/cli/cli.go` (set `CurrentNSDefault`
    if it should scope to the current namespace; set `SortColumns` to the
    lowercased headers to enable `--sort`, then call `t.SortBy(f.Sort)` in the
-   view). `TestSortColumnsMatchHeaders` guards that those columns exist.
+   view; set `Watch: true` only if the answer changes while you watch it, and
+   update `TestWatchFlags`). `TestSortColumnsMatchHeaders` guards that those
+   columns exist.
 3. Add a `_test.go` next to it. Shell completion, `--help`, and dispatch are all
    registry-driven - no extra wiring.
 4. To color cells, build `paint := kube.NewPainter(f)`, wrap status cells

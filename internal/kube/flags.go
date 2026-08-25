@@ -12,6 +12,15 @@ import (
 // magnitude of headroom. --request-timeout=0 removes the bound.
 const DefaultRequestTimeout = 60 * time.Second
 
+// DefaultWatchInterval is the --watch poll period, matching watch(1). Every tick
+// re-runs the command's full list calls, so MinWatchInterval floors it: the
+// heaviest command takes about four seconds on a 6500-pod cluster, and a
+// sub-second poll would hammer the apiserver with requests that cannot finish.
+const (
+	DefaultWatchInterval = 2 * time.Second
+	MinWatchInterval     = 1 * time.Second
+)
+
 // Flags holds the standard kubeconfig-related options shared by all commands,
 // plus optional command-specific options registered via Command.RegisterFlags.
 type Flags struct {
@@ -23,6 +32,8 @@ type Flags struct {
 	ColorMode      string        // raw --color value: "auto"|"always"|"never"|"" (unset)
 	Color          bool          // resolved: whether to emit ANSI color
 	RequestTimeout time.Duration // per-request deadline; 0 means no limit
+	Watch          bool          // re-run the command until interrupted
+	Interval       time.Duration // --watch poll period
 }
 
 // NamespaceScope returns the namespace to list in. Empty string means all

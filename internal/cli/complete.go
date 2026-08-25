@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -56,8 +57,19 @@ func completions(prior []string, toComplete string) []string {
 	}
 	if strings.HasPrefix(toComplete, "-") {
 		flags := completionFlags
-		if c, ok := chosenCommand(prior); ok && len(c.SortColumns) > 0 {
-			flags = append(append([]string{}, completionFlags...), "--sort")
+		if c, ok := chosenCommand(prior); ok {
+			// Per-command flags are only offered where they are registered, so a
+			// completion never suggests a flag the dispatcher would reject.
+			var extra []string
+			if len(c.SortColumns) > 0 {
+				extra = append(extra, "--sort")
+			}
+			if c.Watch {
+				extra = append(extra, "-w", "--watch", "--interval")
+			}
+			if len(extra) > 0 {
+				flags = slices.Concat(completionFlags, extra)
+			}
 		}
 		return withPrefix(flags, toComplete)
 	}

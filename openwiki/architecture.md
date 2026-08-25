@@ -25,15 +25,24 @@ subcommand. `App.Run` (`cli.go`):
 2. `lookup`s the subcommand (honoring singular/plural aliases via a trailing
    `s` toggle).
 3. Registers the global flags, plus `--sort` if the command declares
-   `SortColumns`, then parses args.
-4. Validates `--sort` against the command's columns and `--color` against
-   `auto|always|never`, resolves `Flags.Color` once via `kube.ResolveColor`.
+   `SortColumns` and `-w/--watch` + `--interval` if it declares `Watch`, then
+   parses args. `-w` on a command that does not declare `Watch` is caught before
+   parsing (`wantsWatch` in `watch.go`) so the error names the command instead of
+   leaving the `flag` package to say "not defined".
+4. Validates `--sort` against the command's columns, `--color` against
+   `auto|always|never`, and `--interval` against `kube.MinWatchInterval`;
+   resolves `Flags.Color` once via `kube.ResolveColor`. `--watch` on a non-TTY
+   stdout is refused here, before any cluster call.
 5. Builds the client, applies **namespace defaulting** (below), wraps the context
-   in `signal.NotifyContext` (SIGINT/SIGTERM), then calls `cmd.Run`.
+   in `signal.NotifyContext` (SIGINT/SIGTERM), then calls `cmd.Run` - or, under
+   `--watch`, hands it to the redraw loop in
+   [`watch.go`](../internal/cli/watch.go), which re-runs `cmd.Run` into a buffer
+   every interval.
 6. Maps the outcome to an exit code: `0` on success; `130` with a plain
    `canceled` when the context was cancelled (an interrupt is not a failure); a
    message naming `--request-timeout` when the error is a deadline or a transport
-   timeout; `1` otherwise.
+   timeout; `1` otherwise. A watch that ends on `Ctrl-C` returns `nil`, so it
+   exits `0`: the interrupt is how a watch is meant to end.
 
 ### The Command registry entry
 
@@ -44,6 +53,7 @@ type Command struct {
     Run              RunFunc
     CurrentNSDefault bool     // scope to current ns when neither -n nor -A given
     SortColumns      []string // lowercased headers; enables --sort
+    Watch            bool     // enables -w/--watch + --interval
 }
 ```
 
@@ -61,6 +71,22 @@ One list does sit outside it: `completionFlags` in `complete.go`, the tokens
 offered during shell completion. `TestCompletionOffersEveryGlobalFlag` pins it to
 `globalFlags`, because a new global flag would otherwise be registered and
 documented but silently uncompletable.
+
+### The watch loop (`watch.go`)
+
+`--watch` is a **re-poll, not a Kubernetes watch stream**. The views are
+aggregations (pods joined with nodes, events, owner refs), so streaming would
+mean an informer cache per view; re-running the existing `RunFunc` every tick
+gets the same answer for one buffer and a ticker.
+
+`watch(ctx, out, interval, header, render)` builds each frame in a
+`bytes.Buffer` and emits `clear + header + frame` in a single write, so a slow
+poll never leaves a half-drawn table on screen. A render error is printed and the
+loop continues, because a transient `503` mid-rollout is not a reason to eject
+the user. An error that arrives together with a cancelled context is swallowed
+instead: it is just the interrupt surfacing. `Watch: true` is reserved for views
+whose answer changes while you look at them; `TestWatchFlags` locks that set the
+way `TestCurrentNSDefaultFlags` locks namespace scoping.
 
 ### The RunFunc contract
 
@@ -263,7 +289,9 @@ column and only needs `SortBy`).
      (and update `TestCurrentNSDefaultFlags`);
    - set `SortColumns` to the lowercased headers to enable `--sort`, then call
      `t.SortBy(f.Sort)` in the view. `TestSortColumnsMatchHeaders` guards that
-     those columns actually exist as headers.
+     those columns actually exist as headers;
+   - set `Watch: true` only if the view's answer changes while you watch it (and
+     update `TestWatchFlags`).
 3. Add a `_test.go` next to it. Completion, `--help`, and dispatch are all
    registry-driven - no extra wiring.
 4. To color cells, build `paint := kube.NewPainter(f)`, wrap status cells
@@ -315,5 +343,6 @@ apiserver indexes for it.
 | Change colors / color precedence | `internal/kube/color.go` |
 | Change kubeconfig/context resolution | `internal/kube/client.go` |
 | Change request bounds / interrupts | `cfg.Timeout` in `client.go` + the exit-code switch in `cli.go` |
+| Change the watch loop / which commands watch | `internal/cli/watch.go` + `Watch` in the registry + `TestWatchFlags` |
 | Add/adjust a health verdict | the command's `xVerdict` in `internal/view/<name>.go` |
 | Change completion behaviour | `internal/cli/complete.go` |

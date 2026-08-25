@@ -261,8 +261,12 @@ not a budget: the heaviest command measured on a 6500-pod cluster takes about
 four seconds. Pass `--request-timeout=0` to remove the bound; if you hit it, the
 error names the flag.
 
+`--sort`, `-w/--watch` and `--interval` are per-command flags, registered only on
+the commands that accept them; `<TAB>` lists what a given command takes.
+
 `Ctrl-C` cancels in-flight requests and exits `130`, so a cluster-wide listing
-stops as soon as you ask rather than running to completion first.
+stops as soon as you ask rather than running to completion first. Under
+`--watch` it is the normal way out and exits `0`.
 
 ## Namespace scope
 
@@ -339,6 +343,42 @@ Defaults that differ from ascending:
 
 Pass `--sort <column>` to override any of these. `image-count` sortable columns:
 `count|registry|image|tag`.
+
+## Watch
+
+Eight commands accept `-w/--watch`, which re-runs them every `--interval`
+(default `2s`, floor `1s`) and redraws the screen, with a status line above the
+table:
+
+```console
+$ kubectl klens pending -A --watch
+Every 2s: klens pending -A --watch   14:03:22 (Ctrl-C to stop)
+
+NS     POD             REASON
+prod   api-7f9c-x2k    Insufficient cpu
+```
+
+| Command | What you are waiting for |
+| --- | --- |
+| `pending` | the scheduler placing a pod, usually a node arriving |
+| `restarts` | a container settling down, or not |
+| `rollouts` | a deployment finishing, or wedging |
+| `terminating` | a stuck pod or namespace releasing its finalizers |
+| `autoscaler` | a scale-up or scale-down in flight |
+| `node-conditions` | a node going into pressure |
+| `svc-backends` | endpoints flipping ready/notready during a rollout |
+| `max-pods` | pod slots filling up as a nodepool grows |
+
+Notes:
+
+- It is a re-poll, not a Kubernetes watch stream: every tick re-runs the whole
+  command. The interval floor exists because the heaviest command takes about
+  four seconds on a 6500-pod cluster.
+- A failed poll prints its error and the loop keeps going: a transient `503` is
+  not a reason to drop you out of a watch you are using to follow a rollout.
+- `Ctrl-C` stops it, exits `0`, and leaves the last frame on screen.
+- It needs a terminal. Piped or redirected, `--watch` is refused rather than
+  filling the file with clear-screen escapes.
 
 ## Color
 
