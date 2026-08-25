@@ -42,7 +42,7 @@ type Command struct {
 // commands is the registry of every subcommand. Built once at init; callers
 // only range over it, so sharing the slice is safe.
 var commands = []Command{
-	{Name: "nodes", Summary: "List nodes with GKE nodepool and instance-type", Run: view.Nodes, SortColumns: []string{"name", "status", "nodepool", "instance-type"}},
+	{Name: "nodes", Summary: "List nodes with their pool, instance-type, compute class and spot/on-demand provisioning", Run: view.Nodes, SortColumns: []string{"name", "status", "nodepool", "instance-type", "class", "provisioning"}},
 	{Name: "taints", Summary: "List taints of all nodes", Run: view.Taints, SortColumns: []string{"name", "taints"}},
 	{Name: "capacity", Summary: "Show CPU/memory capacity and allocatable per node", Run: view.Capacity, SortColumns: []string{"name", "cpu_cap", "cpu_alloc", "mem_cap", "mem_alloc"}},
 	{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones, SortColumns: []string{"name", "region", "zone"}},
