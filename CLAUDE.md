@@ -23,7 +23,7 @@ and dynamic clients), `promptui` (interactive pickers), and `golang.org/x/term`
 ## Common commands
 
 ```bash
-make build      # go build -ldflags "-s -w" -o kubectl-klens .
+make build      # go build -ldflags "-s" -o kubectl-klens .
 make test       # go test -race ./...
 make lint       # golangci-lint run (config: .golangci.yml)
 make snapshot   # goreleaser release --snapshot --clean (dry-run)

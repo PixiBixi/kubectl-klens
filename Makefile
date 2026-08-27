@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 
 build: ## Build the local kubectl-klens binary
-	go build -ldflags "-s -w" -o kubectl-klens .
+	go build -ldflags "-s" -o kubectl-klens .
 
 lint: ## Run golangci-lint (config: .golangci.yml)
 	golangci-lint run

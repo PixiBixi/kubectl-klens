@@ -10,7 +10,7 @@ tasks:
   build:
     desc: Build the local kubectl-klens binary
     cmds:
-      - go build -ldflags "-s -w" -o kubectl-klens .
+      - go build -ldflags "-s" -o kubectl-klens .
 
   lint:
     desc: 'Run golangci-lint (config: .golangci.yml)'
