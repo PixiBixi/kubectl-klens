@@ -10,6 +10,7 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -266,6 +267,18 @@ func ListJobs(ctx context.Context, c kubernetes.Interface, ns string, opts metav
 func ListCronJobs(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]batchv1.CronJob, error) {
 	return listAll(opts, func(o metav1.ListOptions) ([]batchv1.CronJob, metav1.ListMeta, error) {
 		l, err := c.BatchV1().CronJobs(ns).List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
+	})
+}
+
+// ListStorageClasses returns every StorageClass matching opts. Cluster-scoped:
+// callers holding only namespace rights must tolerate the error.
+func ListStorageClasses(ctx context.Context, c kubernetes.Interface, opts metav1.ListOptions) ([]storagev1.StorageClass, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]storagev1.StorageClass, metav1.ListMeta, error) {
+		l, err := c.StorageV1().StorageClasses().List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
 		}

@@ -1,7 +1,7 @@
 # kubectl-klens - Quickstart
 
 `kubectl-klens` is a single-binary **kubectl plugin** (`kubectl klens`) bundling
-~33 read-only cluster-inspection shortcuts behind one dispatcher. It is the
+~34 read-only cluster-inspection shortcuts behind one dispatcher. It is the
 codified form of a pile of "quick look at the cluster" one-liners: nodes,
 capacity, requests/limits, images, restarts, PVCs, and a set of *verdict*
 commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `rollouts`,
@@ -67,6 +67,9 @@ The authoritative list is the `commands` slice in
 - `pvc` - PVCs bound to pod + node
 - `pvc-unused` - PVCs no pod mounts (`ORPHAN` is reclaimable, `SCALED-DOWN` a
   StatefulSet leftover), with capacity and storage class
+- `pvc-resize` - PVCs whose capacity does not match the request, with where the
+  resize stalled (`SC-NO-EXPAND` never starts, `FS-PENDING` waits on a pod
+  restart, `SHRINK` is a silent no-op); empty means nothing in flight
 - `default-sa` - pods still on the default service account
 - `privileged` - containers with privileged/host security flags
 - `svc-fqdn` - in-cluster FQDN of services
@@ -121,7 +124,7 @@ kubens/kubectx); the rest default to **all namespaces**.
 - Current-namespace-by-default: `reqlim`, `no-limits`, `no-requests`, `images`,
   `restarts`, `pvc`, `svc-fqdn`, `svc-backends`, `secret`, `privileged`, `pdb`,
   `pending`, `hpa`, `spread`, `probes`, `qos`, `rollouts`, `ingress`,
-  `pvc-unused`, `unused-config`.
+  `pvc-unused`, `pvc-resize`, `unused-config`.
 - `-A` / `--all-namespaces` widens to all; `-n <ns>` targets one.
 - `autoscaler` ignores namespace flags entirely (always `kube-system`).
 
@@ -146,8 +149,8 @@ re-polls it every `--interval` (default `2s`, floor `1s`) and redraws the screen
 with a status line above the table. It is deliberately not the whole catalog: the
 opted-in commands are the ones whose answer changes while you look at it -
 `pending`, `restarts`, `rollouts`, `terminating`, `autoscaler`,
-`node-conditions`, `svc-backends`, `max-pods`. Passing it elsewhere is refused by
-name (`error: nodes does not support --watch`).
+`node-conditions`, `svc-backends`, `max-pods`, `pvc-resize`. Passing it
+elsewhere is refused by name (`error: nodes does not support --watch`).
 
 ```console
 $ kubectl klens pending -A --watch --interval 5s

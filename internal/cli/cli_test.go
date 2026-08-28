@@ -304,6 +304,7 @@ func TestCurrentNSDefaultFlags(t *testing.T) {
 		"secret":        true,
 		"pvc":           true,
 		"pvc-unused":    true,
+		"pvc-resize":    true,
 		"images":        true,
 		"restarts":      true,
 		"no-limits":     true,
@@ -432,6 +433,7 @@ func TestWatchFlags(t *testing.T) {
 		"node-conditions": true,
 		"svc-backends":    true,
 		"max-pods":        true,
+		"pvc-resize":      true,
 	}
 	for _, c := range commands {
 		if got := c.Watch; got != want[c.Name] {

@@ -109,6 +109,7 @@ nodes. A public address is yellow, because it is internet-reachable surface.
 | --- | --- |
 | `pvc` † | PVCs bound to pod + node |
 | `pvc-unused` † | PVCs no pod mounts + why they are still there |
+| `pvc-resize` † | PVCs whose size does not match the request + why |
 | `svc-fqdn` † | in-cluster FQDN of services |
 | `svc-backends` † | services + the pods behind them + wiring verdict |
 | `ingress` † | ingress rules flattened + backend/TLS checks |
@@ -121,6 +122,18 @@ it. `ORPHAN` is the one to reclaim (no pod, no owner that could mount it again),
 `SCALED-DOWN` is a StatefulSet leftover that scaling back up would reuse, and
 `STS-RESERVED` is a slot inside the set's replica count whose pod is expected
 back. A claim held by a pod that is still terminating counts as in use.
+
+`pvc-resize` answers "did my expansion actually land". `kubectl get pvc` prints
+`status.capacity` alone, so a resize that never left the ground looks exactly
+like one that finished. A bigger `spec.resources.requests` is only a *request*:
+the StorageClass has to allow expansion (`SC-NO-EXPAND` when it does not - the
+request then sits there forever and only a new PVC gets you out), the
+provisioner has to accept the size (`INFEASIBLE` past a disk type's ceiling),
+and a filesystem volume then needs its node to remount it (`FS-PENDING`, where
+the `POD` column names the one to restart). `SHRINK` is the reverse trap:
+Kubernetes cannot shrink a claim, so lowering the number is a silent no-op that
+leaves the two sizes disagreeing for good. Claims already at their requested
+size are not listed - an empty table means nothing is in flight or stuck.
 
 `svc-backends` answers "is anything actually behind this service": it counts
 the ready and not-ready endpoints per service from its EndpointSlices, so a
@@ -337,7 +350,8 @@ Defaults that differ from ascending:
 - `autoscaler` - `LAST-CHANGE` descending (most recently changed nodegroup
   first). Sortable columns: `nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change`.
 - Verdict commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`,
-  `rollouts`, `ingress`, `terminating`, `pvc-unused`) - `VERDICT` by severity
+  `rollouts`, `ingress`, `terminating`, `pvc-unused`, `pvc-resize`) - `VERDICT`
+  by severity
   (least-risky first), so the riskiest rows land at the bottom, nearest the
   prompt.
 
@@ -346,7 +360,7 @@ Pass `--sort <column>` to override any of these. `image-count` sortable columns:
 
 ## Watch
 
-Eight commands accept `-w/--watch`, which re-runs them every `--interval`
+Nine commands accept `-w/--watch`, which re-runs them every `--interval`
 (default `2s`, floor `1s`) and redraws the screen, with a status line above the
 table:
 
@@ -368,6 +382,7 @@ prod   api-7f9c-x2k    Insufficient cpu
 | `node-conditions` | a node going into pressure |
 | `svc-backends` | endpoints flipping ready/notready during a rollout |
 | `max-pods` | pod slots filling up as a nodepool grows |
+| `pvc-resize` | an expansion working through the resize state machine |
 
 Notes:
 
@@ -406,6 +421,7 @@ Verdict coloring per command:
 | `ingress` | `OK` | `NO-TLS` | `NO-SERVICE`/`NO-PORT`/`NO-SECRET` | `RESOURCE` |
 | `terminating` | - | `DELETING` | `STUCK` | `GRACE` |
 | `pvc-unused` | - | `STS-RESERVED`/`SCALED-DOWN` | `ORPHAN`/`LOST` | `UNBOUND` |
+| `pvc-resize` | - | `PENDING`/`RESIZING`/`FS-PENDING`/`SHRINK` | `FAILED`/`INFEASIBLE`/`SC-NO-EXPAND` | - |
 
 - `pdb` also colors its `ALLOWED` count: red at 0, yellow at 1, green above.
 - `svc-backends` colors `READY` red at 0 and green above, and `NOTREADY` green at

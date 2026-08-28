@@ -15,7 +15,7 @@ When working in this repository, read the OpenWiki quickstart first, then follow
 
 ## What this is
 
-`kubectl-klens` is a single-binary kubectl plugin (`kubectl klens`) bundling ~30
+`kubectl-klens` is a single-binary kubectl plugin (`kubectl klens`) bundling ~34
 read-only cluster-inspection shortcuts. Go 1.27, depends on `client-go` (typed
 and dynamic clients), `promptui` (interactive pickers), and `golang.org/x/term`
 (TTY detection). No cobra - dispatch is a hand-rolled flag-based switch.
@@ -53,7 +53,7 @@ Three packages under `internal/`, layered cli → view → kube:
   `cmd.Run` to the redraw loop in `watch.go`, which re-polls into a buffer every
   interval; `TestWatchFlags` locks the watchable set (`pending`, `restarts`,
   `rollouts`, `terminating`, `autoscaler`, `node-conditions`, `svc-backends`,
-  `max-pods`). Global flags (`-n`, `--context`, ...) live once in
+  `max-pods`, `pvc-resize`). Global flags (`-n`, `--context`, ...) live once in
   the `globalFlags` table, which drives both FlagSet registration and the
   `--help` listing so the two can't drift - add a global flag there, not in two
   places. `complete.go`
@@ -85,9 +85,9 @@ Three packages under `internal/`, layered cli → view → kube:
 neither `-n` nor `-A`, the dispatcher resolves the current kubeconfig namespace
 (kubens/kubectx) before running. When `false`, the command lists all namespaces
 by default. The current `CurrentNSDefault` set (`reqlim`, `no-limits`,
-`no-requests`, `images`, `restarts`, `pvc`, `pvc-unused`, `svc-fqdn`,
-`svc-backends`, `ingress`, `secret`, `privileged`, `pdb`, `pending`, `hpa`,
-`spread`, `probes`, `qos`, `rollouts`, `unused-config`) is locked in by
+`no-requests`, `images`, `restarts`, `pvc`, `pvc-unused`, `pvc-resize`,
+`svc-fqdn`, `svc-backends`, `ingress`, `secret`, `privileged`, `pdb`, `pending`,
+`hpa`, `spread`, `probes`, `qos`, `rollouts`, `unused-config`) is locked in by
 `TestCurrentNSDefaultFlags` in `cli_test.go`, which is the authoritative list -
 update that map whenever you change a command's scoping.
 
