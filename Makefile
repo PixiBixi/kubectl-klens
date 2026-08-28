@@ -1,4 +1,4 @@
-.PHONY: help build lint test snapshot clean
+.PHONY: help build lint test bench snapshot clean
 .DEFAULT_GOAL := help
 
 build: ## Build the local kubectl-klens binary
@@ -9,6 +9,9 @@ lint: ## Run golangci-lint (config: .golangci.yml)
 
 test: ## Run tests with the race detector
 	go test -race ./...
+
+bench: ## Run benchmarks (BENCH=<regexp> to filter, COUNT=<n> for benchstat runs)
+	go test -run XXX -bench '$(or $(BENCH),.)' -benchtime $(or $(BENCHTIME),20x) -count $(or $(COUNT),1) ./internal/...
 
 snapshot: ## Build a goreleaser snapshot (dry-run release)
 	goreleaser release --snapshot --clean
