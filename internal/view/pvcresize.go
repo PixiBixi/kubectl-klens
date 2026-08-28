@@ -30,17 +30,12 @@ import (
 func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	var (
 		pvcs    []corev1.PersistentVolumeClaim
-		pods    []corev1.Pod
 		classes []storagev1.StorageClass
 	)
 	ns := f.NamespaceScope()
 	err := allLists(
 		func() (err error) {
 			pvcs, err = kube.ListPersistentVolumeClaims(ctx, c, ns, metav1.ListOptions{})
-			return err
-		},
-		func() (err error) {
-			pods, err = kube.ListPods(ctx, c, ns, metav1.ListOptions{})
 			return err
 		},
 		func() error {
@@ -55,7 +50,6 @@ func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 		return err
 	}
 	expandable := expansionPolicies(classes)
-	mounts := claimMounts(pods)
 	paint := kube.NewPainter(f)
 
 	type entry struct {
@@ -71,6 +65,22 @@ func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 		}
 		list = append(list, entry{p, v, sev})
 	}
+
+	t := kube.NewTable(out, paint, "NS", "PVC", "CAPACITY", "REQUESTED", "CLASS", "POD", "VERDICT")
+	// The pod list is only needed for the POD column, and the usual answer here
+	// is an empty table - so pay for it only once there is a row to fill in.
+	// Listing every pod on a 6500-pod cluster is ~86 MiB and ~3s (see the
+	// measurement in kube/client.go), which is not a price to pay for output
+	// that turns out to be a header line.
+	if len(list) == 0 {
+		return t.Flush()
+	}
+	pods, err := kube.ListPods(ctx, c, ns, metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	mounts := claimMounts(pods)
+
 	// Deterministic tiebreak for rows sharing a verdict; the VERDICT sort applied
 	// at Flush is stable, so this order survives within each verdict.
 	slices.SortStableFunc(list, func(a, b entry) int {
@@ -80,7 +90,6 @@ func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 		)
 	})
 
-	t := kube.NewTable(out, paint, "NS", "PVC", "CAPACITY", "REQUESTED", "CLASS", "POD", "VERDICT")
 	for i := range list {
 		e := &list[i]
 		t.Row(

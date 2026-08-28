@@ -3,6 +3,7 @@ package view
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -168,6 +169,59 @@ func TestPvcResizeIgnoresStaleFalseCondition(t *testing.T) {
 	}}
 	if out := runPvcResize(t, storageClass("expandable", true), p); strings.Contains(out, "settled") {
 		t.Fatalf("a Status=False condition is not an in-flight resize:\n%s", out)
+	}
+}
+
+// listedResources names every resource the run issued a list for. The point is
+// the negative case: the pod list is the expensive one (~86 MiB on a 6500-pod
+// cluster) and it must not be paid for output that is only a header line.
+func listedResources(c *fake.Clientset) []string {
+	var out []string
+	for _, a := range c.Actions() {
+		if a.GetVerb() == "list" {
+			out = append(out, a.GetResource().Resource)
+		}
+	}
+	return out
+}
+
+// TestPvcResizeSkipsPodListWhenEmpty locks the lazy pod list: with nothing to
+// report there is no POD column to fill, so the pod list must not be issued.
+func TestPvcResizeSkipsPodListWhenEmpty(t *testing.T) {
+	c := fake.NewClientset(
+		storageClass("expandable", true),
+		resizingPvc("settled", "app", "expandable", "10Gi", "10Gi"),
+		podMounting("web", "app", "settled"),
+	)
+	var buf bytes.Buffer
+	if err := PvcResize(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(listedResources(c), "pods") {
+		t.Errorf("pods were listed for an empty table: %v", listedResources(c))
+	}
+	if !strings.Contains(buf.String(), "VERDICT") {
+		t.Errorf("the header line is still expected:\n%s", buf.String())
+	}
+}
+
+// TestPvcResizeListsPodsWhenNeeded is the other half: once a row exists the POD
+// column has to be filled, so the list is expected.
+func TestPvcResizeListsPodsWhenNeeded(t *testing.T) {
+	c := fake.NewClientset(
+		storageClass("expandable", true),
+		resizingPvc("asked", "app", "expandable", "150Gi", "180Gi"),
+		podMounting("web", "app", "asked"),
+	)
+	var buf bytes.Buffer
+	if err := PvcResize(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(listedResources(c), "pods") {
+		t.Errorf("pods must be listed to fill the POD column: %v", listedResources(c))
+	}
+	if !strings.Contains(buf.String(), "web") {
+		t.Errorf("output missing the mounting pod:\n%s", buf.String())
 	}
 }
 

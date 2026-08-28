@@ -82,6 +82,18 @@ func benchObjects(pods, pvcs int) []runtime.Object {
 	return objs
 }
 
+// benchSettledObjects is benchObjects with every claim already at its requested
+// size, so pvc-resize filters all of them out.
+func benchSettledObjects(pods, pvcs int) []runtime.Object {
+	objs := benchObjects(pods, pvcs)
+	for _, o := range objs {
+		if pvc, ok := o.(*corev1.PersistentVolumeClaim); ok {
+			pvc.Spec.Resources.Requests = pvc.Status.Capacity
+		}
+	}
+	return objs
+}
+
 type benchRunFunc func(context.Context, kube.Clients, kube.Flags, []string, io.Writer) error
 
 func benchView(b *testing.B, fn benchRunFunc, objs []runtime.Object) {
@@ -98,6 +110,12 @@ func benchView(b *testing.B, fn benchRunFunc, objs []runtime.Object) {
 // PvcResize is the heaviest shape: two full lists joined on the pod side.
 func BenchmarkPvcResize(b *testing.B) {
 	benchView(b, PvcResize, benchObjects(benchPods, benchPods))
+}
+
+// PvcResizeSettled is the nominal case and the one that matters most: no claim
+// is mid-resize, so the table is a header line. It must not cost a pod list.
+func BenchmarkPvcResizeSettled(b *testing.B) {
+	benchView(b, PvcResize, benchSettledObjects(benchPods, benchPods))
 }
 
 // PvcUnused walks three lists (PVCs, pods, StatefulSets).
