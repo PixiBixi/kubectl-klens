@@ -25,6 +25,7 @@ and dynamic clients), `promptui` (interactive pickers), and `golang.org/x/term`
 ```bash
 make build      # go build -ldflags "-s" -o kubectl-klens .
 make test       # go test -race ./...
+make bench      # go test -bench (BENCH=<re> COUNT=<n>); see openwiki/performance.md
 make lint       # golangci-lint run (config: .golangci.yml)
 make snapshot   # goreleaser release --snapshot --clean (dry-run)
 

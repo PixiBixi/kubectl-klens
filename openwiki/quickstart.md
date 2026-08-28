@@ -212,6 +212,7 @@ Load kubectl's own completion first, e.g. `source <(kubectl completion zsh)`.
 ```bash
 make build      # go build -ldflags "-s" -o kubectl-klens .
 make test       # go test -race ./...
+make bench      # go test -bench (BENCH=<re> COUNT=<n> BENCHTIME=<n>)
 make lint       # golangci-lint run (config: .golangci.yml)
 make snapshot   # goreleaser release --snapshot --clean (dry-run)
 
@@ -295,3 +296,6 @@ current too.
   `RunFunc` contract, the paged/pushed-down listing layer, the `Table`/`Painter`
   output mechanics, the shared view helpers, the verdict-command pattern, and a
   step-by-step guide to adding a subcommand.
+- **[performance.md](performance.md)** - where the time actually goes (the
+  apiserver, not Go), how to run and read the benchmarks, the lazy/narrowed list
+  pattern that pays, and the optimisations already measured and rejected.
