@@ -3,6 +3,7 @@ package view
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -186,5 +187,29 @@ func TestIngressColor(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output missing colored %q:\n%q", want, out)
 		}
+	}
+}
+
+// TestIngressSkipsSecondaryListsWhenNoIngress locks the lazy lists: Services and
+// Secrets exist only to check a rule's backend and TLS, so a scope with no
+// ingress must issue neither. Secrets matter most here - the heaviest collection
+// on a cluster, and the one a user is least likely to be allowed to read.
+func TestIngressSkipsSecondaryListsWhenNoIngress(t *testing.T) {
+	c := fake.NewClientset(
+		&corev1.Service{Name: "web", Namespace: "app"},
+		&corev1.Secret{Name: "web-tls", Namespace: "app"},
+	)
+	var buf bytes.Buffer
+	if err := Ingress(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	listed := listedResources(c)
+	for _, unwanted := range []string{"services", "secrets"} {
+		if slices.Contains(listed, unwanted) {
+			t.Errorf("%s listed with no ingress present: %v", unwanted, listed)
+		}
+	}
+	if !slices.Contains(listed, "ingresses") {
+		t.Errorf("ingresses must still be listed: %v", listed)
 	}
 }

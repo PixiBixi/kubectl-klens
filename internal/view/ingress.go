@@ -24,7 +24,6 @@ import (
 // nothing wrong. Rows default to VERDICT (risk) order, riskiest at the bottom.
 func Ingress(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	var (
-		ings    []networkingv1.Ingress
 		svcs    []corev1.Service
 		secrets []corev1.Secret
 		// Reading secrets is a privilege many users are not granted, and the
@@ -33,27 +32,34 @@ func Ingress(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 		secretsKnown = true
 	)
 	ns := f.NamespaceScope()
-	err := allLists(
-		func() (err error) {
-			ings, err = kube.ListIngresses(ctx, c, ns, metav1.ListOptions{})
-			return err
-		},
-		func() (err error) {
-			svcs, err = kube.ListServices(ctx, c, ns, metav1.ListOptions{})
-			return err
-		},
-		func() error {
-			list, err := kube.ListSecrets(ctx, c, ns, metav1.ListOptions{})
-			if apierrors.IsForbidden(err) {
-				secretsKnown = false
-				return nil
-			}
-			secrets = list
-			return err
-		},
-	)
+	ings, err := kube.ListIngresses(ctx, c, ns, metav1.ListOptions{})
 	if err != nil {
 		return err
+	}
+	// Services and Secrets exist only to check an ingress's backend and TLS, so
+	// a scope with no ingress needs neither. Secrets in particular are the
+	// heaviest collection on a cluster (every TLS cert and SA token) and the one
+	// users are least likely to be allowed to read - not a list to issue for a
+	// table that is already known to be empty.
+	if len(ings) > 0 {
+		err = allLists(
+			func() (err error) {
+				svcs, err = kube.ListServices(ctx, c, ns, metav1.ListOptions{})
+				return err
+			},
+			func() error {
+				list, err := kube.ListSecrets(ctx, c, ns, metav1.ListOptions{})
+				if apierrors.IsForbidden(err) {
+					secretsKnown = false
+					return nil
+				}
+				secrets = list
+				return err
+			},
+		)
+		if err != nil {
+			return err
+		}
 	}
 	ports := servicePorts(svcs)
 	haveSecret := make(map[string]bool, len(secrets))

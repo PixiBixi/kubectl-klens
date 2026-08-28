@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -127,6 +128,21 @@ func BenchmarkPvcUnused(b *testing.B) {
 // they stress Table.Row and the sort more than the join.
 func BenchmarkRestarts(b *testing.B) { benchView(b, Restarts, benchObjects(benchPods, 0)) }
 func BenchmarkReqlim(b *testing.B)   { benchView(b, Reqlim, benchObjects(benchPods, 0)) }
+
+// IngressNone is the other lazy-list shape: no ingress in scope, so neither the
+// Service nor the Secret list should be paid for. Secrets dominate the fixture
+// the way they dominate a real cluster.
+func BenchmarkIngressNone(b *testing.B) {
+	objs := make([]runtime.Object, 0, benchPods)
+	for i := range benchPods {
+		objs = append(objs, &corev1.Secret{
+			Name:      "cert-" + strconv.Itoa(i),
+			Namespace: "namespace-" + strconv.Itoa(i%40),
+			Data:      map[string][]byte{"tls.crt": make([]byte, 2048)},
+		})
+	}
+	benchView(b, Ingress, objs)
+}
 
 // Spread aggregates into a map keyed per owner, the other shared shape.
 func BenchmarkSpread(b *testing.B) { benchView(b, Spread, benchObjects(benchPods, 0)) }
