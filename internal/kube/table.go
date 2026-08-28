@@ -18,6 +18,7 @@ type Table struct {
 	rows      [][]string
 	sortCol   string
 	sortRanks map[string]func(string) int
+	arena     []string
 }
 
 // NewTable starts a table with the given painter and header row.
@@ -25,9 +26,21 @@ func NewTable(out io.Writer, p Painter, headers ...string) *Table {
 	return &Table{out: out, painter: p, headers: headers}
 }
 
-// Row appends one data row.
+// rowArena is how many cells each backing block holds. Row copies into a slice
+// of a shared block rather than allocating per row, which on a 20k-row table
+// trades 20k allocations for a few dozen. A row is never appended to after Row
+// returns (Flush and sortRows only read cells and reorder the outer slice), so
+// the blocks can be shared; the three-index slice pins each row's capacity so a
+// future append would copy instead of scribbling on the next row.
+const rowArena = 4096
+
+// Row appends one data row, copying cols so the caller keeps ownership of it.
 func (t *Table) Row(cols ...string) {
-	row := make([]string, len(cols))
+	if len(t.arena) < len(cols) {
+		t.arena = make([]string, max(rowArena, len(cols)))
+	}
+	row := t.arena[:len(cols):len(cols)]
+	t.arena = t.arena[len(cols):]
 	copy(row, cols)
 	t.rows = append(t.rows, row)
 }
@@ -60,23 +73,40 @@ func (t *Table) Flush() error {
 		t.sortRows(idx)
 	}
 	widths := make([]int, len(t.headers))
+	bytes := 0
 	for i, h := range t.headers {
 		widths[i] = visibleWidth(h)
+		bytes += len(h)
 	}
 	for _, r := range t.rows {
 		for i := 0; i < len(widths) && i < len(r); i++ {
+			bytes += len(r[i])
 			if w := visibleWidth(r[i]); w > widths[i] {
 				widths[i] = w
 			}
 		}
 	}
 	var b strings.Builder
+	b.Grow(bytes + (len(t.rows)+1)*(maxPadding(widths)+1))
 	t.writeLine(&b, widths, t.headers, true)
 	for _, r := range t.rows {
 		t.writeLine(&b, widths, r, false)
 	}
 	_, err := io.WriteString(t.out, b.String())
 	return err
+}
+
+// maxPadding bounds the whitespace one line can need: a cell contributes at most
+// its column width plus the gap, when the cell renders empty. Overshooting is
+// the point - Flush uses it to size the Builder in one Grow instead of letting
+// it double its way up, which on a 20k-row table was the single largest
+// allocator in the process.
+func maxPadding(widths []int) int {
+	total := 0
+	for _, w := range widths[:max(0, len(widths)-1)] {
+		total += w + tableGap
+	}
+	return total
 }
 
 // writeLine renders one row, padding each column (except the last) to its width
