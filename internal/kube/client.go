@@ -47,6 +47,18 @@ func restConfig(f Flags) (*rest.Config, error) {
 	// back as application/vnd.kubernetes.protobuf. Setting it explicitly is a
 	// no-op, so there is no protobuf tuning to be had here.
 	//
+	// Turn off client-side rate limiting. client-go defaults a kubeconfig-built
+	// config to QPS 5 / Burst 10, sized for a controller that runs forever, and
+	// the limiter is shared across the concurrent lists a view issues. Paging a
+	// 6500-pod cluster at ChunkSize takes 13 requests: measured against a local
+	// server with no network latency, that is 606ms with the defaults versus
+	// 44ms without, i.e. ~560ms of pure self-inflicted waiting per list.
+	//
+	// Safe because the apiserver does its own admission control (API Priority
+	// and Fairness), a one-shot CLI issues tens of requests and then exits, and
+	// kubectl disables it the same way. See TestNoClientSideThrottling.
+	cfg.QPS = -1
+
 	// Bound the wait on an unresponsive apiserver. Without this a hung control
 	// plane hangs the command indefinitely, since nothing else sets a deadline.
 	cfg.Timeout = f.RequestTimeout
