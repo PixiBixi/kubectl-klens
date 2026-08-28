@@ -6,6 +6,7 @@ import (
 	"io"
 	"slices"
 	"strconv"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +30,8 @@ func Restarts(ctx context.Context, c kube.Clients, f kube.Flags, args []string, 
 		restarts                        int32
 		exit                            int32
 		hasExit                         bool
+		last                            time.Time
+		hasLast                         bool
 	}
 	var list []entry
 	for i := range pods {
@@ -39,7 +42,8 @@ func Restarts(ctx context.Context, c kube.Clients, f kube.Flags, args []string, 
 				continue
 			}
 			exit, hasExit := lastExitCode(cs)
-			list = append(list, entry{p.Namespace, p.Name, cs.Name, pcs.Kind, containerState(cs), cs.RestartCount, exit, hasExit})
+			last, hasLast := lastRestart(cs)
+			list = append(list, entry{p.Namespace, p.Name, cs.Name, pcs.Kind, containerState(cs), cs.RestartCount, exit, hasExit, last, hasLast})
 		}
 	}
 	slices.SortFunc(list, func(a, b entry) int {
@@ -50,10 +54,11 @@ func Restarts(ctx context.Context, c kube.Clients, f kube.Flags, args []string, 
 		)
 	})
 	paint := kube.NewPainter(f)
-	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "KIND", "RESTARTS", "STATE", "EXIT")
+	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "KIND", "RESTARTS", "STATE", "EXIT", "LAST")
 	t.SortRank("EXIT", exitRank)
-	for _, e := range list {
-		t.Row(e.ns, e.pod, e.container, e.kind, paint.Warn(strconv.Itoa(int(e.restarts))), paint.Status(e.state), exitCell(paint, e.exit, e.hasExit))
+	for i := range list {
+		e := &list[i]
+		t.Row(e.ns, e.pod, e.container, e.kind, paint.Warn(strconv.Itoa(int(e.restarts))), paint.Status(e.state), exitCell(paint, e.exit, e.hasExit), lastCell(paint, e.last, e.hasLast))
 	}
 	t.SortBy(f.Sort)
 	return t.Flush()
@@ -71,6 +76,45 @@ func lastExitCode(cs *corev1.ContainerStatus) (int32, bool) {
 		return cs.LastTerminationState.Terminated.ExitCode, true
 	default:
 		return 0, false
+	}
+}
+
+// lastRestart reports when the container last restarted: the start of the
+// current run for a container that came back up, else the end of its most
+// recent termination (the crash itself, for one stuck in CrashLoopBackOff).
+// The bool is false when the kubelet recorded no usable timestamp.
+func lastRestart(cs *corev1.ContainerStatus) (time.Time, bool) {
+	switch {
+	case cs.State.Running != nil && !cs.State.Running.StartedAt.IsZero():
+		return cs.State.Running.StartedAt.Time, true
+	case cs.State.Terminated != nil && !cs.State.Terminated.FinishedAt.IsZero():
+		return cs.State.Terminated.FinishedAt.Time, true
+	case cs.LastTerminationState.Terminated != nil && !cs.LastTerminationState.Terminated.FinishedAt.IsZero():
+		return cs.LastTerminationState.Terminated.FinishedAt.Time, true
+	default:
+		return time.Time{}, false
+	}
+}
+
+// lastRestartLayout is fixed-width and month-first so the LAST column sorts
+// lexically (the muted "-" placeholder sorts ahead of any digit).
+const lastRestartLayout = "01-02 15:04:05"
+
+// lastCell renders the LAST column in local time, colored by how fresh the
+// restart is: red under 15m (still crashing), orange under 2h, green beyond -
+// a container that last restarted days ago has settled.
+func lastCell(paint kube.Painter, t time.Time, ok bool) string {
+	if !ok {
+		return paint.Muted("-")
+	}
+	s := t.Local().Format(lastRestartLayout)
+	switch d := time.Since(t); {
+	case d < 15*time.Minute:
+		return paint.Bad(s)
+	case d < 2*time.Hour:
+		return paint.Warn(s)
+	default:
+		return paint.OK(s)
 	}
 }
 

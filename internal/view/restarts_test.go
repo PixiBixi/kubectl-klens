@@ -5,8 +5,10 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -134,5 +136,46 @@ func TestRestartsColor(t *testing.T) {
 	}
 	if !strings.Contains(out, "\x1b[31mCrashLoopBackOff\x1b[0m") {
 		t.Fatalf("crash reason not red:\n%s", out)
+	}
+}
+
+// TestRestartsLastColumn covers the three sources of the LAST timestamp: the
+// current run's start for a container back up, the last termination for one
+// stuck in CrashLoopBackOff, and the muted placeholder when the kubelet
+// recorded neither.
+func TestRestartsLastColumn(t *testing.T) {
+	back := metav1.NewTime(time.Date(2026, 3, 4, 5, 6, 7, 0, time.Local))
+	crashed := metav1.NewTime(time.Date(2026, 3, 4, 8, 9, 10, 0, time.Local))
+	c := fake.NewClientset(&corev1.Pod{
+		Name: "p", Namespace: "default",
+		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
+			{
+				Name: "backup", RestartCount: 1,
+				State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{StartedAt: back}},
+			},
+			{
+				Name: "looping", RestartCount: 5,
+				State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "CrashLoopBackOff"}},
+				LastTerminationState: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 137, FinishedAt: crashed},
+				},
+			},
+			{Name: "unknown", RestartCount: 2},
+		}},
+	})
+	var buf bytes.Buffer
+	if err := Restarts(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"LAST", "03-04 05:06:07", "03-04 08:09:10"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("want %q in output:\n%s", want, out)
+		}
+	}
+	for line := range strings.SplitSeq(out, "\n") {
+		if strings.Contains(line, "unknown") && !strings.HasSuffix(line, "-") {
+			t.Fatalf("want a muted placeholder for a container with no recorded restart time:\n%s", line)
+		}
 	}
 }

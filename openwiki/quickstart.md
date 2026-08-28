@@ -61,7 +61,8 @@ The authoritative list is the `commands` slice in
   `--configmap=ns/name` flag are not false positives), biggest first, with the
   owning controller named - an object owned by an `ExternalSecret` or a `Kafka`
   CR is reviewed there, not deleted here
-- `restarts` - restarted containers + crash reason + last exit code (137/143 = SIGKILL/SIGTERM)
+- `restarts` - restarted containers + crash reason + last exit code (137/143 =
+  SIGKILL/SIGTERM) + the local time of the last restart (`LAST`)
 - `qos` - QoS class + pod requests/limits totals + eviction-risk verdict
 - `pvc` - PVCs bound to pod + node
 - `pvc-unused` - PVCs no pod mounts (`ORPHAN` is reclaimable, `SCALED-DOWN` a

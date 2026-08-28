@@ -101,7 +101,7 @@ nodes. A public address is yellow, because it is internet-reachable surface.
 | `images` † | image per container per pod |
 | `image-count` | image counts, split registry/image/tag (cluster-wide) |
 | `unused-config` † | ConfigMaps/Secrets nothing references |
-| `restarts` † | restarted containers + crash reason + last exit code |
+| `restarts` † | restarted containers + crash reason + last exit code + last restart time |
 
 ### Storage & networking
 
