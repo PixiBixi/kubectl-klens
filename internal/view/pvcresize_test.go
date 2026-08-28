@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -241,5 +242,61 @@ func TestPvcResizeColor(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output missing colored %q:\n%q", want, out)
 		}
+	}
+}
+
+// TestPvcResizeScopesPodListToAffectedNamespaces locks the namespace narrowing:
+// with one claim resizing in one namespace, the pod list must be scoped to that
+// namespace rather than sweeping the cluster.
+func TestPvcResizeScopesPodListToAffectedNamespaces(t *testing.T) {
+	c := fake.NewClientset(
+		storageClass("expandable", true),
+		resizingPvc("asked", "app", "expandable", "150Gi", "180Gi"),
+		resizingPvc("settled", "other", "expandable", "10Gi", "10Gi"),
+		podMounting("web", "app", "asked"),
+		podMounting("noise", "other", "settled"),
+	)
+	var buf bytes.Buffer
+	if err := PvcResize(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	var scopes []string
+	for _, a := range c.Actions() {
+		if a.GetVerb() == "list" && a.GetResource().Resource == "pods" {
+			scopes = append(scopes, a.GetNamespace())
+		}
+	}
+	if !slices.Equal(scopes, []string{"app"}) {
+		t.Errorf("pod lists scoped to %v, want [app] only", scopes)
+	}
+	if !strings.Contains(buf.String(), "web") {
+		t.Errorf("output missing the mounting pod:\n%s", buf.String())
+	}
+}
+
+// TestPvcResizeFallsBackToOneListPastFanout: past maxNamespaceFanout distinct
+// namespaces the per-namespace round trips stop paying, so it reverts to a
+// single cluster-wide list.
+func TestPvcResizeFallsBackToOneListPastFanout(t *testing.T) {
+	objs := []runtime.Object{storageClass("expandable", true)}
+	for i := range maxNamespaceFanout + 1 {
+		objs = append(objs, resizingPvc("asked", "ns-"+strconv.Itoa(i), "expandable", "150Gi", "180Gi"))
+	}
+	c := fake.NewClientset(objs...)
+	var buf bytes.Buffer
+	if err := PvcResize(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	lists := 0
+	for _, a := range c.Actions() {
+		if a.GetVerb() == "list" && a.GetResource().Resource == "pods" {
+			lists++
+			if a.GetNamespace() != "" {
+				t.Errorf("pod list scoped to %q, want cluster-wide", a.GetNamespace())
+			}
+		}
+	}
+	if lists != 1 {
+		t.Errorf("issued %d pod lists, want 1 cluster-wide", lists)
 	}
 }

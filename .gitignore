@@ -3,3 +3,5 @@
 *.tar.gz
 checksums.txt
 .claude
+*.test
+*.prof

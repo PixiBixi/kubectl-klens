@@ -119,6 +119,25 @@ func BenchmarkPvcResizeSettled(b *testing.B) {
 	benchView(b, PvcResize, benchSettledObjects(benchPods, benchPods))
 }
 
+// PvcResizeFewRows is the realistic non-empty shape: a couple of claims resizing
+// in one namespace out of forty. The POD column then only needs that namespace's
+// pods, not the cluster's.
+func BenchmarkPvcResizeFewRows(b *testing.B) {
+	objs := benchSettledObjects(benchPods, benchPods)
+	resizing := 0
+	for _, o := range objs {
+		pvc, ok := o.(*corev1.PersistentVolumeClaim)
+		if !ok || pvc.Namespace != "namespace-0" || resizing == 3 {
+			continue
+		}
+		pvc.Spec.Resources.Requests = corev1.ResourceList{
+			corev1.ResourceStorage: resource.MustParse("180Gi"),
+		}
+		resizing++
+	}
+	benchView(b, PvcResize, objs)
+}
+
 // PvcUnused walks three lists (PVCs, pods, StatefulSets).
 func BenchmarkPvcUnused(b *testing.B) {
 	benchView(b, PvcUnused, benchObjects(benchPods, benchPods))

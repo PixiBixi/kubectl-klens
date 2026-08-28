@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 
@@ -75,7 +76,11 @@ func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 	if len(list) == 0 {
 		return t.Flush()
 	}
-	pods, err := kube.ListPods(ctx, c, ns, metav1.ListOptions{})
+	inNamespace := make(map[string]bool, len(list))
+	for i := range list {
+		inNamespace[list[i].pvc.Namespace] = true
+	}
+	pods, err := podsForClaims(ctx, c, ns, inNamespace)
 	if err != nil {
 		return err
 	}
@@ -107,6 +112,35 @@ func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 	))
 	t.SortBy(orDefault(f.Sort, "verdict"))
 	return t.Flush()
+}
+
+// maxNamespaceFanout caps how many per-namespace pod lists podsForClaims issues
+// before falling back to a single cluster-wide one. Past a handful the extra
+// round trips cost more than the bytes they save.
+const maxNamespaceFanout = 8
+
+// podsForClaims lists pods only where the rows are. The rows are the few claims
+// mid-resize, normally in one or two namespaces out of hundreds, so filling a
+// handful of POD cells does not justify the cluster-wide pod list (~86 MiB and
+// ~3s on a 6500-pod cluster, per the measurement in kube/client.go).
+func podsForClaims(ctx context.Context, c kube.Clients, scope string, namespaces map[string]bool) ([]corev1.Pod, error) {
+	// Already narrowed to one namespace, or too many to be worth fanning out.
+	if scope != "" || len(namespaces) > maxNamespaceFanout {
+		return kube.ListPods(ctx, c, scope, metav1.ListOptions{})
+	}
+	names := slices.Sorted(maps.Keys(namespaces))
+	perNamespace := make([][]corev1.Pod, len(names))
+	fns := make([]func() error, len(names))
+	for i, name := range names {
+		fns[i] = func() (err error) {
+			perNamespace[i], err = kube.ListPods(ctx, c, name, metav1.ListOptions{})
+			return err
+		}
+	}
+	if err := allLists(fns...); err != nil {
+		return nil, err
+	}
+	return slices.Concat(perNamespace...), nil
 }
 
 // resizeVerdict grades a claim's resize state, returning "" for one that has
