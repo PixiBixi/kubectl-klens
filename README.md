@@ -1,10 +1,14 @@
 # kubectl-klens
 
 A kubectl plugin for quick, read-only cluster inspection. One dispatcher,
-~25 shortcuts.
+~34 shortcuts.
 
 Commands accept their singular or plural form interchangeably (`kubectl klens
 image` ≡ `kubectl klens images`, `node` ≡ `nodes`, ...).
+
+Why each verdict says what it says is documented in
+[openwiki/quickstart.md](openwiki/quickstart.md); the internals are in
+[openwiki/architecture.md](openwiki/architecture.md).
 
 ## Install
 
@@ -17,16 +21,14 @@ kubectl krew upgrade klens   # later, to update
 ```
 
 Or download a release archive, extract `kubectl-klens` onto your `PATH`, and
-invoke it as `kubectl klens`.
-
-The darwin binaries require macOS 13 Ventura or later (Go 1.27 toolchain
-minimum).
+invoke it as `kubectl klens`. The darwin binaries require macOS 13 Ventura or
+later (Go 1.27 toolchain minimum).
 
 ## Commands
 
 `†` = defaults to the current kubeconfig namespace (kubens/kubectx); `-A` widens
 to all namespaces, `-n <ns>` targets one. All other commands are node- or
-cluster-scoped. See [Namespace scope](#namespace-scope) for details.
+cluster-scoped. See [Namespace scope](#namespace-scope).
 
 ### Nodes & capacity
 
@@ -41,6 +43,7 @@ cluster-scoped. See [Namespace scope](#namespace-scope) for details.
 | `max-pods` | pod ceiling, non-terminated count, free slots per node |
 | `node-conditions` | node readiness + memory/disk/pid pressure |
 | `on-node <node>` | pods on a node |
+| `autoscaler` | cluster-autoscaler summary + per-nodegroup table (always `kube-system`) |
 
 `nodes` reads its `NODEPOOL`, `CLASS` and `PROVISIONING` columns from provider
 labels, so the same command works on GKE, EKS (managed node groups and
@@ -49,46 +52,18 @@ Karpenter) and AKS:
 | Column | Labels read |
 | --- | --- |
 | `NODEPOOL` | `cloud.google.com/gke-nodepool`, `eks.amazonaws.com/nodegroup`, `karpenter.sh/nodepool`, `kubernetes.azure.com/agentpool` |
-| `CLASS` | `cloud.google.com/compute-class` (GKE Autopilot classes and custom ComputeClasses) |
+| `CLASS` | `cloud.google.com/compute-class` (GKE-only by design; `<none>` elsewhere) |
 | `PROVISIONING` | `cloud.google.com/gke-spot`, `cloud.google.com/gke-preemptible`, `cloud.google.com/gke-provisioning`, `eks.amazonaws.com/capacityType`, `karpenter.sh/capacity-type`, `kubernetes.azure.com/priority`, `kubernetes.azure.com/scalesetpriority` |
 
 `PROVISIONING` is normalized to one vocabulary whatever the cloud
-(`spot`/`on-demand`/`preemptible`/`capacity-block`/`reserved`), so `SPOT` and
-`ON_DEMAND` from EKS do not read differently from GKE's booleans. The column is
-not named `CAPACITY` on purpose: `capacity` is already a klens command (CPU/mem)
-and already a `pvc-unused` column (volume size), so `--sort capacity` would have
-read as "sort by size". Two caveats worth knowing:
+(`spot`/`on-demand`/`preemptible`/`capacity-block`/`reserved`). `on-demand` is an
+inference (no cloud labels it): a node carrying labels from a known provider
+namespace but no provisioning label is on-demand, anything else shows `<none>`
+rather than a guess.
 
-- **`on-demand` is an inference**, not a label read: no cloud writes a
-  "this is on-demand" label. When no provisioning label matches but the node
-  carries other labels from a known provider namespace (`cloud.google.com/`,
-  `eks.amazonaws.com/`, `karpenter.sh/`, `kubernetes.azure.com/`), the node is
-  on-demand. A node from anywhere else (on-prem, another cloud) shows `<none>`
-  rather than a guess.
-- **`CLASS` is GKE-only** by design: AWS and Azure expose no equivalent, and
-  folding an instance family or a pool name in there would duplicate
-  `INSTANCE-TYPE`/`NODEPOOL` and misname it. Non-GKE nodes show `<none>`.
-
-On AKS, `kubernetes.azure.com/scalesetpriority` is deprecated in favor of
-`kubernetes.azure.com/priority`; both are read, `priority` first.
-
-The `STATUS` column of `nodes` and `node-conditions` separates the two ways a
-node can be unhealthy: `NotReady` is a kubelet that is answering and reporting
-itself unready, while `Unknown` is a kubelet that has **stopped reporting
-altogether** - the state that starts the eviction clock once the `unreachable`
-toleration expires. Both are red.
-
-`node-ips` reads `.status.addresses` - the data you would otherwise dig out with
-a `-o jsonpath` filter on `@.type=="ExternalIP"` - and reports the internal
-address next to it. Passing a node name (`kubectl klens node-ips <node>`) narrows
-the listing to that node; the filter is a `metadata.name` field selector, so the
-apiserver returns that one node instead of the whole fleet, and an unknown name
-is an error rather than an empty table. A dual-stack node shows both of its
-addresses comma-joined (`10.0.0.4,fd00::4`). Color reads the two columns
-differently: a missing
-`INTERNAL-IP` is red (the control plane has no route to that kubelet), while a
-missing `EXTERNAL-IP` is a muted `<none>` - the normal, wanted state on private
-nodes. A public address is yellow, because it is internet-reachable surface.
+In `nodes` and `node-conditions`, `NotReady` is a kubelet reporting itself
+unready while `Unknown` is a kubelet that stopped reporting altogether, which
+starts the eviction clock. Both are red.
 
 ### Workloads & resources
 
@@ -103,6 +78,17 @@ nodes. A public address is yellow, because it is internet-reachable surface.
 | `unused-config` † | ConfigMaps/Secrets nothing references |
 | `restarts` † | restarted containers + crash reason + last exit code + last restart time |
 
+`unused-config` scans pod *templates* as well as live pods (volumes,
+`env.valueFrom`, `envFrom`, `imagePullSecrets`, CSI secrets, ServiceAccount
+secrets, Ingress TLS, container args), skips what the platform owns
+(`kube-root-ca.crt`, SA tokens, Helm history, label-selected Grafana dashboards)
+and names the owning controller. It cannot see an object a controller reads by
+fixed name, so read it as a review queue, not a delete script.
+
+`reqlim`, `no-limits`, `no-requests`, `probes`, `qos` and `unused-config` drop
+kube-system from the `-A` view only; an explicit `-n kube-system` still returns
+its rows.
+
 ### Storage & networking
 
 | Command | Shows |
@@ -114,49 +100,18 @@ nodes. A public address is yellow, because it is internet-reachable surface.
 | `svc-backends` † | services + the pods behind them + wiring verdict |
 | `ingress` † | ingress rules flattened + backend/TLS checks |
 
-`pvc-unused` is the FinOps counterpart of `pvc`: disks that are provisioned and
-billed with nothing reading or writing them. A cloud-side audit cannot find
-these - the disk is attached to a live PV that a live PVC references, so the
-provider sees it as in use; only joining on the pod side shows nothing mounts
-it. `ORPHAN` is the one to reclaim (no pod, no owner that could mount it again),
-`SCALED-DOWN` is a StatefulSet leftover that scaling back up would reuse, and
-`STS-RESERVED` is a slot inside the set's replica count whose pod is expected
-back. A claim held by a pod that is still terminating counts as in use.
+`pvc-unused` is the FinOps counterpart of `pvc`: a cloud-side audit sees these
+disks as in use, only joining on the pod side shows nothing mounts them.
+`ORPHAN` is the one to reclaim.
 
-`pvc-resize` answers "did my expansion actually land". `kubectl get pvc` prints
-`status.capacity` alone, so a resize that never left the ground looks exactly
-like one that finished. A bigger `spec.resources.requests` is only a *request*:
-the StorageClass has to allow expansion (`SC-NO-EXPAND` when it does not - the
-request then sits there forever and only a new PVC gets you out), the
-provisioner has to accept the size (`INFEASIBLE` past a disk type's ceiling),
-and a filesystem volume then needs its node to remount it (`FS-PENDING`, where
-the `POD` column names the one to restart). `SHRINK` is the reverse trap:
-Kubernetes cannot shrink a claim, so lowering the number is a silent no-op that
-leaves the two sizes disagreeing for good. Claims already at their requested
-size are not listed - an empty table means nothing is in flight or stuck.
+`pvc-resize` answers "did my expansion land": `kubectl get pvc` prints
+`status.capacity` alone, so a resize that never started looks like one that
+finished. Claims already at their requested size are not listed.
 
-`svc-backends` answers "is anything actually behind this service": it counts
-the ready and not-ready endpoints per service from its EndpointSlices, so a
-mistyped label (`NO-PODS`) or a workload whose pods all fail readiness
-(`NO-READY`) reads as a fault instead of an empty `get endpoints`. The
-`SELECTOR` column is spelled out only on a `NO-PODS` row, where the typo is
-what you came to read; elsewhere it is a label count, because the usual Helm
-selector (three `app.kubernetes.io` keys repeating one value) spends 110
-columns saying nothing and wraps the row. A selector-less service is `UNWIRED`
-when nothing filled its endpoints in and `MANUAL` when another controller did;
-`ExternalName` is a DNS alias and stays muted. Endpoints are counted per pod,
-so a dual-stack service (one EndpointSlice per address family) is not
-double-counted.
-
-`ingress` flattens every rule to one row per host+path and checks it against the
-cluster: that the backend service exists (`NO-SERVICE`) and exposes the port the
-rule names (`NO-PORT`, by number or by name), and that the host is covered by a
-TLS block whose secret is actually there (`NO-SECRET` - the controller falls back
-to its own certificate, so browsers see a name mismatch while `get ing` looks
-fine). A host on plaintext only is `NO-TLS`. Wildcard certificates cover one
-label, as TLS name matching does. Reading secrets is a privilege many users lack:
-a refused secret list downgrades the `TLS` column to an unverified (muted) name
-rather than failing the command.
+`svc-backends` counts ready/not-ready endpoints per service from its
+EndpointSlices, so a mistyped selector (`NO-PODS`) reads as a fault instead of
+an empty `get endpoints`. `ingress` flattens every rule to one row per
+host+path and checks the backend service, its port, and the TLS secret.
 
 ### Security
 
@@ -177,77 +132,8 @@ rather than failing the command.
 | `terminating` | pods/namespaces stuck being deleted + blocker |
 | `rollouts` † | workloads not finished rolling out (+ Argo Rollouts) |
 
-`unused-config` lists ConfigMaps and Secrets nothing points at. The reference
-scan is the whole value of it, so it reads **pod templates** as well as live
-pods (a CronJob between runs and a workload scaled to zero own no pods, and
-calling their config unused would be wrong), covering volumes (projected sources
-included), `env.valueFrom`, `envFrom`, `imagePullSecrets`, CSI node-publish
-secrets, the secrets a ServiceAccount holds, Ingress TLS certificates, and names
-cited in a container's `args`/`command` (the `--configmap=ns/name` flag several
-ingress controllers take). Argument matching is on whole tokens, never
-substrings: a Secret named `operator` must not be considered referenced by any
-flag containing the word.
-
-It leaves out what the platform owns: the `kube-root-ca.crt` ConfigMap,
-`kubernetes.io/service-account-token` secrets, `helm.sh/release.v1` release
-history, and what a sidecar loads by label selector rather than by name
-(`grafana_dashboard`, `grafana_datasource`, `grafana_alert`, `grafana_folder`),
-which on any kube-prometheus-stack is dozens of dashboards no pod references.
-
-The `OWNER` column is the actionable part when a controller created the object:
-deleting a Secret an `ExternalSecret` owns just has it recreated a minute later,
-so the row is telling you to review the `ExternalSecret`. Rows are biggest first,
-since size is what decides which leftover to delete. It skips kube-system in the
-`-A` view.
-
-What it cannot see is an object a controller reads **by fixed name** through the
-API, or one an app writes to itself: an `argo-rollouts-config`, an operator's
-own state secret, a `metricsConfig` a `Kafka` CR points at. Those stay on the
-list, so read it as a review queue, not a delete script.
-
-`qos` rolls the per-container view up to the pod: it prints the class the
-apiserver assigned (`Guaranteed`/`Burstable`/`BestEffort`) next to what the pod
-actually reserves in steady state - app containers plus native sidecars (init
-containers with `restartPolicy: Always`), since a plain init container's spike
-ends before the pod is up. The verdict adds what the class alone hides: a
-`Burstable` pod with **no memory request** (`NO-MEM-FLOOR`) is ranked with the
-`BestEffort` ones when the kubelet starts evicting on memory pressure, however
-small its real footprint. It skips kube-system in the `-A` view, like `reqlim`
-and `no-limits`.
-
-`probes` skips kube-system in the `-A` view, like `reqlim` and `no-limits`.
-
-`rollouts` answers "is everything finished deploying": one row per Deployment,
-StatefulSet, DaemonSet and - when the CRD is installed - Argo Rollout, with the
-desired/ready/updated/available counts and a verdict. `STALLED` is the one to
-look for: a Deployment whose `Progressing` condition went `False`
-(`ProgressDeadlineExceeded`) or a Rollout Argo called `Degraded` will not
-recover on its own. `NOT-OBSERVED` means the controller has not acted on the
-current spec yet, which points at a wedged or missing controller rather than at
-the workload. For a canary the `STATE` column carries the step it sits on
-(`Paused 2/5`).
-
-`terminating` is `pending` at the other end of a resource's life: everything
-carrying a `deletionTimestamp` that is still there, plus namespaces in the
-`Terminating` phase, with the blocker named. The three that matter are a
-finalizer nobody will clear, a node whose kubelet stopped answering (the pod
-cannot be confirmed dead, so it hangs until force-deleted), and, for a
-namespace, the condition the controller records and `get ns` never prints
-(`NamespaceContentRemaining`, `NamespaceFinalizersRemaining`,
-`NamespaceDeletionDiscoveryFailure`). A deletion inside its grace period is
-`GRACE`; past five minutes it is `STUCK`, which is well beyond any sane
-`terminationGracePeriodSeconds`. Cluster-wide by default, since a stuck
-namespace is not scoped to one.
-
-Argo Rollouts are read through the dynamic client. A cluster without the CRD, or
-a user without RBAC on it, gets the three built-in kinds and no `Rollout` rows -
-not an error, since that is the normal case on most clusters.
-
-### Cluster autoscaler
-
-| Command | Shows |
-| --- | --- |
-| `autoscaler` | cluster-wide summary + per-nodegroup table |
+Argo Rollouts are read through the dynamic client: no CRD or no RBAC on it gets
+you the three built-in kinds and no `Rollout` rows, not an error.
 
 ### Secrets
 
@@ -258,10 +144,8 @@ not an error, since that is the normal case on most clusters.
 | `secret <name> <key>` | decode and print one key's value |
 | `secret <name> all` | decode and print all keys |
 
-`secret` opens interactive pickers when run in a terminal; when piped (script,
-CI) it falls back to plain listings (`secret` lists secrets, `secret <name>`
-lists keys). In a picker, press `/` to filter as you type. A secret with a
-single key skips the key picker and decodes that key directly.
+Pickers only in a terminal; piped (script, CI) it falls back to plain listings.
+In a picker, `/` filters as you type. A single-key secret skips the key picker.
 
 ## Flags
 
@@ -269,33 +153,17 @@ single key skips the key picker and decodes that key directly.
 `--request-timeout`, `--version`.
 
 `--request-timeout` bounds each apiserver request (default `1m0s`) so an
-unresponsive control plane can't hang the command forever. It is a safety net,
-not a budget: the heaviest command measured on a 6500-pod cluster takes about
-four seconds. Pass `--request-timeout=0` to remove the bound; if you hit it, the
-error names the flag.
-
-`--sort`, `-w/--watch` and `--interval` are per-command flags, registered only on
-the commands that accept them; `<TAB>` lists what a given command takes.
-
-`Ctrl-C` cancels in-flight requests and exits `130`, so a cluster-wide listing
-stops as soon as you ask rather than running to completion first. Under
-`--watch` it is the normal way out and exits `0`.
+unresponsive control plane can't hang the command forever; `--request-timeout=0`
+removes the bound. `--sort`, `-w/--watch` and `--interval` are per-command flags
+(`<TAB>` lists what a given command takes). `Ctrl-C` cancels in-flight requests
+and exits `130`, or `0` under `--watch`.
 
 ## Namespace scope
 
-The `†` commands above default to the current kubeconfig namespace (the one set
-by kubens/kubectx); `-A` widens to all namespaces and `-n` targets a specific
-one. The other pod-scoped commands (including `image-count`) default to all
-namespaces.
-
-`autoscaler` always reads from `kube-system` and ignores namespace flags. It
-renders the cluster-autoscaler status (both the structured-YAML format from
-CA 1.30+ and the older legacy text) into a cluster-wide summary plus a
-per-nodegroup table, falling back to the raw status when neither format is
-recognized. The table's `LAST-CHANGE` column shows each nodegroup's most recent
-`lastTransitionTime` (across its health/scale-up/scale-down conditions), so a
-recent scaling event is easy to spot - it is only populated from the
-structured-YAML format.
+The `†` commands default to the current kubeconfig namespace (kubens/kubectx);
+`-A` widens to all namespaces and `-n` targets one. The other pod-scoped
+commands (including `image-count`) default to all namespaces. `autoscaler`
+always reads `kube-system` and ignores namespace flags.
 
 ## Container kinds
 
@@ -309,14 +177,11 @@ a `KIND` column:
 | `init` | a `spec.initContainers` entry (including native sidecars) |
 | `eph` | an ephemeral debug container (`kubectl debug`) |
 
-This matters because init containers are not second-class: their requests count
-toward the pod's scheduling footprint and toward `ResourceQuota`, their images
-are pulled and executed on the node, a privileged one escalates exactly as far
-as an app container, and one looping in `CrashLoopBackOff` wedges the whole pod.
-Rows are emitted in startup order (init, then app, then ephemeral) and the
-container name is printed verbatim, so it can be pasted straight into
-`kubectl logs -c <name>`. `--sort kind` groups by role. `image-count` folds all
-three kinds into its totals (it has no per-container column).
+Init containers are not second-class: their requests count toward scheduling and
+`ResourceQuota`, a privileged one escalates as far as an app container, and one
+in `CrashLoopBackOff` wedges the pod. Rows come in startup order and the name is
+printed verbatim, pastable into `kubectl logs -c <name>`. `--sort kind` groups
+by role.
 
 ## Security flags
 
@@ -333,36 +198,26 @@ three kinds into its totals (it has no per-container column).
 | `hostNetwork`, `hostPID`, `hostIPC` | pod sharing that host namespace |
 | `hostPath` | pod mounting a host directory |
 
-`privesc-default` is only ever reported **alongside** another finding, never on
-its own: nearly every container in a normal cluster leaves the field unset, so
-triggering a row on it would bury the real findings instead of surfacing them.
+`privesc-default` is only ever reported **alongside** another finding: nearly
+every container leaves the field unset, so triggering a row on it would bury the
+real findings.
 
 ## Sorting
 
-Most table commands accept `--sort <column>` to order rows by one of their
-columns (e.g. `kubectl klens zones --sort region`, `kubectl klens nodes --sort
-nodepool`). Sorting is ascending, with numeric columns ordered by value.
-`<TAB>` completes the valid column names per command.
+Most table commands accept `--sort <column>` (e.g. `kubectl klens nodes --sort
+nodepool`). Sorting is ascending, numeric columns by value; `<TAB>` completes
+the valid names per command.
 
-Defaults that differ from ascending:
-
-- `image-count` and `restarts` - count-descending.
-- `autoscaler` - `LAST-CHANGE` descending (most recently changed nodegroup
-  first). Sortable columns: `nodegroup|health|ready|target|min|max|scaleup|scaledown|last-change`.
-- Verdict commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`,
-  `rollouts`, `ingress`, `terminating`, `pvc-unused`, `pvc-resize`) - `VERDICT`
-  by severity
-  (least-risky first), so the riskiest rows land at the bottom, nearest the
-  prompt.
-
-Pass `--sort <column>` to override any of these. `image-count` sortable columns:
-`count|registry|image|tag`.
+Defaults that differ: `image-count` and `restarts` sort count-descending,
+`autoscaler` by `LAST-CHANGE` descending, and verdict commands (`pdb`, `hpa`,
+`spread`, `probes`, `qos`, `svc-backends`, `rollouts`, `ingress`, `terminating`,
+`pvc-unused`, `pvc-resize`) by `VERDICT` severity least-risky first, so the
+riskiest rows land nearest the prompt.
 
 ## Watch
 
 Nine commands accept `-w/--watch`, which re-runs them every `--interval`
-(default `2s`, floor `1s`) and redraws the screen, with a status line above the
-table:
+(default `2s`, floor `1s`) and redraws the screen:
 
 ```console
 $ kubectl klens pending -A --watch
@@ -372,32 +227,16 @@ NS     POD             REASON
 prod   api-7f9c-x2k    Insufficient cpu
 ```
 
-| Command | What you are waiting for |
-| --- | --- |
-| `pending` | the scheduler placing a pod, usually a node arriving |
-| `restarts` | a container settling down, or not |
-| `rollouts` | a deployment finishing, or wedging |
-| `terminating` | a stuck pod or namespace releasing its finalizers |
-| `autoscaler` | a scale-up or scale-down in flight |
-| `node-conditions` | a node going into pressure |
-| `svc-backends` | endpoints flipping ready/notready during a rollout |
-| `max-pods` | pod slots filling up as a nodepool grows |
-| `pvc-resize` | an expansion working through the resize state machine |
+`pending`, `restarts`, `rollouts`, `terminating`, `autoscaler`,
+`node-conditions`, `svc-backends`, `max-pods`, `pvc-resize`.
 
-Notes:
-
-- It is a re-poll, not a Kubernetes watch stream: every tick re-runs the whole
-  command. The interval floor exists because the heaviest command takes about
-  four seconds on a 6500-pod cluster.
-- A failed poll prints its error and the loop keeps going: a transient `503` is
-  not a reason to drop you out of a watch you are using to follow a rollout.
-- `Ctrl-C` stops it, exits `0`, and leaves the last frame on screen.
-- It needs a terminal. Piped or redirected, `--watch` is refused rather than
-  filling the file with clear-screen escapes.
+It is a re-poll, not a Kubernetes watch stream (the interval floor exists
+because the heaviest command takes about four seconds on a 6500-pod cluster). A
+failed poll prints its error and the loop keeps going. `Ctrl-C` stops it, exits
+`0` and leaves the last frame on screen. Piped or redirected, `--watch` is
+refused rather than filling the file with escape codes.
 
 ## Color
-
-klens colorizes its tables:
 
 | Color | Meaning |
 | --- | --- |
@@ -423,50 +262,33 @@ Verdict coloring per command:
 | `pvc-unused` | - | `STS-RESERVED`/`SCALED-DOWN` | `ORPHAN`/`LOST` | `UNBOUND` |
 | `pvc-resize` | - | `PENDING`/`RESIZING`/`FS-PENDING`/`SHRINK` | `FAILED`/`INFEASIBLE`/`SC-NO-EXPAND` | - |
 
-- `pdb` also colors its `ALLOWED` count: red at 0, yellow at 1, green above.
-- `svc-backends` colors `READY` red at 0 and green above, and `NOTREADY` green at
-  0, yellow above.
-- `rollouts` colors its `READY`/`UPDATED`/`AVAILABLE` counts against `DESIRED`:
-  green at full count, red at zero, yellow in between.
-- `probes` colors each probe cell by handler type (`http`/`grpc`/`tcp`/`exec`)
-  green when set, a muted `-` when absent.
+Count columns are colored against their target too (`pdb` `ALLOWED`,
+`svc-backends` `READY`/`NOTREADY`, `rollouts` `READY`/`UPDATED`/`AVAILABLE`);
+`probes` colors each probe cell by handler type (`http`/`grpc`/`tcp`/`exec`).
 
 Control it with `--color=auto|always|never` (default `auto`, which colors only
 when stdout is a terminal). `NO_COLOR` disables color; `KLENS_COLOR` sets the
-default via the environment.
-
-**Under kubecolor** (`alias kubectl=kubecolor`) klens' stdout is a pipe, so
-`auto` turns color off. kubecolor passes plugin output through unchanged, so
-klens' own colors survive - force them on with `--color=always` or
-`export KLENS_COLOR=always`.
+default via the environment. **Under kubecolor** klens' stdout is a pipe, so
+`auto` turns color off; force it with `--color=always`.
 
 ## Shell completion
 
 `kubectl klens <TAB>` uses kubectl's plugin-completion mechanism (kubectl 1.26+):
-kubectl looks for an executable `kubectl_complete-klens` on your `PATH` and asks
-it for candidates. This repo ships that shim
-(`completion/kubectl_complete-klens`), a one-liner that forwards to the plugin's
-hidden `__complete` command. Load kubectl's own completion first (e.g.
-`source <(kubectl completion zsh)`).
-
-**Easiest** - let klens drop the shim for you. It writes `kubectl_complete-klens`
-into krew's bin dir (already on your `PATH`), or pass `--dir` to target another
-directory on your `PATH`:
+kubectl looks for an executable `kubectl_complete-klens` on your `PATH`. Load
+kubectl's own completion first (e.g. `source <(kubectl completion zsh)`), then
+let klens drop the shim into krew's bin dir:
 
 ```bash
 kubectl klens completion install
 kubectl klens completion install --dir /usr/local/bin   # non-krew install
 ```
 
-**Standalone** - drop both executables on your `PATH` (from the extracted
-archive):
+Standalone, drop both executables from the extracted archive on your `PATH`:
 
 ```bash
 install -m 0755 kubectl-klens /usr/local/bin/
 install -m 0755 completion/kubectl_complete-klens /usr/local/bin/
 ```
-
-Then `kubectl klens <TAB>` completes subcommands and flags.
 
 ## Development
 
