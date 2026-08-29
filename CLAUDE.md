@@ -145,7 +145,7 @@ goreleaser builds cross-platform archives and pushes the regenerated
 `plugins/klens.yaml` to the central
 [PixiBixi/krew-index](https://github.com/PixiBixi/krew-index) repo (via the `krews`
 publisher, using the `KREW_INDEX_TOKEN` PAT secret for the cross-repo push). That
-is how users `kubectl krew upgrade pixibixi/klens`. Version/commit/date are
+is how users `kubectl krew upgrade klens`. Version/commit/date are
 injected via `-X main.version=...` ldflags.
 
 Renovate drives the version bumps: `renovate.json` maps minor Go-module updates to
