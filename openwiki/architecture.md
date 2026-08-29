@@ -282,7 +282,10 @@ mapping in three ordered tables - `nodePoolLabels`, `computeClassLabels`,
 `nodeProvisioning` (first key whose *value* is recognised wins). Order is the
 whole design, so append rather than reorder: GKE's boolean `gke-spot` /
 `gke-preemptible` are checked before `gke-provisioning`, which only exists on
-GKE 1.25.5+ nodes.
+GKE 1.25.5+ nodes, and on AKS `kubernetes.azure.com/priority` comes before the
+deprecated `kubernetes.azure.com/scalesetpriority` (which maps `spot` only - a
+regular AKS node carries no priority label and reaches `on-demand` through the
+inference below).
 
 Three rules the tables encode, worth keeping when adding a cloud:
 

@@ -43,13 +43,21 @@ The authoritative list is the `commands` slice in
 - `taints` - taints per node
 - `capacity` - CPU/mem capacity + allocatable per node
 - `zones` - region/zone per node
-- `node-ips [node]` - internal + external IP per node, or for a single node
-  (`<none>` when a node has no public address)
+- `node-ips [node]` - internal + external IP per node, or for a single node. The
+  two columns read differently on purpose: a missing `INTERNAL-IP` is red (the
+  control plane has no route to that kubelet), a missing `EXTERNAL-IP` is a muted
+  `<none>` (the wanted state on private nodes), and a public address is yellow
+  because it is internet-reachable surface. A dual-stack node shows both of its
+  addresses comma-joined (`10.0.0.4,fd00::4`)
 - `pods-per-node` - pod count per node
 - `max-pods` - pod ceiling (allocatable), current count, free slots per node
 - `node-conditions` - readiness + memory/disk/pid pressure
 - `on-node <node>` - pods scheduled on a given node
-- `autoscaler` - cluster-autoscaler status (always reads `kube-system`)
+- `autoscaler` - cluster-autoscaler status (always reads `kube-system`), rendered
+  from the structured-YAML status (CA 1.30+) or the older legacy text, falling
+  back to the raw value when neither parses. `LAST-CHANGE` is the nodegroup's most
+  recent condition `lastTransitionTime` and is populated **only** by the
+  structured format - it stays empty against a legacy-format autoscaler
 
 **Workload hygiene (namespace-scoped)**
 - `reqlim` - requests/limits per container
@@ -65,11 +73,18 @@ The authoritative list is the `commands` slice in
   SIGKILL/SIGTERM) + the local time of the last restart (`LAST`)
 - `qos` - QoS class + pod requests/limits totals + eviction-risk verdict
 - `pvc` - PVCs bound to pod + node
-- `pvc-unused` - PVCs no pod mounts (`ORPHAN` is reclaimable, `SCALED-DOWN` a
-  StatefulSet leftover), with capacity and storage class
+- `pvc-unused` - PVCs no pod mounts, with capacity and storage class. `ORPHAN` is
+  the reclaimable one (no pod, no owner that could mount it again),
+  `SCALED-DOWN` a StatefulSet leftover that scaling back up would reuse, and
+  `STS-RESERVED` a slot inside the set's replica count whose pod is expected
+  back. A claim held by a still-terminating pod counts as in use
 - `pvc-resize` - PVCs whose capacity does not match the request, with where the
-  resize stalled (`SC-NO-EXPAND` never starts, `FS-PENDING` waits on a pod
-  restart, `SHRINK` is a silent no-op); empty means nothing in flight
+  resize stalled: `SC-NO-EXPAND` never starts (the StorageClass forbids
+  expansion, and only a new PVC gets you out), `INFEASIBLE` is past the disk
+  type's ceiling, `FS-PENDING` waits on a node remount and the `POD` column names
+  the pod to restart, `SHRINK` is a silent no-op because Kubernetes cannot shrink
+  a claim. Claims already at their requested size are not listed, so an empty
+  table means nothing is in flight or stuck
 - `default-sa` - pods still on the default service account
 - `privileged` - containers with privileged/host security flags
 - `svc-fqdn` - in-cluster FQDN of services
@@ -93,14 +108,28 @@ the `KIND` and `FLAGS` values.
 - `probes` - readiness/liveness/startup probe reliability verdict
 - `qos` - QoS class + eviction-risk verdict (`NO-MEM-FLOOR` is the finding the
   class itself hides: no memory request means eviction alongside `BestEffort`)
-- `svc-backends` - services + ready/not-ready endpoint counts + wiring verdict
-  (`NO-PODS` is a selector matching nothing, `UNWIRED` a service nothing can
-  ever answer for); the selector is printed in full only on a `NO-PODS` row
+- `svc-backends` - services + ready/not-ready endpoint counts (from the
+  EndpointSlices) + wiring verdict. `NO-PODS` is a selector matching nothing,
+  `NO-READY` a workload whose pods all fail readiness; a selector-less service is
+  `UNWIRED` when nothing filled its endpoints in and `MANUAL` when another
+  controller did, and an `ExternalName` service is a DNS alias, so it stays muted
+  as `EXTERNAL`. The `SELECTOR` column is spelled out only on a `NO-PODS` row,
+  where the typo is what you came to read - elsewhere it is a label count,
+  because the usual three-key Helm selector spends 110 columns saying nothing and
+  wraps the row. Endpoints are deduplicated per pod, so a dual-stack service (one
+  EndpointSlice per address family) is not double-counted
 - `rollouts` - Deployments/StatefulSets/DaemonSets and Argo Rollouts that are
   not finished rolling out (`STALLED` will not recover on its own,
   `NOT-OBSERVED` points at the controller, not the workload)
-- `ingress` - ingress rules flattened per host+path, each checked against its
-  backend service/port and its TLS secret
+- `ingress` - ingress rules flattened to one row per host+path, each checked
+  against the cluster: the backend service exists (`NO-SERVICE`) and exposes the
+  port the rule names, by number or by name (`NO-PORT`), and the host is covered
+  by a TLS block whose secret is actually there (`NO-SECRET` - the controller
+  falls back to its own certificate, so browsers see a name mismatch while
+  `get ing` looks fine). A host on plaintext only is `NO-TLS`. Wildcard
+  certificates cover one label, as TLS name matching does. Listing secrets is a
+  privilege many users lack, so a refused list downgrades the `TLS` column to an
+  unverified (muted) name rather than failing the command
 - `terminating` - pods and namespaces stuck being deleted, with the blocker
   (finalizer, unreachable node, namespace condition); cluster-wide
 
