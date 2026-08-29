@@ -196,11 +196,19 @@ detection. `IsTTY` checks whether the writer is a terminal.
 
 `clientConfig` builds a deferred-loading `clientcmd.ClientConfig` from the
 default loading rules plus the explicit `--kubeconfig` path and `--context`
-override. `Client` builds the clientset and sets `rest.Config.Timeout` from
-`Flags.RequestTimeout` (`--request-timeout`, default 1m0s, `0` disables) - without
-it, a hung control plane hangs the command indefinitely, since nothing else sets
-a deadline. `CurrentNamespace` reads the active context's namespace (defaulting
-to `default`).
+override. `Client` builds the clientset and sets two things on the `rest.Config`:
+
+- `Timeout` from `Flags.RequestTimeout` (`--request-timeout`, default 1m0s, `0`
+  disables) - without it, a hung control plane hangs the command indefinitely,
+  since nothing else sets a deadline.
+- `QPS = -1`, which turns off client-go's client-side rate limiter. Its default
+  (QPS 5 / Burst 10) is sized for a long-running controller and throttles the
+  paged lists a one-shot command issues; `TestNoClientSideThrottling` in
+  `client_test.go` guards it. See [performance.md](performance.md#client-configuration)
+  for the measurements.
+
+`CurrentNamespace` reads the active context's namespace (defaulting to
+`default`).
 
 > **Protobuf is already the default - do not "optimise" it.** Setting
 > `ContentType`/`AcceptContentTypes` to protobuf on the config is a **no-op**: the
@@ -302,7 +310,11 @@ colored too, not only the anomaly.
    output with `kube.NewTable`/`kube.Label`. Validate required positional args
    inside the func. Fetch through the `kube.List*` helpers (never the clientset
    directly, or you lose paging), push any filter the apiserver can evaluate
-   into the `ListOptions` field selector, and enumerate containers via
+   into the `ListOptions` field selector, and **do not issue a list until you
+   know the view needs it** - `pvc-resize` and `ingress` return early before
+   fetching pods / Services+Secrets, which is the single biggest win available
+   (see [performance.md](performance.md#the-pattern-that-pays-lazy-and-narrowed-lists)).
+   Enumerate containers via
    `podContainers`/`podContainerStatuses`. **Iterate API objects by index, not by
    value** - `for i := range pods { p := &pods[i] }`, and take `*corev1.Pod` in
    helpers. gocritic's `performance` tag is enabled in `.golangci.yml` and fails
