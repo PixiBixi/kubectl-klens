@@ -93,7 +93,7 @@ its rows.
 
 | Command | Shows |
 | --- | --- |
-| `pvc` † | PVCs bound to pod + node |
+| `pvc` † | PVCs bound to pod + node + storage class + size |
 | `pvc-unused` † | PVCs no pod mounts + why they are still there |
 | `pvc-resize` † | PVCs whose size does not match the request + why |
 | `svc-fqdn` † | in-cluster FQDN of services |

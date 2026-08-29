@@ -72,7 +72,11 @@ The authoritative list is the `commands` slice in
 - `restarts` - restarted containers + crash reason + last exit code (137/143 =
   SIGKILL/SIGTERM) + the local time of the last restart (`LAST`)
 - `qos` - QoS class + pod requests/limits totals + eviction-risk verdict
-- `pvc` - PVCs bound to pod + node
+- `pvc` - PVCs bound to pod + node, with the claim's storage class (`<default>`
+  when the claim leaves `storageClassName` unset) and its provisioned size
+  (`CAPACITY` falls back to the requested size while the claim is unbound). Fill
+  rate is out of scope: it lives in the kubelet volume stats, not the typed API -
+  use [`df-pv`](https://github.com/yashbhutwala/kubectl-df-pv) for that
 - `pvc-unused` - PVCs no pod mounts, with capacity and storage class. `ORPHAN` is
   the reclaimable one (no pod, no owner that could mount it again),
   `SCALED-DOWN` a StatefulSet leftover that scaling back up would reuse, and
