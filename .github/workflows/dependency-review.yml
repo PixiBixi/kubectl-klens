@@ -1,0 +1,24 @@
+name: Dependency review
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  review:
+    name: Review
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      # Renovate automerges, so the PR is the last point where a human-visible
+      # gate can stop a vulnerable or badly-licensed dependency.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/dependency-review-action@bc41d900bc59d5f7dd0aa5f5a4f6c0a1b48a8fa1 # v4.9.1
+        with:
+          fail-on-severity: high
+          deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0
