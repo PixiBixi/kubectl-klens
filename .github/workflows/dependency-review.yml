@@ -18,7 +18,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/dependency-review-action@bc41d900bc59d5f7dd0aa5f5a4f6c0a1b48a8fa1 # v4.9.1
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
           deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0
