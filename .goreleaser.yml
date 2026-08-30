@@ -55,6 +55,22 @@ krews:
 sboms:
   - artifacts: archive
 
+# Keyless, so there is no private key to store or rotate: the identity comes from
+# the GitHub OIDC token and lands in the Sigstore transparency log.
+#
+# Signing checksums.txt covers every archive at once, since it holds their
+# SHA256. cosign v3 writes one .sigstore.json bundle instead of the old .sig plus
+# .pem pair, so verification is `cosign verify-blob --bundle <file>.sigstore.json`.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+
 checksum:
   name_template: 'checksums.txt'
 
