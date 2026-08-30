@@ -49,6 +49,12 @@ krews:
     caveats: "Run 'kubectl klens completion install' to enable shell completion."
     skip_upload: auto
 
+# syft runs over each archive, so the release carries what is inside the
+# artifact, not just how it was built. The provenance attestation in
+# release.yml covers these files too, so a swapped SBOM does not verify.
+sboms:
+  - artifacts: archive
+
 checksum:
   name_template: 'checksums.txt'
 
