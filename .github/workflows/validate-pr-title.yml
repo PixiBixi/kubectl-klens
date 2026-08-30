@@ -1,7 +1,11 @@
 name: Validate PR title
 
 on:
-  pull_request_target:
+  # pull_request and not pull_request_target: the action reads the title from the
+  # event payload, so it needs neither the base repo's token nor a checkout of
+  # the PR's code. Using the privileged trigger here would buy nothing and hand a
+  # fork's branch a token, which is what zizmor's dangerous-triggers flags.
+  pull_request:
     types: [opened, edited, reopened, synchronize]
 
 permissions: {}
