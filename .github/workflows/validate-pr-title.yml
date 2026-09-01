@@ -17,6 +17,10 @@ jobs:
     permissions:
       pull-requests: read
     steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
       # The squash commit takes the PR title, and svu computes the next version
       # from those commits. A title outside the convention means svu sees nothing
       # releasable and the release is skipped silently, with no error anywhere.
