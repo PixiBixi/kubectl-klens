@@ -107,7 +107,7 @@ the `KIND` and `FLAGS` values.
 **Verdict commands** (compute a health classification, default-sorted worst-last)
 - `pdb` - PodDisruptionBudget drain-safety verdict
 - `pending` - Pending pods with a synthesized blocking reason
-- `hpa` - HorizontalPodAutoscaler autoscaling verdict
+- `hpa` - HorizontalPodAutoscaler current/target metrics + autoscaling verdict
 - `spread` - replica placement single-point-of-failure verdict
 - `probes` - readiness/liveness/startup probe reliability verdict
 - `qos` - QoS class + eviction-risk verdict (`NO-MEM-FLOOR` is the finding the

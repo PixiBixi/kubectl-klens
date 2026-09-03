@@ -126,7 +126,7 @@ host+path and checks the backend service, its port, and the TLS secret.
 | --- | --- |
 | `pdb` † | PodDisruptionBudgets + drain-safety verdict |
 | `pending` † | Pending pods + synthesized blocking reason |
-| `hpa` † | HorizontalPodAutoscalers + autoscaling verdict |
+| `hpa` † | HorizontalPodAutoscalers + current/target metrics + autoscaling verdict |
 | `spread` † | replica placement across nodes/zones + SPOF verdict |
 | `probes` † | readiness/liveness/startup probes + verdict |
 | `terminating` | pods/namespaces stuck being deleted + blocker |
@@ -240,9 +240,9 @@ refused rather than filling the file with escape codes.
 
 | Color | Meaning |
 | --- | --- |
-| green | good - Ready/Healthy/Bound/Running, roomy free pod slots, `on-demand` nodes |
+| green | good - Ready/Healthy/Bound/Running, roomy free pod slots, `on-demand` nodes, readable HPA metrics |
 | yellow | warning - Pending, high restart counts, floating `latest` tags, <25% free pod slots, `NoSchedule` taints, `spot`/`preemptible` nodes |
-| red | bad - NotReady/Unknown/CrashLoopBackOff, node pressure, privileged flags, <10% free pod slots, `NoExecute` taints |
+| red | bad - NotReady/Unknown/CrashLoopBackOff, node pressure, privileged flags, <10% free pod slots, `NoExecute` taints, `<unknown>` HPA metrics |
 | gray | muted placeholders - `<none>`/`none`, `PreferNoSchedule` taints |
 | bold | headers |
 
