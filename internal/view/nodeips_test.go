@@ -142,3 +142,25 @@ func TestNodeIPsSort(t *testing.T) {
 		t.Fatalf("rows not sorted by internal-ip:\n%s", out)
 	}
 }
+
+func TestNodeIPsClass(t *testing.T) {
+	classed := nodeWithAddresses("classed", corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "10.0.0.4"})
+	classed.Labels = map[string]string{"cloud.google.com/compute-class": "balanced"}
+	// Non-GKE nodes expose no compute class, so the cell must fall back to
+	// <none> rather than borrow the pool or instance-type value.
+	plain := nodeWithAddresses("plain", corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "10.0.0.5"})
+	plain.Labels = map[string]string{"eks.amazonaws.com/nodegroup": "ng-1"}
+	var buf bytes.Buffer
+	if err := NodeIPs(context.Background(), clients(fake.NewClientset(classed, plain)), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"CLASS", "balanced", "<none>"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "ng-1") {
+		t.Fatalf("nodegroup label leaked into the class column:\n%s", out)
+	}
+}

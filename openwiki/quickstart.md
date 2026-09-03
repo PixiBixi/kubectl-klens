@@ -43,8 +43,10 @@ The authoritative list is the `commands` slice in
 - `taints` - taints per node
 - `capacity` - CPU/mem capacity + allocatable per node
 - `zones` - region/zone per node
-- `node-ips [node]` - internal + external IP per node, or for a single node. The
-  two columns read differently on purpose: a missing `INTERNAL-IP` is red (the
+- `node-ips [node]` - internal + external IP and compute class per node, or for a
+  single node. `CLASS` comes from the same provider labels `nodes` reads, so an
+  address can be tied to the pool shape it came from in one command. The two
+  IP columns read differently on purpose: a missing `INTERNAL-IP` is red (the
   control plane has no route to that kubelet), a missing `EXTERNAL-IP` is a muted
   `<none>` (the wanted state on private nodes), and a public address is yellow
   because it is internet-reachable surface. A dual-stack node shows both of its

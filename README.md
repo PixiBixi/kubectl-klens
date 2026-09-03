@@ -38,7 +38,7 @@ cluster-scoped. See [Namespace scope](#namespace-scope).
 | `taints` | taints per node |
 | `capacity` | CPU/mem capacity + allocatable |
 | `zones` | region/zone per node |
-| `node-ips [node]` | internal + external IP per node, or for one node |
+| `node-ips [node]` | internal + external IP and compute class per node, or for one node |
 | `pods-per-node` | pod count per node |
 | `max-pods` | pod ceiling, non-terminated count, free slots per node |
 | `node-conditions` | node readiness + memory/disk/pid pressure |
@@ -47,7 +47,7 @@ cluster-scoped. See [Namespace scope](#namespace-scope).
 
 `nodes` reads its `NODEPOOL`, `CLASS` and `PROVISIONING` columns from provider
 labels, so the same command works on GKE, EKS (managed node groups and
-Karpenter) and AKS:
+Karpenter) and AKS. `node-ips` reads `CLASS` from the same labels:
 
 | Column | Labels read |
 | --- | --- |

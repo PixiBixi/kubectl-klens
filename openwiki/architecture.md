@@ -279,7 +279,10 @@ The `nodes` view answers "which pool, which class, spot or on-demand?" from node
 labels, and every cloud spells those differently. `nodelabels.go` holds that
 mapping in three ordered tables - `nodePoolLabels`, `computeClassLabels`,
 `provisioningLabels` - read by `firstLabel` (first key present wins) and
-`nodeProvisioning` (first key whose *value* is recognised wins). Order is the
+`nodeProvisioning` (first key whose *value* is recognised wins). The `CLASS`
+cell goes through `nodeClass(paint, labels)` rather than `firstLabel` directly,
+because two views print it (`nodes`, `node-ips`): adding a class label key to
+`computeClassLabels` must reach both, not just the one being edited. Order is the
 whole design, so append rather than reorder: GKE's boolean `gke-spot` /
 `gke-preemptible` are checked before `gke-provisioning`, which only exists on
 GKE 1.25.5+ nodes, and on AKS `kubernetes.azure.com/priority` comes before the

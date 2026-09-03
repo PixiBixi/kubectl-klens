@@ -14,8 +14,10 @@ import (
 )
 
 // NodeIPs lists the internal and external addresses of every node - what a
-// `-o jsonpath` over .status.addresses gives you, without the jsonpath. A node
-// name narrows the listing to that node.
+// `-o jsonpath` over .status.addresses gives you, without the jsonpath - next
+// to its compute class, so a suspect address can be tied to the pool shape it
+// came from without a second command. A node name narrows the listing to that
+// node.
 func NodeIPs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	var opts metav1.ListOptions
 	node := ""
@@ -35,11 +37,12 @@ func NodeIPs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 		return fmt.Errorf("node %q not found", node)
 	}
 	paint := kube.NewPainter(f)
-	t := kube.NewTable(out, paint, "NAME", "INTERNAL-IP", "EXTERNAL-IP")
+	t := kube.NewTable(out, paint, "NAME", "CLASS", "INTERNAL-IP", "EXTERNAL-IP")
 	for i := range nodes {
 		n := &nodes[i]
 		t.Row(
 			n.Name,
+			nodeClass(paint, n.Labels),
 			// A node with no InternalIP is broken, not merely unexposed: that
 			// address is how the control plane reaches its kubelet.
 			addressCell(paint.OK, paint.Bad, nodeAddresses(n, corev1.NodeInternalIP)),

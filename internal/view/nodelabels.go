@@ -85,3 +85,10 @@ func nodeProvisioning(labels map[string]string) string {
 	}
 	return ""
 }
+
+// nodeClass renders the CLASS cell for the views that report it (`nodes`,
+// `node-ips`), so a new compute-class label key reaches every one of them at
+// once instead of only the view it was added to.
+func nodeClass(paint kube.Painter, labels map[string]string) string {
+	return firstLabel(paint, labels, computeClassLabels)
+}

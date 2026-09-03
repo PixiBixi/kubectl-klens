@@ -25,7 +25,7 @@ func Nodes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out
 			paint.Status(nodeStatus(n)),
 			firstLabel(paint, n.Labels, nodePoolLabels),
 			kube.Label(paint, n.Labels, "node.kubernetes.io/instance-type"),
-			firstLabel(paint, n.Labels, computeClassLabels),
+			nodeClass(paint, n.Labels),
 			paintProvisioning(paint, nodeProvisioning(n.Labels)),
 		)
 	}
