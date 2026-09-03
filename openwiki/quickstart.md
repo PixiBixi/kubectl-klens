@@ -257,9 +257,19 @@ the bare invocation: `make` and `task` both just list the available targets.
 `make lint` runs **golangci-lint** (`.github/workflows/lint.yml`, config in
 `.golangci.yml`), the same linter CI enforces. The
 `ci.yml` Test job runs `go mod verify`, build, and `go test -race`. Separate
-hardening workflows add `govulncheck` (dependency CVEs), `zizmor` (GitHub Actions
-security), goimports formatting, and markdownlint; Renovate keeps dependencies
+workflows add `govulncheck` (dependency CVEs), `zizmor` (GitHub Actions
+security), CodeQL (weekly plus every push/PR), dependency review on PRs
+(`fail-on-severity: high`), an OpenSSF Scorecard run whose SARIF lands in the
+security tab, goimports formatting, markdownlint, and a conventional-commit
+check on the PR **title** - that title becomes the squash-merge commit subject,
+which is what svu reads to decide the next version. Renovate keeps dependencies
 current.
+
+Every job starts with `step-security/harden-runner` in **audit** mode, never
+block: GitHub's own egress endpoints move between runs, so an allowlist would
+fail builds on infrastructure changes rather than on attacks. Write permissions
+are declared per job (`permissions: {}` at the workflow level), so a workflow's
+non-publishing jobs cannot reach the token that publishes.
 
 ## Release
 
@@ -287,21 +297,45 @@ goreleaser builds cross-platform archives and pushes the regenerated
 publisher, using the `KREW_INDEX_TOKEN` PAT for the cross-repo push).
 Version/commit/date are injected via `-X main.version=...` ldflags.
 
-Every release also gets a **build-provenance attestation** over the archives and
-`checksums.txt` (`actions/attest-build-provenance`, signed keylessly with the
-job's `id-token`). A signature would say who published; provenance says *how* the
-artifact was built - which repo, workflow and commit. Verify a download with:
+Each release carries three supply-chain artifacts, all produced in that same
+job. **SBOMs**: goreleaser shells out to syft over each archive (`sboms:` in
+`.goreleaser.yml`), which is why the workflow installs syft up front - a missing
+syft fails the release *after* the archives are built. A **cosign signature**
+over `checksums.txt` (`signs:`), keyless, so the identity is the workflow rather
+than a key; cosign v3 emits a single `.sigstore.json` bundle instead of the old
+`.sig`/`.pem` pair. And a **build-provenance attestation** over the archives,
+`checksums.txt` and the SBOMs (`actions/attest-build-provenance`, signed with
+the job's `id-token`). The signature says who published; provenance says *how*
+the artifact was built - which repo, workflow and commit. Signing
+`checksums.txt` alone is enough because it pins the SHA256 of every archive.
+
+Verify a download:
 
 ```bash
+cosign verify-blob \
+  --certificate-identity-regexp '^https://github.com/PixiBixi/kubectl-klens/\.github/workflows/release\.yml@refs/tags/' \
+  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+  --bundle checksums.txt.sigstore.json checksums.txt
+shasum -a 256 --check --ignore-missing checksums.txt
 gh attestation verify kubectl-klens_<version>_Darwin_arm64.tar.gz \
   --repo PixiBixi/kubectl-klens
 ```
 
-The job also installs **cosign** before running goreleaser-action: the action
-verifies the cosign signature of the goreleaser binary it downloads, but skips
-that check silently when cosign is absent from `PATH`. Removing the install step
-does not fail the build, it just stops verifying the tool that produces the
-release.
+`SECURITY.md` is the user-facing copy of those commands.
+
+A second **`verify` job** replays exactly that sequence against the *published*
+release: it downloads the archives from the GitHub release, checks the
+checksums, verifies the cosign bundle and verifies the provenance of every
+archive. Signing is only worth having if it verifies, and without this job a
+broken signing config ships in silence and the first person to hit it is a user.
+The load-bearing part is the pinned `--certificate-identity-regexp`: a keyless
+signature with an unchecked identity proves only that *somebody* signed. The job
+is gated on `needs.release.outputs.tag != ''`, so a push that produced no
+release skips it.
+
+The release job also installs **cosign** before goreleaser-action runs, for a
+second reason: the action verifies the cosign signature of the goreleaser binary
+it downloads, and silently skips that check when cosign is absent from `PATH`.
 
 Renovate drives the version bumps (`renovate.json`): minor Go-module updates map
 to `feat(deps)` (minor release), patch/digest to `fix(deps)` (patch release),
