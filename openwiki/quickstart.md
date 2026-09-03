@@ -107,7 +107,16 @@ the `KIND` and `FLAGS` values.
 **Verdict commands** (compute a health classification, default-sorted worst-last)
 - `pdb` - PodDisruptionBudget drain-safety verdict
 - `pending` - Pending pods with a synthesized blocking reason
-- `hpa` - HorizontalPodAutoscaler current/target metrics + autoscaling verdict
+- `hpa` - HorizontalPodAutoscaler current/target metrics + autoscaling verdict.
+  `TARGETS` mirrors `kubectl get hpa` (`cpu: 67%/70%`, one cell per metric
+  source, utilization as a percentage and value targets as quantities) so the
+  number the autoscaler reacts to sits next to the verdict. A metric with no
+  reported current value reads `<unknown>` in red: that is `NO-METRICS` seen per
+  metric rather than per HPA. `<auto>` is a target the spec never set,
+  `<none>` an HPA with no metrics at all. The verdict itself is driven by the
+  replica counts and the `ScalingActive` condition: `MAXED` is pinned at the
+  ceiling with no headroom left, `AT-MIN` is idle at the floor (muted, not a
+  finding)
 - `spread` - replica placement single-point-of-failure verdict
 - `probes` - readiness/liveness/startup probe reliability verdict
 - `qos` - QoS class + eviction-risk verdict (`NO-MEM-FLOOR` is the finding the
