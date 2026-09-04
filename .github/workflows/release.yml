@@ -132,12 +132,15 @@ jobs:
         run: shasum -a 256 --check --ignore-missing checksums.txt
 
       # Keyless: the identity is the workflow that signed, not a key. Pinning
-      # the identity regexp is what makes the signature mean something.
+      # the identity regexp is what makes the signature mean something. The
+      # automated release signs from a push to master, so the SAN ends in
+      # refs/heads/master; refs/tags/v only covers the manual tag escape hatch.
+      # Do NOT relax this to a bare refs/ prefix - any branch could then sign.
       - name: Verify the cosign signature
         run: |
           set -euo pipefail
           cosign verify-blob \
-            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\\.github/workflows/release\\.yml@refs/tags/" \
+            --certificate-identity-regexp "^https://github\\.com/${GITHUB_REPOSITORY}/\\.github/workflows/release\\.yml@refs/(heads/master|tags/v[0-9])" \
             --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
             --bundle checksums.txt.sigstore.json \
             checksums.txt
