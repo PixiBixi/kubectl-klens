@@ -81,6 +81,16 @@ const unknownForCNPG = "probes,images"
 // and an image reference. A kind that can answer part of the question marks the
 // rest unknown (see unknownAnnotation) so the views that cannot be honest about
 // it abstain, rather than printing an inference.
+//
+// A subtler limit has no marker because it is invisible from here: an operator
+// can attach pods directly to a controller this does list, and those pods need
+// not match its template. The Flink operator in native mode does exactly that -
+// the FlinkDeployment's Deployment describes the JobManager (measured at 500m /
+// 2Gi on one cluster) while the TaskManager pods it owns directly are 2 CPU /
+// 8Gi and far more numerous. The row is present and describes only the
+// template, so this mode understates such a workload. Detecting it would mean
+// listing pods, which is the cost the flag exists to avoid; the unflagged view
+// shows every pod at its real size.
 func podsForView(ctx context.Context, c kube.Clients, f kube.Flags) ([]corev1.Pod, error) {
 	if !f.ByOwner {
 		return kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{})

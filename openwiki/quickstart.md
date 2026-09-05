@@ -234,7 +234,11 @@ and `--sort workload` are both accepted in both modes.
 
 The set of kinds is closed and the set of pod-owning controllers is not, so
 anything owned by another custom resource has no row with the flag; without it
-nothing is missed. Kinds also differ in what they can answer: a StrimziPodSet
+nothing is missed. An operator can also attach pods directly to a controller
+that *is* listed, and they need not match its template - Flink in native mode
+attaches TaskManagers (2 CPU / 8Gi measured) to a Deployment whose template
+describes only the JobManager (500m / 2Gi), so that workload reads far smaller
+than it is. Kinds also differ in what they can answer: a StrimziPodSet
 embeds real pod manifests, while a CNPG `Cluster` has only `instances` and
 `resources` (applied to both its containers, so the resource columns and the
 QoS class are right). What a kind cannot answer is marked unknown, and `images`
