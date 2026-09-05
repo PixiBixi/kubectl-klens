@@ -90,8 +90,9 @@ kube-system from the `-A` view only; an explicit `-n kube-system` still returns
 its rows.
 
 `reqlim`, `no-limits`, `no-requests`, `images`, `probes` and `qos` accept
-`--by-owner`, which reads the Deployments, StatefulSets, DaemonSets and Argo
-Rollouts behind the pods instead of the pods themselves: one row per container
+`--by-owner`, which reads the controllers behind the pods instead of the pods
+themselves - Deployments, StatefulSets, DaemonSets, Argo Rollouts, Strimzi
+PodSets and CloudNativePG Clusters: one row per container
 per workload, with a `REPLICAS` column, and far cheaper on a large cluster - on
 a 7209-pod cluster the controllers are 164 objects and ~700 kB against ~77 MB of
 pods, about 4-7x faster end to end.
@@ -109,6 +110,14 @@ invisible; without it these views read what is actually **running**. `REPLICAS`
 is `status.desiredNumberScheduled` for a DaemonSet, which has no
 `spec.replicas`, and is muted at `0`: a scaled-to-zero workload's requests
 reserve nothing.
+
+That list of kinds is closed while the set of controllers that can own a pod is
+not, so a pod owned by any other custom resource has no row under `--by-owner`.
+The unflagged view lists pods and misses nothing. A CloudNativePG `Cluster`
+carries no pod manifest at all, only `instances` and `resources`, which CNPG
+applies to both its containers - so it answers `reqlim`, `no-limits`,
+`no-requests` and `qos` faithfully, and is skipped by `images` and `probes`
+rather than have them invent a `latest` tag and a missing probe.
 
 ### Storage & networking
 

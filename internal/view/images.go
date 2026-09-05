@@ -29,6 +29,11 @@ func Images(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 	row := make([]string, 0, 7)
 	for i := range pods {
 		p := &pods[i]
+		// An unset image would render as an empty repository on the "latest"
+		// tag, which this view paints as a warning - a finding that is not real.
+		if !specKnows(p, "images") {
+			continue
+		}
 		for _, pc := range podContainers(p) {
 			image, tag := splitImageTag(pc.Spec.Image)
 			row = append(row[:0], p.Name)
