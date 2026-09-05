@@ -105,7 +105,8 @@ neither `-n` nor `-A`, the dispatcher resolves the current kubeconfig namespace
 (kubens/kubectx) before running. When `false`, the command lists all namespaces
 by default. The current `CurrentNSDefault` set (`reqlim`, `no-limits`,
 `no-requests`, `images`, `restarts`, `pvc`, `pvc-unused`, `pvc-resize`,
-`svc-fqdn`, `svc-backends`, `ingress`, `secret`, `privileged`, `pdb`, `pending`,
+`svc-fqdn`, `svc-backends`, `ingress`, `secret`, `privileged`, `certs`, `pdb`,
+`pending`,
 `hpa`, `spread`, `probes`, `qos`, `rollouts`, `unused-config`) is locked in by
 `TestCurrentNSDefaultFlags` in `cli_test.go`, which is the authoritative list -
 update that map whenever you change a command's scoping.

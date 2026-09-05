@@ -93,6 +93,12 @@ The authoritative list is the `commands` slice in
   table means nothing is in flight or stuck
 - `default-sa` - pods still on the default service account
 - `privileged` - containers with privileged/host security flags
+- `certs` - TLS secrets with their certificate expiry and a renewal verdict
+  (`EXPIRED`, `EXPIRING` under 7 days, `RENEW-DUE` under 14). The date is the
+  earliest in the chain, not the leaf's, since an intermediate expiring first
+  breaks the handshake too. Names group by registrable domain past a short
+  cell, so an 88-host delivery certificate reads as
+  `smartadserver.com (86), eqtv.io (2)`; naming a secret prints them all
 - `svc-fqdn` - in-cluster FQDN of services
 
 `reqlim`, `no-limits`, `no-requests`, `images`, `restarts` and `privileged`
