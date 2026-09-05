@@ -90,7 +90,7 @@ match, and paging makes the cluster-wide List *sequential* (4 requests for
 and nothing else - `qos` is the one exception, and it already has a
 from-spec fallback for when a pod's `status.qosClass` is unset. That is
 exactly what makes `--by-owner` a source switch rather than a client-side
-reshape: with the flag, `podsForView` lists the four controller kinds
+reshape: with the flag, `podsForView` lists the six controller kinds
 instead of every pod and hands each view a synthetic pod built from the
 controller's template, which then flows through the same per-container loop
 unmodified.

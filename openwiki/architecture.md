@@ -265,7 +265,7 @@ override. `Client` builds the clientset and sets two things on the `rest.Config`
 ## The verdict-command pattern
 
 `pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `rollouts`, `ingress`,
-`terminating`, `pvc-unused`, `pvc-resize` and `pending` share a shape (see
+`terminating`, `pvc-unused`, `pvc-resize`, `certs` and `pending` share a shape (see
 [`internal/view/pdb.go`](../internal/view/pdb.go) as the reference):
 
 1. List the resource, then classify each item with a pure `xVerdict(...)`
@@ -286,8 +286,8 @@ replica at once. See `pdbVerdict` for the canonical example.
 Shared helpers (`orDefault`, `sevPaint`, `verdictRank`) live in
 [`internal/view/verdict.go`](../internal/view/verdict.go); `pdb`, `hpa`,
 `spread`, `probes`, `qos`, `svc-backends`, `rollouts`, `ingress`, and
-`terminating`, `pvc-unused` and `pvc-resize` reuse them (`pending` renders a
-plain `REASON`
+`terminating`, `pvc-unused`, `pvc-resize` and `certs` reuse them (`pending`
+renders a plain `REASON`
 column and only needs `SortBy`).
 
 ## Shared view helpers (`internal/view/view.go`)
@@ -310,7 +310,45 @@ column and only needs `SortBy`).
   returns the first error. `max-pods` and `spread` each need nodes *and* pods with
   no dependency between them; issued in sequence, the smaller list's latency is
   pure addition (measured ~14% and ~10% of total on a 6300-pod cluster).
+  `allLists(fns...)` is the n-way form, used by `--by-owner` for its six
+  controller lists.
 - `qtyOrNone(paint, rl, name)` renders a resource quantity or a muted `none`.
+
+## The `--by-owner` source switch (`internal/view/byowner.go`)
+
+Six views (`reqlim`, `no-limits`, `no-requests`, `images`, `probes`, `qos`) set
+`ByOwner: true` in the registry and fetch through `podsForView` instead of
+`kube.ListPods`. Without the flag it *is* `ListPods`; with it, `workloadPods`
+lists Deployments, StatefulSets, DaemonSets, Argo Rollouts, Strimzi PodSets and
+CloudNativePG Clusters concurrently (`allLists`) and turns each into a
+**synthetic pod**: Namespace/Name from the controller, `Spec` its pod template,
+`Status` left zero. The row then flows through the view's normal per-container
+loop unmodified - which is why a view qualifies only if it reads nothing but the
+container spec. `TestByOwnerFlags` locks that set. The user-facing semantics
+(desired spec vs. running pods) live in
+[quickstart.md](quickstart.md#by-owner---by-owner); the measurements live in
+[performance.md](performance.md#ask-the-controllers-not-the-pods).
+
+Three mechanics to preserve when adding a kind:
+
+- **In-process annotations, never sent anywhere.** The replica count rides on
+  `klens.io/replicas` (`replicasAnnotation`, read back by `replicasOf`) because
+  a synthetic pod has no `Status` to carry it. Nothing writes these objects to an
+  apiserver.
+- **Honest gaps, not inferred ones.** A kind that cannot answer a view lists the
+  aspects it cannot speak for in `klens.io/unknown` (`unknownAnnotation`); views
+  gate on `specKnows(p, aspect)` and skip the row. A CNPG `Cluster` exposes only
+  `instances` and `resources`, so it is `probes,images` unknown while the
+  resource columns and the QoS class stay correct.
+- **A missing CRD is not an error.** `absentCRD(err)` swallows no-match,
+  `NotFound` *and* `Forbidden`, so a cluster without Argo Rollouts / Strimzi /
+  CNPG installed - or a user without rights on them - still gets a table of the
+  built-in kinds instead of a failure. Strimzi is tried at `v1` then the legacy
+  `v1beta2`. `kube.ListCustom` returns nothing on a nil `Dynamic`, which is how
+  these paths survive tests that never wire a dynamic client.
+
+The set of kinds is closed and the set of pod-owning controllers is not, so a
+workload owned by any other custom resource simply has no row under the flag.
 
 ## Cross-cloud node labels (`internal/view/nodelabels.go`)
 
@@ -380,7 +418,10 @@ colored too, not only the anomaly.
      `t.SortBy(f.Sort)` in the view. `TestSortColumnsMatchHeaders` guards that
      those columns actually exist as headers;
    - set `Watch: true` only if the view's answer changes while you watch it (and
-     update `TestWatchFlags`).
+     update `TestWatchFlags`);
+   - set `ByOwner: true` only if the view's rows are pod *spec* and nothing else,
+     fetch through `podsForView`, and update `TestByOwnerFlags`. A view of
+     runtime state would hide the one pod that differs from its template.
 3. Add a `_test.go` next to it. Completion, `--help`, and dispatch are all
    registry-driven - no extra wiring.
 4. To color cells, build `paint := kube.NewPainter(f)`, wrap status cells
@@ -434,5 +475,6 @@ apiserver indexes for it.
 | Change request bounds / interrupts | `cfg.Timeout` in `client.go` + the exit-code switch in `cli.go` |
 | Change the watch loop / which commands watch | `internal/cli/watch.go` + `Watch` in the registry + `TestWatchFlags` |
 | Add/adjust a health verdict | the command's `xVerdict` in `internal/view/<name>.go` |
+| Add a controller kind to `--by-owner` | `internal/view/byowner.go` (+ `unknownAnnotation` for what it cannot answer) |
 | Support another cloud's node-pool / spot labels | the ordered tables in `internal/view/nodelabels.go` |
 | Change completion behaviour | `internal/cli/complete.go` |

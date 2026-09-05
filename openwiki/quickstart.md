@@ -175,7 +175,7 @@ kubens/kubectx); the rest default to **all namespaces**.
 - Current-namespace-by-default: `reqlim`, `no-limits`, `no-requests`, `images`,
   `restarts`, `pvc`, `svc-fqdn`, `svc-backends`, `secret`, `privileged`, `pdb`,
   `pending`, `hpa`, `spread`, `probes`, `qos`, `rollouts`, `ingress`,
-  `pvc-unused`, `pvc-resize`, `unused-config`.
+  `pvc-unused`, `pvc-resize`, `certs`, `unused-config`.
 - `-A` / `--all-namespaces` widens to all; `-n <ns>` targets one.
 - `nodes`, `taints`, `capacity`, `zones`, `node-ips`, `max-pods`,
   `node-conditions` and `autoscaler` read only cluster-scoped objects and ignore
