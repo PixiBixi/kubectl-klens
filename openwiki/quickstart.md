@@ -209,8 +209,9 @@ the only completion that talks to a cluster, and it stays silent on any failure.
 `reqlim`, `no-limits`, `no-requests`, `images`, `probes` and `qos` set
 `ByOwner: true` in the registry and accept `--by-owner`. It is a source switch,
 not a dedup: with the flag, `podsForView` (`internal/view/byowner.go`) lists
-Deployments, StatefulSets, DaemonSets and Argo Rollouts and turns each into a
-synthetic pod - Namespace/Name from the controller, Spec its pod template,
+Deployments, StatefulSets, DaemonSets, Argo Rollouts, Strimzi PodSets and
+CloudNativePG Clusters, and turns each into a synthetic pod - Namespace/Name
+from the controller, Spec its pod template,
 Status left zero - which then flows through the view's normal per-container
 loop unmodified. The pod-identity column becomes `WORKLOAD` and a `REPLICAS`
 column appears, free at that point since the controller list already carries
@@ -230,6 +231,14 @@ without it it is what is actually **running**. None of the six views reads
 `pod.Status` except `qos`, which already has a from-spec fallback for exactly
 this case - that is what let this be one code path instead of two. `--sort pod`
 and `--sort workload` are both accepted in both modes.
+
+The set of kinds is closed and the set of pod-owning controllers is not, so
+anything owned by another custom resource has no row with the flag; without it
+nothing is missed. Kinds also differ in what they can answer: a StrimziPodSet
+embeds real pod manifests, while a CNPG `Cluster` has only `instances` and
+`resources` (applied to both its containers, so the resource columns and the
+QoS class are right). What a kind cannot answer is marked unknown, and `images`
+and `probes` skip those rows instead of inferring a value.
 
 ### Sorting (`--sort`)
 

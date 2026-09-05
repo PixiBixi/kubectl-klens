@@ -41,6 +41,12 @@ func Probes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 		if ref := metav1.GetControllerOf(p); ref != nil && ref.Kind == "Job" {
 			continue
 		}
+		// A workload whose source carries no probe definitions cannot be
+		// reported on: an empty spec here would read as NO-PROBES for a
+		// workload that has them.
+		if !specKnows(p, "probes") {
+			continue
+		}
 		for i := range p.Spec.Containers {
 			ctr := &p.Spec.Containers[i]
 			hasR := ctr.ReadinessProbe != nil

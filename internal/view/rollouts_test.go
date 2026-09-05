@@ -105,10 +105,17 @@ func rolloutObj(name, ns, phase string, replicas, ready int64, steps int, step i
 
 // argoClients bundles a typed fake with a dynamic fake serving the Rollout CRD.
 func argoClients(typed *fake.Clientset, objs ...runtime.Object) kube.Clients {
-	gvr := schema.GroupVersionResource{Group: "argoproj.io", Version: "v1alpha1", Resource: "rollouts"}
+	// Every custom resource podsForView lists has to be registered here: the
+	// dynamic fake panics on an unregistered LIST rather than returning the 404
+	// a real apiserver sends for an absent CRD.
 	d := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
 		runtime.NewScheme(),
-		map[schema.GroupVersionResource]string{gvr: "RolloutList"},
+		map[schema.GroupVersionResource]string{
+			rolloutGVR:             "RolloutList",
+			strimziPodSetGVR:       "StrimziPodSetList",
+			strimziPodSetLegacyGVR: "StrimziPodSetList",
+			cnpgClusterGVR:         "ClusterList",
+		},
 		objs...,
 	)
 	return kube.Clients{Interface: typed, Dynamic: d}
