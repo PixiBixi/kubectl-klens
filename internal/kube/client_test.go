@@ -98,13 +98,16 @@ func pagedPodServer(t *testing.T, totalPods int, reqs *int) *httptest.Server {
 	}))
 }
 
-// TestListPodsPagesWithoutThrottling walks a collection big enough to need
-// several pages against a real HTTP server, asserting both that paging is
-// followed to the end and that the limiter is not pacing it. With client-go's
-// defaults the same walk takes ~600ms; the deadline here is loose enough not to
-// be flaky on a busy machine but far under the throttled cost.
+// TestListPodsPagesWithoutThrottling walks a collection needing several pages
+// against a real HTTP server, asserting both that paging is followed to the end
+// and that the limiter is not pacing it. The pod count is fixed rather than
+// scaled by ChunkSize: this walks 5 pages whatever the page size is, instead of
+// also multiplying the JSON volume every time ChunkSize is tuned, which is what
+// made this flaky on a busy machine once it was.
 func TestListPodsPagesWithoutThrottling(t *testing.T) {
-	const total = ChunkSize*4 + 1 // 5 pages
+	const pageSpan = 500 // independent of ChunkSize: see the comment above
+	total := pageSpan*4 + 1
+	wantReqs := (total + ChunkSize - 1) / ChunkSize
 	reqs := 0
 	srv := pagedPodServer(t, total, &reqs)
 	defer srv.Close()
@@ -123,11 +126,11 @@ func TestListPodsPagesWithoutThrottling(t *testing.T) {
 	if len(pods) != total {
 		t.Fatalf("got %d pods, want %d", len(pods), total)
 	}
-	if reqs != 5 {
-		t.Errorf("server answered %d requests, want 5 pages", reqs)
+	if reqs != wantReqs {
+		t.Errorf("server answered %d requests, want %d pages", reqs, wantReqs)
 	}
-	// Four of the five requests would sit behind the 5 QPS limiter, ~200ms each.
-	if elapsed > 400*time.Millisecond {
-		t.Errorf("paging took %v, which looks rate-limited", elapsed)
+	// wantReqs-1 requests would sit behind the 5 QPS limiter, ~200ms each.
+	if budget := time.Duration(wantReqs) * 300 * time.Millisecond; elapsed > budget {
+		t.Errorf("paging took %v (budget %v), which looks rate-limited", elapsed, budget)
 	}
 }

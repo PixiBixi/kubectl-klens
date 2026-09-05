@@ -219,7 +219,8 @@ kubectl klens qos -n prod --by-owner
 
 This is what makes the flag pay for itself on a large cluster: on a 7209-pod
 GKE cluster the four controller lists are 164 objects and ~700 kB, against
-~77 MB for every pod - about 4-7x faster end to end. The trade
+~77 MB for every pod - about 4-7x faster end to end (see
+[performance.md](performance.md#ask-the-controllers-not-the-pods)). The trade
 is what the row means: with the flag it is the **desired** spec (a rollout in
 flight shows only the new one, a pod mutated after creation is invisible),
 without it it is what is actually **running**. None of the six views reads

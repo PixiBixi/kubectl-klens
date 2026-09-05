@@ -172,8 +172,9 @@ runs once per object.
 `kube.List<Kind>` wrapper per resource kind (`ListPods`, `ListNodes`,
 `ListServices`, `ListIngresses`, `ListConfigMaps`, ... - `list.go` is the
 inventory, plus `ListCustom` for a dynamic-client GVR), thin wrappers over
-a generic `listAll` that sets `Limit = ChunkSize` (500, the same chunk kubectl
-uses) and follows the server's `continue` token until it stops handing one out.
+a generic `listAll` that sets `Limit = ChunkSize` (2000; see its doc comment
+for why not kubectl's 500) and follows the server's `continue` token until it
+stops handing one out.
 An unlimited `List` makes the apiserver materialize the whole collection in one
 response, which spikes memory on both ends on a cluster with tens of thousands
 of pods. Paging stays an implementation detail: callers get the full slice, and

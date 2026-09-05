@@ -3,7 +3,9 @@ package kube
 import (
 	"errors"
 	"strconv"
+	"sync"
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -121,5 +123,70 @@ func TestListAllPropagatesErrorMidWalk(t *testing.T) {
 	}
 	if got != nil {
 		t.Fatalf("a failed walk must not return partial results, got %v", got)
+	}
+}
+
+// TestChunkSizeBounded pins the two properties ChunkSize has to keep: it must be
+// set (an unlimited List makes the apiserver materialize the whole collection in
+// one response) and it must stay within what an apiserver serves comfortably in
+// a single page.
+func TestChunkSizeBounded(t *testing.T) {
+	if ChunkSize <= 0 || ChunkSize > 5000 {
+		t.Fatalf("ChunkSize = %d, want a bound in (0, 5000]", ChunkSize)
+	}
+}
+
+// TestListAllUsesChunkSize checks the constant actually reaches the request:
+// dropping Limit would silently restore the unbounded List it exists to prevent.
+func TestListAllUsesChunkSize(t *testing.T) {
+	var got int64
+	if _, err := listAll(metav1.ListOptions{}, func(o metav1.ListOptions) ([]int, metav1.ListMeta, error) {
+		got = o.Limit
+		return nil, metav1.ListMeta{}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got != ChunkSize {
+		t.Fatalf("Limit = %d, want ChunkSize (%d)", got, ChunkSize)
+	}
+}
+
+// TestListAllBoundsInFlight checks the semaphore actually caps concurrent
+// requests. Without it the two fan-out layers multiply: a 10-list view under a
+// 16-namespace glob would put 160 requests on the wire at once.
+func TestListAllBoundsInFlight(t *testing.T) {
+	var mu sync.Mutex
+	cur, peak := 0, 0
+	page := func(o metav1.ListOptions) ([]int, metav1.ListMeta, error) {
+		mu.Lock()
+		cur++
+		peak = max(peak, cur)
+		mu.Unlock()
+		time.Sleep(2 * time.Millisecond) // hold the slot long enough to overlap
+		mu.Lock()
+		cur--
+		mu.Unlock()
+		return nil, metav1.ListMeta{}, nil
+	}
+
+	var wg sync.WaitGroup
+	const callers = MaxInFlight * 4
+	wg.Add(callers)
+	for range callers {
+		go func() {
+			defer wg.Done()
+			if _, err := listAll(metav1.ListOptions{}, page); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if peak > MaxInFlight {
+		t.Fatalf("peak concurrency %d, want at most MaxInFlight (%d)", peak, MaxInFlight)
+	}
+	// A bound that never binds would make the test vacuous.
+	if peak < 2 {
+		t.Fatalf("peak concurrency %d: the requests never overlapped, the test proves nothing", peak)
 	}
 }
