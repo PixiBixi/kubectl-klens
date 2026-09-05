@@ -190,15 +190,32 @@ func TestSortColumnsMatchHeaders(t *testing.T) {
 			// before its table: see TestAutoscalerSortColumnsMatchHeaders.
 			continue
 		}
-		var buf bytes.Buffer
 		// The positional arg is a node name for the commands that take one, and
 		// node-ips errors out when it names nothing, so back it with a node.
 		objs := []runtime.Object{&corev1.Node{Name: "dummy"}}
-		if err := c.Run(context.Background(), kube.Clients{Interface: fake.NewClientset(objs...)}, kube.Flags{}, []string{"dummy"}, &buf); err != nil {
-			t.Fatalf("%s: run failed: %v", c.Name, err)
+		// --by-owner renames the pod column to WORKLOAD, so the declared set
+		// only fully appears across both modes; a column has to be a header in
+		// at least one of them.
+		got := map[string]bool{}
+		for _, byOwner := range []bool{false, true} {
+			if byOwner && !c.ByOwner {
+				continue
+			}
+			var buf bytes.Buffer
+			flags := kube.Flags{ByOwner: byOwner}
+			if err := c.Run(context.Background(), kube.Clients{Interface: fake.NewClientset(objs...)}, flags, []string{"dummy"}, &buf); err != nil {
+				t.Fatalf("%s: run failed: %v", c.Name, err)
+			}
+			header, _, _ := strings.Cut(buf.String(), "\n")
+			for h := range strings.FieldsSeq(strings.ToLower(header)) {
+				got[h] = true
+			}
 		}
-		header, _, _ := strings.Cut(buf.String(), "\n")
-		assertSortColumnsInHeader(t, c.Name, c.SortColumns, header)
+		for _, col := range c.SortColumns {
+			if !got[col] {
+				t.Errorf("%s: sort column %q is not a header in any mode (%v)", c.Name, col, got)
+			}
+		}
 	}
 }
 
@@ -588,5 +605,27 @@ func TestIgnoresNamespaceFlags(t *testing.T) {
 		if c.IgnoresNamespace != want[c.Name] {
 			t.Errorf("%s: IgnoresNamespace = %v, want %v", c.Name, c.IgnoresNamespace, want[c.Name])
 		}
+	}
+}
+
+// TestByOwnerFlags locks in which commands accept --by-owner: only views whose
+// rows are pod spec. A view of runtime state would hide the one pod that
+// differs, which is the pod the user is looking for.
+func TestByOwnerFlags(t *testing.T) {
+	want := map[string]bool{
+		"reqlim": true, "no-limits": true, "no-requests": true,
+		"images": true, "probes": true, "qos": true,
+	}
+	for _, c := range commands {
+		if c.ByOwner != want[c.Name] {
+			t.Errorf("%s: ByOwner = %v, want %v", c.Name, c.ByOwner, want[c.Name])
+		}
+	}
+}
+
+func TestRunRejectsByOwnerOnUnsupportedCommand(t *testing.T) {
+	var out, errw bytes.Buffer
+	if code := testApp(&out, &errw).Run([]string{"nodes", "--by-owner"}); code != 1 {
+		t.Fatalf("want exit 1, got %d", code)
 	}
 }

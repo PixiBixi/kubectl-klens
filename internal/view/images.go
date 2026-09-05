@@ -3,31 +3,41 @@ package view
 import (
 	"context"
 	"io"
+	"slices"
 	"strings"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
 // Images lists every container image per pod, one row per container, including
 // init and ephemeral containers - their images are pulled and run on the node
-// like any other, so an unpatched init image has to be visible here.
+// like any other, so an unpatched init image has to be visible here. --by-owner
+// reads the workload specs instead of the running pods; see Reqlim's doc
+// comment. Note this view is not namespace-scoped by default (unlike the other
+// five --by-owner views), so kube-system is never excluded here.
 func Images(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{})
+	pods, err := podsForView(ctx, c, f)
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
-	t := kube.NewTable(out, paint, "PODNAME", "CONTAINER", "KIND", "PULL", "IMAGE", "TAG")
+	t := kube.NewTable(out, paint, slices.Concat(
+		[]string{podColumn(f, "PODNAME")}, ownerHeaders(f),
+		[]string{"CONTAINER", "KIND", "PULL", "IMAGE", "TAG"},
+	)...)
+	// Reused row buffer; see Reqlim for why this is not a slices.Concat.
+	row := make([]string, 0, 7)
 	for i := range pods {
 		p := &pods[i]
 		for _, pc := range podContainers(p) {
 			image, tag := splitImageTag(pc.Spec.Image)
-			t.Row(p.Name, pc.Spec.Name, pc.Kind, string(pc.Spec.ImagePullPolicy), image, latestTag(paint, tag))
+			row = append(row[:0], p.Name)
+			row = appendOwnerCells(row, paint, f, p)
+			row = append(row, pc.Spec.Name, pc.Kind, string(pc.Spec.ImagePullPolicy), image, latestTag(paint, tag))
+			t.Row(row...)
 		}
 	}
-	t.SortBy(f.Sort)
+	t.SortBy(podSort(f, f.Sort, "PODNAME"))
 	return t.Flush()
 }
 

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -111,6 +112,43 @@ func benchViewFlags(b *testing.B, fn benchRunFunc, objs []runtime.Object, f kube
 			b.Fatal(err)
 		}
 	}
+}
+
+// benchControllers builds 130 Deployments of two containers each, spread
+// across the same 40 namespaces as benchObjects: the shape --by-owner walks
+// instead of the pod list.
+func benchControllers(n int) []runtime.Object {
+	objs := make([]runtime.Object, 0, n)
+	for i := range n {
+		objs = append(objs, &appsv1.Deployment{
+			Name:      fmt.Sprintf("deployment-%d", i),
+			Namespace: fmt.Sprintf("namespace-%d", i%40),
+			Spec: appsv1.DeploymentSpec{
+				Replicas: new(int32),
+				Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{{Name: "init"}},
+					Containers: []corev1.Container{{
+						Name: "app",
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m")},
+							Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("500m")},
+						},
+					}},
+				}},
+			},
+		})
+	}
+	return objs
+}
+
+// BenchmarkReqlimByOwner is the --by-owner path against BenchmarkReqlim as its
+// baseline: 130 Deployments instead of the 6500 pods behind them. The two
+// numbers are not comparable as wall clock on a fake clientset - it serves both
+// from memory, so it hides the entire point, which is that one call fetches
+// 164 objects and the other 6500 (see openwiki/performance.md for the real
+// numbers) - but the local walk should stay well under BenchmarkReqlim's.
+func BenchmarkReqlimByOwner(b *testing.B) {
+	benchViewFlags(b, Reqlim, benchControllers(130), kube.Flags{ByOwner: true})
 }
 
 // BenchmarkReqlimGlobFanout lists 8 of the 40 namespaces through the fan-out,

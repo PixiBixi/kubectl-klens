@@ -55,6 +55,7 @@ type Command struct {
     SortColumns      []string // lowercased headers; enables --sort
     Watch            bool     // enables -w/--watch + --interval
     IgnoresNamespace bool     // cluster-scoped only; skips -n resolution
+    ByOwner          bool     // enables --by-owner
 }
 ```
 
@@ -113,9 +114,10 @@ dereference it.
 
 `complete.go` implements the cobra-compatible `__complete` protocol kubectl
 invokes through the `completion/kubectl_complete-klens` shim. It completes
-subcommand names, global flags, `--sort` columns (per the chosen command), and
-`--color` values - all derived from the same `commands` registry. `completion
-install` writes the shim into krew's bin dir (or `--dir`) and needs no cluster.
+subcommand names, global flags, `--sort` columns (per the chosen command),
+`--by-owner` where the registry allows it, and `--color` values - all derived
+from the same `commands` registry. `completion install` writes the shim into
+krew's bin dir (or `--dir`) and needs no cluster.
 
 One completion does hit the cluster: after `-n` / `--namespace` it lists
 namespaces, honouring a `--kubeconfig` or `--context` already typed on the line.
