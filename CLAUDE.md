@@ -54,13 +54,12 @@ Three packages under `internal/`, layered cli → view → kube:
   `cmd.Run` to the redraw loop in `watch.go`, which re-polls into a buffer every
   interval; `TestWatchFlags` locks the watchable set (`pending`, `restarts`,
   `rollouts`, `terminating`, `autoscaler`, `node-conditions`, `svc-backends`,
-  `max-pods`, `pvc-resize`). A command that sets `IgnoresNamespace` reads only
-  cluster-scoped objects and skips `-n` resolution (`TestIgnoresNamespaceFlags`);
-  one that sets `ByOwner` opts into `--by-owner` (`TestByOwnerFlags`).
-  Global flags (`-n`, `--context`, ...) live once in
-  the `globalFlags` table, which drives both FlagSet registration and the
-  `--help` listing so the two can't drift - add a global flag there, not in two
-  places. `complete.go`
+  `max-pods`, `pvc-resize`). A command that sets `ByOwner` opts into
+  `--by-owner` (`TestByOwnerFlags`); one that sets `IgnoresNamespace` reads only
+  cluster-scoped objects and skips `-n` resolution (`TestIgnoresNamespaceFlags`).
+  Global flags (`-n`, `--context`, ...) live once in the `globalFlags` table,
+  which drives both FlagSet registration and the `--help` listing so the two
+  can't drift - add a global flag there, not in two places. `complete.go`
   implements the cobra-compatible `__complete` protocol kubectl invokes via the
   `completion/kubectl_complete-klens` shim, plus `completion install` (writes
   the shim to krew's bin dir, needs no cluster). Completion after `-n` is the
@@ -88,11 +87,14 @@ Three packages under `internal/`, layered cli → view → kube:
   bundle (embedded `kubernetes.Interface` + `Dynamic` for CRDs), the `Flags`
   struct with `Scope()`, `scope.go` (`ResolveScope` expands and validates `-n`,
   including globs) plus the `listScoped` fan-out that turns a multi-namespace
-  `Scope` into one `List` per namespace up to `MaxNamespaceFanout`, the
-  `Table` helper used for all columnar output, and `color.go` (`Painter` + `ResolveColor` + `IsTTY`). `Table` buffers
-  rows and, via `SortBy(column)`, sorts ascending by a named header at `Flush`
-  (numeric columns ordered by value); it aligns on *visible* width (ANSI
-  stripped) so colored cells don't break columns, and bolds headers via the
+  `Scope` into one `List` per namespace up to `MaxNamespaceFanout` (with
+  `MaxInFlight` capping total concurrent requests, since `cfg.QPS = -1` means
+  nothing else does and the fan-out layers multiply), the
+  `Table` helper used for all columnar output, and `color.go` (`Painter` +
+  `ResolveColor` + `IsTTY`). `Table` buffers rows and, via `SortBy(column)`,
+  sorts ascending by a named header at `Flush` (numeric columns ordered by
+  value); it aligns on *visible* width (ANSI stripped) so colored cells don't
+  break columns, and bolds headers via the
   `Painter` passed to `NewTable`. Color is resolved once in the dispatcher
   (`--color` > `KLENS_COLOR` > `NO_COLOR` > TTY) into `Flags.Color`.
 
@@ -123,19 +125,21 @@ therefore seed `Namespace` objects into the fake (`namespaceObjs` in
    if it should scope to the current namespace; set `SortColumns` to the
    lowercased headers to enable `--sort`, then call `t.SortBy(f.Sort)` in the
    view; set `Watch: true` only if the answer changes while you watch it, and
-   update `TestWatchFlags`; set `ByOwner: true` only for a view that reads
-   nothing but the container spec, so a synthetic pod built from a workload
-   template answers it correctly - and update `TestByOwnerFlags`).
-   `TestSortColumnsMatchHeaders` guards that those columns exist, in both
-   `--by-owner` modes.
+   update `TestWatchFlags`; set `ByOwner: true` only for a view whose rows are
+   pod *spec* - a view of runtime state would hide the one pod that differs -
+   and update `TestByOwnerFlags`). `TestSortColumnsMatchHeaders` guards that
+   those columns exist, in both `--by-owner` modes.
 3. Add a `_test.go` next to it. Shell completion, `--help`, and dispatch are all
    registry-driven - no extra wiring.
-4. To color cells, build `paint := kube.NewPainter(f)`, wrap status cells
+4. Anything called once per pod takes the field it reads, not `kube.Flags` by
+   value: the struct is ~120 bytes and the copy measured +3.6% on
+   `BenchmarkReqlim` (see `openwiki/performance.md`).
+5. To color cells, build `paint := kube.NewPainter(f)`, wrap status cells
    (`paint.OK/Warn/Bad/Muted` or the `paint.Status` classifier), and pass `paint`
    to `kube.NewTable`. Name the painter `paint`, not `p`, to avoid shadowing the
    `p` pod loop variable. Color is off in tests (they pass `kube.Flags{}`), so
    plain-output assertions stay byte-identical - add new `...Color` tests instead.
-5. Update the docs, before committing: the README usage section (repo
+6. Update the docs, before committing: the README usage section (repo
    convention), the `openwiki/quickstart.md` command catalog, and any
    `openwiki/architecture.md` section the change reaches - its pushdown table
    when the view uses a field selector, its Testing section when you touch the

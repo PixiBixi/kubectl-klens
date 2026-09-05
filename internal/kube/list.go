@@ -20,11 +20,57 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// ChunkSize is how many objects each List request asks for. A List with no Limit
-// makes the apiserver build the entire collection in one response, which on a
-// cluster with tens of thousands of pods spikes memory on both ends; kubectl
-// chunks at 500 for the same reason.
-const ChunkSize = 500
+// pageBounded issues one page request while holding a slot in inFlight. The slot
+// is held for the request alone, not for a whole paged walk: paging is
+// sequential per collection, so a walk holding its slot end to end would let a
+// handful of large collections monopolize the bound.
+func pageBounded[T any](page func(metav1.ListOptions) ([]T, metav1.ListMeta, error), opts metav1.ListOptions) ([]T, metav1.ListMeta, error) {
+	inFlight <- struct{}{}
+	defer func() { <-inFlight }()
+	return page(opts)
+}
+
+// ChunkSize is how many objects each List request asks for. Its job is to stop
+// the apiserver building an entire unbounded collection in one response, which
+// on a cluster with tens of thousands of pods spikes memory on both ends.
+//
+// It is 2000, not the 500 kubectl uses, because paging is *sequential*: the next
+// request needs the previous response's continue token, so the page count is
+// round trips in series. Measured on a 7209-pod GKE cluster, `reqlim -A`:
+//
+//	500  -> 15 pages, ~4.8s     2000 -> 4 pages, ~2.6s
+//
+// kubectl's 500 buys a memory ceiling klens does not get anyway: it accumulates
+// the whole collection before rendering, so the page size barely moves peak RSS
+// (373-410 MiB at 500 against 351-397 MiB at 2000, same runs). What 500 does buy
+// here is 11 extra round trips.
+//
+// Guarded by TestChunkSizeBounded - the value must stay bounded, the bound is
+// what protects the apiserver.
+const ChunkSize = 2000
+
+// MaxInFlight bounds how many List requests one klens invocation has open at
+// once. Nothing else does: cfg.QPS is -1 on purpose (see client.go), and the two
+// fan-out layers multiply - a view issuing 10 concurrent lists (unused-config)
+// under a glob matching MaxNamespaceFanout namespaces puts 160 requests on the
+// wire at the same instant. HTTP/2 multiplexes them onto one connection so the
+// client survives it, but a shared apiserver answering that burst is exactly
+// what API Priority and Fairness starts queuing.
+//
+// 32 is the knee. Measured on a 7209-pod GKE cluster with
+// `unused-config -n 'be-m*'` (10 lists x 7 namespaces = 70 requests unbounded),
+// medians over four runs:
+//
+//	16 -> 1.53s    32 -> 0.98s    48 -> 0.97s    64 -> 1.01s    unbounded -> 0.82s
+//
+// So 16 costs 60% and 48 buys nothing over 32. 32 keeps nearly all the speed
+// while capping the worst-case burst at a fifth of what it was.
+const MaxInFlight = 32
+
+// inFlight is that bound, as a counting semaphore. It is package-level because
+// the limit is per process, not per call: every List in the binary goes through
+// listAll, which is the one place that can see them all.
+var inFlight = make(chan struct{}, MaxInFlight)
 
 // listAll drains a paginated collection, following the server's continue token
 // until it stops handing one out. Callers get the full slice, so paging stays an
@@ -39,7 +85,7 @@ const ChunkSize = 500
 // which is the right outcome for a one-shot CLI that finishes in seconds.
 func listAll[T any](opts metav1.ListOptions, page func(metav1.ListOptions) ([]T, metav1.ListMeta, error)) ([]T, error) {
 	opts.Limit = ChunkSize
-	items, meta, err := page(opts)
+	items, meta, err := pageBounded(page, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +102,7 @@ func listAll[T any](opts metav1.ListOptions, page func(metav1.ListOptions) ([]T,
 	for meta.Continue != "" {
 		opts.Continue = meta.Continue
 		var next []T
-		next, meta, err = page(opts)
+		next, meta, err = pageBounded(page, opts)
 		if err != nil {
 			return nil, err
 		}
