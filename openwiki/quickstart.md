@@ -159,7 +159,7 @@ registry, so it can't drift). Subcommands accept singular/plural aliases
 
 ## Cross-cutting behaviour
 
-These five behaviours apply across commands - learn them once.
+These behaviours apply across commands - learn them once.
 
 ### Namespace defaulting
 Some commands default to the **current kubeconfig namespace** (the one set by
@@ -201,6 +201,31 @@ A pattern matching nothing is an error too. Expansion needs cluster-wide `list`
 on namespaces; a literal `-n <name>` only needs `get` on that one.
 `kubectl klens restarts -n <TAB>` completes namespace names from the cluster -
 the only completion that talks to a cluster, and it stays silent on any failure.
+
+### By owner (`--by-owner`)
+`reqlim`, `no-limits`, `no-requests`, `images`, `probes` and `qos` set
+`ByOwner: true` in the registry and accept `--by-owner`. It is a source switch,
+not a dedup: with the flag, `podsForView` (`internal/view/byowner.go`) lists
+Deployments, StatefulSets, DaemonSets and Argo Rollouts and turns each into a
+synthetic pod - Namespace/Name from the controller, Spec its pod template,
+Status left zero - which then flows through the view's normal per-container
+loop unmodified. The pod-identity column becomes `WORKLOAD` and a `REPLICAS`
+column appears, free at that point since the controller list already carries
+the count.
+
+```bash
+kubectl klens qos -n prod --by-owner
+```
+
+This is what makes the flag pay for itself on a large cluster: on a 7209-pod
+GKE cluster the four controller lists are 164 objects and ~700 kB, against
+~77 MB for every pod - about 4-7x faster end to end. The trade
+is what the row means: with the flag it is the **desired** spec (a rollout in
+flight shows only the new one, a pod mutated after creation is invisible),
+without it it is what is actually **running**. None of the six views reads
+`pod.Status` except `qos`, which already has a from-spec fallback for exactly
+this case - that is what let this be one code path instead of two. `--sort pod`
+and `--sort workload` are both accepted in both modes.
 
 ### Sorting (`--sort`)
 A command that declares `SortColumns` opts into `--sort <column>`. The

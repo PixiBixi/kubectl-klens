@@ -89,6 +89,27 @@ fixed name, so read it as a review queue, not a delete script.
 kube-system from the `-A` view only; an explicit `-n kube-system` still returns
 its rows.
 
+`reqlim`, `no-limits`, `no-requests`, `images`, `probes` and `qos` accept
+`--by-owner`, which reads the Deployments, StatefulSets, DaemonSets and Argo
+Rollouts behind the pods instead of the pods themselves: one row per container
+per workload, with a `REPLICAS` column, and far cheaper on a large cluster - on
+a 7209-pod cluster the controllers are 164 objects and ~700 kB against ~77 MB of
+pods, about 4-7x faster end to end.
+
+```console
+$ kubectl klens qos -n 'be-motherlode-*' --by-owner
+NS                              WORKLOAD                REPLICAS  QOS         REQ_CPU  LIM_CPU  REQ_MEM  LIM_MEM  VERDICT
+be-motherlode-a-inference-prod  motherlode-a-inference  1         Guaranteed  7        7        4G       4G       GUARANTEED
+be-motherlode-a-training-prod   motherlode-a-training   1         Burstable   4        none     16G      none     BURSTABLE
+```
+
+The trade is what the numbers mean. `--by-owner` shows the **desired** spec, so a
+rollout in flight shows only the new one and a pod mutated after creation is
+invisible; without it these views read what is actually **running**. `REPLICAS`
+is `status.desiredNumberScheduled` for a DaemonSet, which has no
+`spec.replicas`, and is muted at `0`: a scaled-to-zero workload's requests
+reserve nothing.
+
 ### Storage & networking
 
 | Command | Shows |
@@ -154,9 +175,9 @@ In a picker, `/` filters as you type. A single-key secret skips the key picker.
 
 `--request-timeout` bounds each apiserver request (default `1m0s`) so an
 unresponsive control plane can't hang the command forever; `--request-timeout=0`
-removes the bound. `--sort`, `-w/--watch` and `--interval` are per-command flags
-(`<TAB>` lists what a given command takes). `Ctrl-C` cancels in-flight requests
-and exits `130`, or `0` under `--watch`.
+removes the bound. `--sort`, `-w/--watch`, `--interval` and `--by-owner` are
+per-command flags (`<TAB>` lists what a given command takes). `Ctrl-C` cancels
+in-flight requests and exits `130`, or `0` under `--watch`.
 
 ## Namespace scope
 

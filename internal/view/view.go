@@ -52,6 +52,14 @@ type podContainer struct {
 // podContainers enumerates a pod's containers in startup order - init, then
 // app, then ephemeral (debug) - tagged with their kind. The returned pointers
 // alias p, so they stay valid only as long as p does.
+// podContainers enumerates a pod's containers in startup order - init, then
+// app, then ephemeral (debug) - tagged with their kind. The returned pointers
+// alias p, so they stay valid only as long as p does.
+//
+// A synthetic pod standing in for a workload template (see podsForView) has no
+// ephemeral containers - those are attached to a running pod, never declared in
+// a workload's spec - so this reads the same for a real pod and a template
+// without needing a second version.
 func podContainers(p *corev1.Pod) []podContainer {
 	out := make([]podContainer, 0, len(p.Spec.InitContainers)+len(p.Spec.Containers)+len(p.Spec.EphemeralContainers))
 	for i := range p.Spec.InitContainers {
@@ -141,4 +149,55 @@ func qtyOrNone(paint kube.Painter, rl corev1.ResourceList, name corev1.ResourceN
 		return q.String()
 	}
 	return paint.Muted("none")
+}
+
+// ownerHeader is the column name that replaces a view's pod-identity column
+// under --by-owner: the rows are then workloads, read straight from their
+// controllers, not pods.
+const ownerHeader = "WORKLOAD"
+
+// podColumn returns the header for a view's pod-identity column: its own name,
+// or WORKLOAD when --by-owner is reading workloads instead of pods.
+func podColumn(f kube.Flags, header string) string {
+	if f.ByOwner {
+		return ownerHeader
+	}
+	return header
+}
+
+// podSort maps a --sort value naming the pod-identity column onto whichever
+// header the table actually carries, so `--sort pod` keeps working under
+// --by-owner and `--sort workload` without it. Both names are accepted in both
+// modes: which one is live depends on a flag, and rejecting the other would
+// make --sort fail for a reason that has nothing to do with the sort.
+func podSort(f kube.Flags, sort, header string) string {
+	switch sort {
+	case "pod", "podname", "workload":
+		return podColumn(f, header)
+	}
+	return sort
+}
+
+// ownerHeaders and appendOwnerCells insert a REPLICAS column right after the
+// identity column when --by-owner is active - free at that point, since
+// podsForView already listed the controller to get there - and contribute
+// nothing when it is off, so the table renders byte-identical to before the
+// flag existed.
+//
+// appendOwnerCells appends into the caller's reusable row buffer rather than
+// returning a slice: it runs once per row, where a fresh slice (or the
+// slices.Concat this replaced) is a heap allocation per line. ownerHeaders runs
+// once per table, so it can allocate.
+func ownerHeaders(f kube.Flags) []string {
+	if !f.ByOwner {
+		return nil
+	}
+	return []string{"REPLICAS"}
+}
+
+func appendOwnerCells(row []string, paint kube.Painter, f kube.Flags, p *corev1.Pod) []string {
+	if !f.ByOwner {
+		return row
+	}
+	return append(row, replicaCell(paint, replicasOf(p)))
 }

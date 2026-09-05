@@ -16,9 +16,11 @@ import (
 // probe handler types with a reliability verdict, so a missing readiness probe
 // (which silently serves 5xx during rollouts) is as visible as a missing
 // liveness probe. Batch (Job/CronJob) pods are excluded since they aren't
-// servers. Rows default to VERDICT (risk) order, riskiest at the bottom.
+// servers - under --by-owner that exclusion is automatic, because Jobs are not
+// one of the four kinds podsForView reads. Rows default to VERDICT (risk)
+// order, riskiest at the bottom.
 func Probes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{})
+	pods, err := podsForView(ctx, c, f)
 	if err != nil {
 		return err
 	}
@@ -26,6 +28,7 @@ func Probes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 
 	type entry struct {
 		ns, pod, container           string
+		replicas                     *corev1.Pod
 		readiness, liveness, startup string
 		verdict, sev                 string
 	}
@@ -46,6 +49,7 @@ func Probes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 			list = append(list, entry{
 				ns:        p.Namespace,
 				pod:       p.Name,
+				replicas:  p,
 				container: ctr.Name,
 				readiness: probeHandler(ctr.ReadinessProbe),
 				liveness:  probeHandler(ctr.LivenessProbe),
@@ -65,19 +69,27 @@ func Probes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 		)
 	})
 
-	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "READINESS", "LIVENESS", "STARTUP", "VERDICT")
+	t := kube.NewTable(out, paint, slices.Concat(
+		[]string{"NS", podColumn(f, "POD")}, ownerHeaders(f),
+		[]string{"CONTAINER", "READINESS", "LIVENESS", "STARTUP", "VERDICT"},
+	)...)
+	// Reused row buffer; see Reqlim for why this is not a slices.Concat.
+	row := make([]string, 0, 8)
 	for i := range list {
 		e := &list[i]
-		t.Row(
-			e.ns, e.pod, e.container,
+		row = append(row[:0], e.ns, e.pod)
+		row = appendOwnerCells(row, paint, f, e.replicas)
+		row = append(row,
+			e.container,
 			probeCell(paint, e.readiness),
 			probeCell(paint, e.liveness),
 			probeCell(paint, e.startup),
 			sevPaint(paint, e.sev)(e.verdict),
 		)
+		t.Row(row...)
 	}
 	t.SortRank("VERDICT", verdictRank("NO-PROBES", "NO-READINESS", "NO-LIVENESS", "OK"))
-	t.SortBy(orDefault(f.Sort, "verdict"))
+	t.SortBy(podSort(f, orDefault(f.Sort, "verdict"), "POD"))
 	return t.Flush()
 }
 

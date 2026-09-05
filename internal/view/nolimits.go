@@ -3,18 +3,18 @@ package view
 import (
 	"context"
 	"io"
+	"slices"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
 // NoLimits lists containers missing CPU and/or memory limits (kube-system
 // excluded from the -A view), the usual source of noisy-neighbour and eviction
-// surprises.
+// surprises. --by-owner reads the workload specs instead of the running pods;
+// see Reqlim's doc comment.
 func NoLimits(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	return reportMissing(ctx, c, f, out, func(ctr *corev1.Container) corev1.ResourceList {
 		return ctr.Resources.Limits
@@ -26,13 +26,18 @@ func NoLimits(ctx context.Context, c kube.Clients, f kube.Flags, args []string, 
 // containers are checked too: LimitRange and ResourceQuota admission apply to
 // them as well, so an unbounded init container is a real gap, not a detail.
 // kube-system is skipped only when listing across all namespaces.
-func reportMissing(ctx context.Context, c kubernetes.Interface, f kube.Flags, out io.Writer, pick func(*corev1.Container) corev1.ResourceList) error {
-	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{})
+func reportMissing(ctx context.Context, c kube.Clients, f kube.Flags, out io.Writer, pick func(*corev1.Container) corev1.ResourceList) error {
+	pods, err := podsForView(ctx, c, f)
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
-	t := kube.NewTable(out, paint, "NS", "POD", "CONTAINER", "KIND", "MISSING")
+	t := kube.NewTable(out, paint, slices.Concat(
+		[]string{"NS", podColumn(f, "POD")}, ownerHeaders(f),
+		[]string{"CONTAINER", "KIND", "MISSING"},
+	)...)
+	// Reused row buffer; see Reqlim for why this is not a slices.Concat.
+	row := make([]string, 0, 6)
 	for i := range pods {
 		p := &pods[i]
 		if skipNamespace(f, p.Namespace) {
@@ -40,11 +45,14 @@ func reportMissing(ctx context.Context, c kubernetes.Interface, f kube.Flags, ou
 		}
 		for _, pc := range podContainers(p) {
 			if m := missingResources(pick(pc.Spec)); m != "" {
-				t.Row(p.Namespace, p.Name, pc.Spec.Name, pc.Kind, paint.Warn(m))
+				row = append(row[:0], p.Namespace, p.Name)
+				row = appendOwnerCells(row, paint, f, p)
+				row = append(row, pc.Spec.Name, pc.Kind, paint.Warn(m))
+				t.Row(row...)
 			}
 		}
 	}
-	t.SortBy(f.Sort)
+	t.SortBy(podSort(f, f.Sort, "POD"))
 	return t.Flush()
 }
 

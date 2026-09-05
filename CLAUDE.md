@@ -55,7 +55,8 @@ Three packages under `internal/`, layered cli → view → kube:
   interval; `TestWatchFlags` locks the watchable set (`pending`, `restarts`,
   `rollouts`, `terminating`, `autoscaler`, `node-conditions`, `svc-backends`,
   `max-pods`, `pvc-resize`). A command that sets `IgnoresNamespace` reads only
-  cluster-scoped objects and skips `-n` resolution (`TestIgnoresNamespaceFlags`).
+  cluster-scoped objects and skips `-n` resolution (`TestIgnoresNamespaceFlags`);
+  one that sets `ByOwner` opts into `--by-owner` (`TestByOwnerFlags`).
   Global flags (`-n`, `--context`, ...) live once in
   the `globalFlags` table, which drives both FlagSet registration and the
   `--help` listing so the two can't drift - add a global flag there, not in two
@@ -68,8 +69,16 @@ Three packages under `internal/`, layered cli → view → kube:
   command line.
 - **`internal/view`** - one file per subcommand, each a `RunFunc`:
   `func(ctx, kube.Clients, kube.Flags, args []string, out io.Writer) error`.
-  Shared node helpers live in `view.go`. `secret.go` is the only interactive
-  command: `kube.IsTTY(out)` gates promptui pickers vs. plain piped listings.
+  Shared node helpers live in `view.go`. `byowner.go` holds `podsForView`, the
+  shared source for the six `--by-owner` commands (`reqlim`, `no-limits`,
+  `no-requests`, `images`, `probes`, `qos`): it lists Deployments/StatefulSets/
+  DaemonSets/Argo Rollouts instead of pods and turns each into a synthetic pod
+  (Namespace/Name from the controller, Spec its template, Status zero), which
+  then flows through the view's normal per-container loop unmodified - a view
+  qualifies only if it reads nothing but the container spec, `qos` included
+  (its `qosClass` has a from-spec fallback for exactly this). `secret.go` is the
+  only interactive command: `kube.IsTTY(out)` gates promptui pickers vs. plain
+  piped listings.
   Sortable views call `t.SortBy(f.Sort)` before `Flush`; `image-count` and
   `restarts` keep a bespoke count-descending default (overridden by `--sort`).
   Views colorize status cells by building `paint := kube.NewPainter(f)` and
@@ -114,8 +123,11 @@ therefore seed `Namespace` objects into the fake (`namespaceObjs` in
    if it should scope to the current namespace; set `SortColumns` to the
    lowercased headers to enable `--sort`, then call `t.SortBy(f.Sort)` in the
    view; set `Watch: true` only if the answer changes while you watch it, and
-   update `TestWatchFlags`). `TestSortColumnsMatchHeaders` guards that those
-   columns exist.
+   update `TestWatchFlags`; set `ByOwner: true` only for a view that reads
+   nothing but the container spec, so a synthetic pod built from a workload
+   template answers it correctly - and update `TestByOwnerFlags`).
+   `TestSortColumnsMatchHeaders` guards that those columns exist, in both
+   `--by-owner` modes.
 3. Add a `_test.go` next to it. Shell completion, `--help`, and dispatch are all
    registry-driven - no extra wiring.
 4. To color cells, build `paint := kube.NewPainter(f)`, wrap status cells

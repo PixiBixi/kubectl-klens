@@ -8,7 +8,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -18,8 +17,13 @@ import (
 // not say is that a Burstable pod with no memory request is ranked with the
 // BestEffort crowd when the kubelet starts evicting, which is the finding this
 // view exists for. Rows default to VERDICT (risk) order, riskiest at the bottom.
+//
+// --by-owner computes the class from the workload spec instead of a running
+// pod's status: qosClass falls back to exactly that computation whenever
+// status.qosClass is unset, which is what a synthetic pod (see podsForView)
+// always looks like.
 func Qos(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{})
+	pods, err := podsForView(ctx, c, f)
 	if err != nil {
 		return err
 	}
@@ -51,12 +55,17 @@ func Qos(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 		)
 	})
 
-	t := kube.NewTable(out, paint, "NS", "POD", "QOS", "REQ_CPU", "LIM_CPU", "REQ_MEM", "LIM_MEM", "VERDICT")
+	t := kube.NewTable(out, paint, slices.Concat(
+		[]string{"NS", podColumn(f, "POD")}, ownerHeaders(f),
+		[]string{"QOS", "REQ_CPU", "LIM_CPU", "REQ_MEM", "LIM_MEM", "VERDICT"},
+	)...)
+	// Reused row buffer; see Reqlim for why this is not a slices.Concat.
+	row := make([]string, 0, 9)
 	for i := range list {
 		e := &list[i]
-		t.Row(
-			e.pod.Namespace,
-			e.pod.Name,
+		row = append(row[:0], e.pod.Namespace, e.pod.Name)
+		row = appendOwnerCells(row, paint, f, e.pod)
+		row = append(row,
 			string(e.class),
 			qtyOrNone(paint, e.req, corev1.ResourceCPU),
 			qtyOrNone(paint, e.lim, corev1.ResourceCPU),
@@ -64,9 +73,10 @@ func Qos(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 			qtyOrNone(paint, e.lim, corev1.ResourceMemory),
 			sevPaint(paint, e.sev)(e.verdict),
 		)
+		t.Row(row...)
 	}
 	t.SortRank("VERDICT", verdictRank("EVICT-FIRST", "NO-MEM-FLOOR", "BURSTABLE", "GUARANTEED"))
-	t.SortBy(orDefault(f.Sort, "verdict"))
+	t.SortBy(podSort(f, orDefault(f.Sort, "verdict"), "POD"))
 	return t.Flush()
 }
 

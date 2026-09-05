@@ -84,6 +84,9 @@ func (a App) completions(prior []string, toComplete string) []string {
 			if c.Watch {
 				extra = append(extra, "-w", "--watch", "--interval")
 			}
+			if c.ByOwner {
+				extra = append(extra, "--by-owner")
+			}
 			if len(extra) > 0 {
 				flags = slices.Concat(completionFlags, extra)
 			}

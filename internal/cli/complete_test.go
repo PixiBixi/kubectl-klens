@@ -220,3 +220,12 @@ func TestCompleteNamespacesStaysSilentOnFailure(t *testing.T) {
 		t.Fatalf("want no candidates with no client factory, got %v", got)
 	}
 }
+
+func TestCompleteOffersByOwnerOnlyWhereSupported(t *testing.T) {
+	if got := (App{}).completions([]string{"reqlim"}, "--by"); !slices.Contains(got, "--by-owner") {
+		t.Fatalf("want --by-owner offered for reqlim, got %v", got)
+	}
+	if got := (App{}).completions([]string{"nodes"}, "--by"); slices.Contains(got, "--by-owner") {
+		t.Fatalf("--by-owner must not be offered for nodes, got %v", got)
+	}
+}

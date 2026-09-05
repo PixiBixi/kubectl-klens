@@ -35,6 +35,7 @@ type Flags struct {
 	RequestTimeout time.Duration // per-request deadline; 0 means no limit
 	Watch          bool          // re-run the command until interrupted
 	Interval       time.Duration // --watch poll period
+	ByOwner        bool          // collapse per-pod rows onto their owning workload
 }
 
 // Scope returns the resolved set of namespaces to list in. Default (no -n, no
