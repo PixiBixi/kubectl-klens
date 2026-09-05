@@ -113,6 +113,10 @@ reserve nothing.
 
 That list of kinds is closed while the set of controllers that can own a pod is
 not, so a pod owned by any other custom resource has no row under `--by-owner`.
+An operator can also attach pods directly to a controller that *is* listed, and
+those pods need not match its template: the Flink operator in native mode does
+this, so a `FlinkDeployment` is reported at its JobManager size while the larger
+TaskManager pods it owns go uncounted.
 The unflagged view lists pods and misses nothing. A CloudNativePG `Cluster`
 carries no pod manifest at all, only `instances` and `resources`, which CNPG
 applies to both its containers - so it answers `reqlim`, `no-limits`,
