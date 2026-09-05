@@ -29,7 +29,7 @@ func ImageCount(ctx context.Context, c kube.Clients, f kube.Flags, args []string
 	if err != nil {
 		return err
 	}
-	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

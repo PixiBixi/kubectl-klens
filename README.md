@@ -165,6 +165,30 @@ The `†` commands default to the current kubeconfig namespace (kubens/kubectx);
 commands (including `image-count`) default to all namespaces. `autoscaler`
 always reads `kube-system` and ignores namespace flags.
 
+`-n` is checked against the cluster before the command runs: an unknown
+namespace is an error, not an empty table.
+
+```console
+$ kubectl klens restarts -n be-znoff
+error: namespace "be-znoff" not found
+```
+
+`-n` also takes a **shell glob** (`*`, `?`, `[abc]`), not a regexp: `.` is a
+literal character, so `be.*` matches nothing and `be-*` is what you want (klens
+says so when a pattern looks like a regexp). Quote it, or your shell may expand
+it against the current directory:
+
+```bash
+kubectl klens restarts -n 'be-*'      # every be-* namespace
+kubectl klens reqlim -n 'be-[dp]*'
+```
+
+A pattern matching no namespace is an error too. Expanding one needs
+cluster-wide `list` rights on namespaces; a plain `-n <name>` only needs `get`
+on that namespace.
+
+`kubectl klens restarts -n <TAB>` completes namespace names from the cluster.
+
 ## Container kinds
 
 `reqlim`, `no-limits`, `no-requests`, `images`, `restarts` and `privileged`

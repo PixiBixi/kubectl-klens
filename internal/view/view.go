@@ -131,7 +131,7 @@ func allLists(fns ...func() error) error {
 // single namespace they asked for it explicitly, and silently returning nothing
 // for `-n kube-system` would be a lie.
 func skipNamespace(f kube.Flags, namespace string) bool {
-	return f.NamespaceScope() == "" && namespace == "kube-system"
+	return f.ScopeIsAll() && namespace == "kube-system"
 }
 
 // qtyOrNone returns the string form of a resource quantity, or a muted "none"

@@ -46,19 +46,19 @@ func UnusedConfig(ctx context.Context, c kube.Clients, f kube.Flags, args []stri
 		sas      []corev1.ServiceAccount
 		ings     []networkingv1.Ingress
 	)
-	ns := f.NamespaceScope()
+	scope := f.Scope()
 	opts := metav1.ListOptions{}
 	err := allLists(
-		func() (err error) { cms, err = kube.ListConfigMaps(ctx, c, ns, opts); return err },
-		func() (err error) { secrets, err = kube.ListSecrets(ctx, c, ns, opts); return err },
-		func() (err error) { pods, err = kube.ListPods(ctx, c, ns, opts); return err },
-		func() (err error) { deploys, err = kube.ListDeployments(ctx, c, ns, opts); return err },
-		func() (err error) { stateful, err = kube.ListStatefulSets(ctx, c, ns, opts); return err },
-		func() (err error) { daemons, err = kube.ListDaemonSets(ctx, c, ns, opts); return err },
-		func() (err error) { jobs, err = kube.ListJobs(ctx, c, ns, opts); return err },
-		func() (err error) { crons, err = kube.ListCronJobs(ctx, c, ns, opts); return err },
-		func() (err error) { sas, err = kube.ListServiceAccounts(ctx, c, ns, opts); return err },
-		func() (err error) { ings, err = kube.ListIngresses(ctx, c, ns, opts); return err },
+		func() (err error) { cms, err = kube.ListConfigMaps(ctx, c, scope, opts); return err },
+		func() (err error) { secrets, err = kube.ListSecrets(ctx, c, scope, opts); return err },
+		func() (err error) { pods, err = kube.ListPods(ctx, c, scope, opts); return err },
+		func() (err error) { deploys, err = kube.ListDeployments(ctx, c, scope, opts); return err },
+		func() (err error) { stateful, err = kube.ListStatefulSets(ctx, c, scope, opts); return err },
+		func() (err error) { daemons, err = kube.ListDaemonSets(ctx, c, scope, opts); return err },
+		func() (err error) { jobs, err = kube.ListJobs(ctx, c, scope, opts); return err },
+		func() (err error) { crons, err = kube.ListCronJobs(ctx, c, scope, opts); return err },
+		func() (err error) { sas, err = kube.ListServiceAccounts(ctx, c, scope, opts); return err },
+		func() (err error) { ings, err = kube.ListIngresses(ctx, c, scope, opts); return err },
 	)
 	if err != nil {
 		return err

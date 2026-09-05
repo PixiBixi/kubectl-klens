@@ -26,7 +26,7 @@ import (
 // transferring three pods and transferring every pod in the cluster, since the
 // interesting answer here is almost always a handful of rows.
 func Pending(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{
+	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{
 		FieldSelector: fields.OneTermEqualSelector("status.phase", string(corev1.PodPending)).String(),
 	})
 	if err != nil {

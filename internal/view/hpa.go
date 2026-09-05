@@ -20,7 +20,7 @@ import (
 // maxed-out (no headroom) or metric-blind HPA is readable at a glance. Rows
 // default to VERDICT (risk) order, riskiest at the bottom.
 func Hpa(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	hpas, err := kube.ListHorizontalPodAutoscalers(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
+	hpas, err := kube.ListHorizontalPodAutoscalers(ctx, c, f.Scope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

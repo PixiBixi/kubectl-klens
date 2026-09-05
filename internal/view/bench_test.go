@@ -99,13 +99,42 @@ type benchRunFunc func(context.Context, kube.Clients, kube.Flags, []string, io.W
 
 func benchView(b *testing.B, fn benchRunFunc, objs []runtime.Object) {
 	b.Helper()
+	benchViewFlags(b, fn, objs, kube.Flags{})
+}
+
+func benchViewFlags(b *testing.B, fn benchRunFunc, objs []runtime.Object, f kube.Flags) {
+	b.Helper()
 	cl := clients(fake.NewClientset(objs...))
 	b.ReportAllocs()
 	for b.Loop() {
-		if err := fn(context.Background(), cl, kube.Flags{}, nil, io.Discard); err != nil {
+		if err := fn(context.Background(), cl, f, nil, io.Discard); err != nil {
 			b.Fatal(err)
 		}
 	}
+}
+
+// BenchmarkReqlimGlobFanout lists 8 of the 40 namespaces through the fan-out,
+// against BenchmarkReqlim's single cluster-wide list. On a fake clientset the
+// round trips are free, so this only measures the local cost of the fan-out -
+// the real win (not transferring 32 namespaces of pods) is invisible here.
+func BenchmarkReqlimGlobFanout(b *testing.B) {
+	ns := make([]string, 0, kube.MaxNamespaceFanout)
+	for i := range kube.MaxNamespaceFanout {
+		ns = append(ns, fmt.Sprintf("namespace-%d", i))
+	}
+	benchViewFlags(b, Reqlim, benchObjects(benchPods, 0), kube.Flags{Namespaces: ns})
+}
+
+// BenchmarkReqlimGlobWide is the same query past the fanout cap, which falls
+// back to one cluster-wide list filtered locally. It is the shape that has to
+// stay close to BenchmarkReqlim: it does the same list plus a map lookup per
+// pod.
+func BenchmarkReqlimGlobWide(b *testing.B) {
+	ns := make([]string, 0, kube.MaxNamespaceFanout+1)
+	for i := range kube.MaxNamespaceFanout + 1 {
+		ns = append(ns, fmt.Sprintf("namespace-%d", i))
+	}
+	benchViewFlags(b, Reqlim, benchObjects(benchPods, 0), kube.Flags{Namespaces: ns})
 }
 
 // PvcResize is the heaviest shape: two full lists joined on the pod side.

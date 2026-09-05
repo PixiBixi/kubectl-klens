@@ -15,7 +15,7 @@ import (
 // scheduling footprint and toward ResourceQuota, so leaving them out
 // understated the real cost. kube-system is excluded from the -A view only.
 func Reqlim(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

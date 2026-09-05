@@ -35,22 +35,22 @@ func Rollouts(ctx context.Context, c kube.Clients, f kube.Flags, args []string, 
 		daemons  []appsv1.DaemonSet
 		argo     []unstructured.Unstructured
 	)
-	ns := f.NamespaceScope()
+	scope := f.Scope()
 	err := allLists(
 		func() (err error) {
-			deploys, err = kube.ListDeployments(ctx, c, ns, metav1.ListOptions{})
+			deploys, err = kube.ListDeployments(ctx, c, scope, metav1.ListOptions{})
 			return err
 		},
 		func() (err error) {
-			stateful, err = kube.ListStatefulSets(ctx, c, ns, metav1.ListOptions{})
+			stateful, err = kube.ListStatefulSets(ctx, c, scope, metav1.ListOptions{})
 			return err
 		},
 		func() (err error) {
-			daemons, err = kube.ListDaemonSets(ctx, c, ns, metav1.ListOptions{})
+			daemons, err = kube.ListDaemonSets(ctx, c, scope, metav1.ListOptions{})
 			return err
 		},
 		func() error {
-			list, err := kube.ListCustom(ctx, c.Dynamic, rolloutGVR, ns, metav1.ListOptions{})
+			list, err := kube.ListCustom(ctx, c.Dynamic, rolloutGVR, scope, metav1.ListOptions{})
 			// A cluster without Argo Rollouts installed, or a user without
 			// access to them, is the normal case rather than a failure: the
 			// other three kinds still make a useful table, so the CRD rows are

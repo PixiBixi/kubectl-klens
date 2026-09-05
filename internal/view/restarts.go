@@ -21,7 +21,7 @@ import (
 // classic cause of a pod that never starts, and it used to be invisible here.
 // Containers with zero restarts are omitted.
 func Restarts(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

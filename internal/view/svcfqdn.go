@@ -12,7 +12,7 @@ import (
 
 // SvcFQDN lists services and prints their in-cluster FQDN.
 func SvcFQDN(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	services, err := kube.ListServices(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
+	services, err := kube.ListServices(ctx, c, f.Scope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

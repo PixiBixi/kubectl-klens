@@ -35,7 +35,7 @@ func Terminating(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 		nodes  []corev1.Node
 		nsList []corev1.Namespace
 	)
-	scope := f.NamespaceScope()
+	scope := f.Scope()
 	err := allLists(
 		func() (err error) {
 			pods, err = kube.ListPods(ctx, c, scope, metav1.ListOptions{})
@@ -85,7 +85,7 @@ func Terminating(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 		if n.Status.Phase != corev1.NamespaceTerminating {
 			continue
 		}
-		if scope != "" && n.Name != scope {
+		if !scope.All() && !slices.Contains(scope.Names(), n.Name) {
 			continue
 		}
 		// A namespace has no grace period: it is deleted as soon as its content

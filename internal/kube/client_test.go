@@ -114,7 +114,7 @@ func TestListPodsPagesWithoutThrottling(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Now()
-	pods, err := ListPods(context.Background(), c, "", metav1.ListOptions{})
+	pods, err := ListPods(context.Background(), c, Scope{}, metav1.ListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,11 +2,17 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
 func completeOut(t *testing.T, args ...string) string {
@@ -172,16 +178,45 @@ func TestCompletionOffersEveryGlobalFlag(t *testing.T) {
 }
 
 func TestCompletionOffersWatchOnlyWhereRegistered(t *testing.T) {
-	got := completions([]string{"pending"}, "-")
+	got := App{}.completions([]string{"pending"}, "-")
 	for _, want := range []string{"-w", "--watch", "--interval"} {
 		if !slices.Contains(got, want) {
 			t.Errorf("pending completion missing %q: %v", want, got)
 		}
 	}
-	got = completions([]string{"nodes"}, "-")
+	got = App{}.completions([]string{"nodes"}, "-")
 	for _, unwanted := range []string{"-w", "--watch", "--interval"} {
 		if slices.Contains(got, unwanted) {
 			t.Errorf("nodes completion offers %q, which it does not accept: %v", unwanted, got)
 		}
+	}
+}
+
+func TestCompleteNamespaces(t *testing.T) {
+	c := fake.NewClientset(
+		&corev1.Namespace{Name: "be-znof"},
+		&corev1.Namespace{Name: "be-alpha"},
+		&corev1.Namespace{Name: "fe-web"},
+	)
+	app := App{NewClient: func(kube.Flags) (kube.Clients, error) { return kube.Clients{Interface: c}, nil }}
+	for _, flag := range []string{"-n", "--namespace"} {
+		got := app.completions([]string{"reqlim", flag}, "be-")
+		want := []string{"be-alpha", "be-znof"}
+		if !slices.Equal(got, want) {
+			t.Errorf("%s: got %v, want %v", flag, got, want)
+		}
+	}
+}
+
+// TestCompleteNamespacesStaysSilentOnFailure: completion writes to the shell's
+// stdout, so an unreachable cluster has to yield nothing rather than an error
+// the shell would paste into the command line.
+func TestCompleteNamespacesStaysSilentOnFailure(t *testing.T) {
+	app := App{NewClient: func(kube.Flags) (kube.Clients, error) { return kube.Clients{}, errors.New("no kubeconfig") }}
+	if got := app.completions([]string{"reqlim", "-n"}, ""); got != nil {
+		t.Fatalf("want no candidates when the client cannot be built, got %v", got)
+	}
+	if got := (App{}).completions([]string{"reqlim", "-n"}, ""); got != nil {
+		t.Fatalf("want no candidates with no client factory, got %v", got)
 	}
 }
