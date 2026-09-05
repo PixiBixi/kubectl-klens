@@ -328,6 +328,7 @@ func TestRunAcceptsSingularAlias(t *testing.T) {
 // kubeconfig namespace by default (vs. all namespaces).
 func TestCurrentNSDefaultFlags(t *testing.T) {
 	want := map[string]bool{
+		"certs":         true,
 		"reqlim":        true,
 		"svc-fqdn":      true,
 		"svc-backends":  true,

@@ -153,6 +153,7 @@ host+path and checks the backend service, its port, and the TLS secret.
 | --- | --- |
 | `default-sa` | pods still using the default service account |
 | `privileged` † | containers with privileged/host security flags |
+| `certs` † | TLS secrets + certificate expiry + renewal verdict |
 
 ### Reliability (verdicts)
 
@@ -259,6 +260,45 @@ by role.
 `privesc-default` is only ever reported **alongside** another finding: nearly
 every container leaves the field unset, so triggering a row on it would bury the
 real findings.
+
+## Certificate expiry
+
+`certs` lists every `kubernetes.io/tls` secret with the date its certificate
+stops working, how long that is from now, and a verdict.
+
+```console
+$ kubectl klens certs -A --sort in
+NS               SECRET                   NAMES                                ISSUER         NOT_AFTER         IN   VERDICT
+be-video-engine  be-video-engine-app-tls  smartadserver.com (74), eqtv.io (4)  Let's Encrypt  2026-10-09 08:35  33d  OK
+```
+
+| verdict | when |
+| --- | --- |
+| `EXPIRED` | already past |
+| `EXPIRING` | under 7 days |
+| `RENEW-DUE` | under 14 days |
+| `OK` | beyond that |
+| `INVALID` | `tls.crt` missing or unparseable |
+
+The date is the **earliest in the chain**, not the leaf's: an intermediate that
+expires first breaks the handshake just as thoroughly, and it is the one nobody
+watches. `ISSUER` prefers the issuing organization over its common name, since
+Let's Encrypt signs with intermediates called `YR1` and `YR2`; `self-signed`
+means subject and issuer are the same.
+
+`NAMES` prints the certificate's names while they are short, and otherwise
+groups them by registrable domain with a count, so a delivery certificate
+carrying 88 hosts reads as `smartadserver.com (86), eqtv.io (2)` instead of
+destroying the table. In-cluster names (`api.ns.svc`, `.cluster.local`) group as
+`cluster-internal`. Naming a secret prints every name it carries:
+
+```bash
+kubectl klens certs -n be-usersync-prod be-usersync-app-public-tls
+```
+
+The apiserver does the narrowing to TLS secrets, which is cheaper (43 of 386
+secrets on one cluster) and means the command never reads the passwords and
+tokens it has no business seeing.
 
 ## Sorting
 

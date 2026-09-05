@@ -91,6 +91,7 @@ var commands = []Command{
 	{Name: "terminating", Summary: "List pods and namespaces stuck being deleted, with the blocker (cluster-wide)", Run: view.Terminating, SortColumns: []string{"kind", "ns", "name", "stuck-for", "blocker", "finalizers", "verdict"}, Watch: true},
 	{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler, SortColumns: []string{"nodegroup", "health", "ready", "target", "min", "max", "scaleup", "scaledown", "last-change"}, Watch: true, IgnoresNamespace: true},
 	{Name: "unused-config", Summary: "List ConfigMaps and Secrets nothing references in the current namespace (-A for all; -A excludes kube-system)", Run: view.UnusedConfig, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "type", "owner"}},
+	{Name: "certs", Summary: "List TLS secrets with their certificate expiry and a renewal verdict in the current namespace (-A for all); a secret name prints all its names", Run: view.Certs, CurrentNSDefault: true, SortColumns: []string{"ns", "secret", "names", "issuer", "not_after", "in", "verdict"}},
 	{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},
 }
 
