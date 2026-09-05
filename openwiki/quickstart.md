@@ -162,6 +162,7 @@ registry, so it can't drift). Subcommands accept singular/plural aliases
 These behaviours apply across commands - learn them once.
 
 ### Namespace defaulting
+
 Some commands default to the **current kubeconfig namespace** (the one set by
 kubens/kubectx); the rest default to **all namespaces**.
 
@@ -179,6 +180,7 @@ locked by guard tests - see
 [architecture.md](architecture.md#namespace-defaulting).
 
 ### Namespace validation and globs (`-n`)
+
 `-n` is resolved against the cluster before the command runs, so a typo fails
 loudly instead of printing an empty table:
 
@@ -203,6 +205,7 @@ on namespaces; a literal `-n <name>` only needs `get` on that one.
 the only completion that talks to a cluster, and it stays silent on any failure.
 
 ### By owner (`--by-owner`)
+
 `reqlim`, `no-limits`, `no-requests`, `images`, `probes` and `qos` set
 `ByOwner: true` in the registry and accept `--by-owner`. It is a source switch,
 not a dedup: with the flag, `podsForView` (`internal/view/byowner.go`) lists
@@ -229,6 +232,7 @@ this case - that is what let this be one code path instead of two. `--sort pod`
 and `--sort workload` are both accepted in both modes.
 
 ### Sorting (`--sort`)
+
 A command that declares `SortColumns` opts into `--sort <column>`. The
 dispatcher registers the flag, validates the value against that command's
 columns, and the view sorts by it. Verdict commands default to sorting by their
@@ -241,6 +245,7 @@ kubectl klens pdb --sort verdict
 ```
 
 ### Watch (`-w/--watch`)
+
 A command that sets `Watch: true` in the registry opts into `-w/--watch`, which
 re-polls it every `--interval` (default `2s`, floor `1s`) and redraws the screen
 with a status line above the table. It is deliberately not the whole catalog: the
@@ -265,6 +270,7 @@ non-TTY stdout refuses the flag instead of writing clear-screen escapes into a
 pipe.
 
 ### Color
+
 Tables colorize status cells: green = good, yellow = warning, red = bad, gray =
 muted placeholders, bold = headers. Control with
 `--color=auto|always|never` (default `auto` = color only when stdout is a TTY).
@@ -275,6 +281,7 @@ with `--color=always` or `export KLENS_COLOR=always` (kubecolor passes plugin
 output through unchanged).
 
 ### Request bounds and interruption
+
 Every apiserver request is bounded by `--request-timeout` (default `1m0s`;
 `--request-timeout=0` removes the bound). It is a safety net against an
 unresponsive control plane, not a budget - the heaviest command measured on a
@@ -292,6 +299,7 @@ running to completion. Under `--watch` the same signal is the intended way out,
 so it exits `0` and prints nothing.
 
 ### Shell completion
+
 `kubectl klens <TAB>` uses kubectl's plugin-completion mechanism (kubectl 1.26+):
 kubectl runs an executable `kubectl_complete-klens` on your `PATH`, which
 forwards to the plugin's hidden `__complete` command. Install the shim (no

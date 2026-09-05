@@ -103,8 +103,8 @@ be-motherlode-a-inference-prod  motherlode-a-inference  1         Guaranteed  7 
 be-motherlode-a-training-prod   motherlode-a-training   1         Burstable   4        none     16G      none     BURSTABLE
 ```
 
-The trade is what the numbers mean. `--by-owner` shows the **desired** spec, so a
-rollout in flight shows only the new one and a pod mutated after creation is
+The trade is what the numbers mean. `--by-owner` shows the **desired** spec, so
+a rollout in flight shows only the new one and a pod mutated after creation is
 invisible; without it these views read what is actually **running**. `REPLICAS`
 is `status.desiredNumberScheduled` for a DaemonSet, which has no
 `spec.replicas`, and is muted at `0`: a scaled-to-zero workload's requests

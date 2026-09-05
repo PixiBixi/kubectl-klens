@@ -220,4 +220,4 @@ Do not re-litigate these without a new measurement:
 | Forcing protobuf explicitly | No-op, already negotiated. |
 | Deferring `terminating`'s node list | ~10% of a command dominated by its pod list. Below the bar for the added branch. |
 | `sync.Pool` anywhere | Nothing is reused across requests in a process that exits in seconds. |
-| Passing `kube.Flags` by value to a per-row helper | Measured +3.6% on `BenchmarkReqlim` (p=0.015, identical B/op and allocs/op) against passing the one field it read. `Flags` is a ~120-byte struct; anything called once per object takes the field, not the struct - see `Command.ByOwner`'s note in CLAUDE.md's subcommand checklist. |
+| Passing `kube.Flags` by value to a per-row helper | +3.6% on `BenchmarkReqlim` (p=0.015, B/op and allocs/op identical) against passing the one field it reads. `Flags` is ~120 bytes: anything called once per object takes the field, not the struct. |
