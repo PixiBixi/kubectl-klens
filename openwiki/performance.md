@@ -67,6 +67,22 @@ paid only on the path that has rows, which narrowing then more than refunds.
 case that is slower than before, ~52ms against ~34ms, and it is not a real
 cluster state.
 
+**Narrow with `-n <glob>`.** The same lever, handed to the user: `-n 'be-*'`
+expands to the matched namespaces and issues one List each instead of a
+cluster-wide one. Measured on the bench shape (6500 pods over 40 namespaces),
+against 11.4ms / 42.9MiB for the cluster-wide list:
+
+| Scope | sec/op | B/op |
+| --- | --- | --- |
+| fan-out, 16 of 40 namespaces | 6.4 ms | 20.4 MiB |
+| fan-out, 32 of 40 | 12.9 ms | 40.8 MiB |
+| fan-out, 40 of 40 | 16.5 ms | 51.0 MiB |
+
+So the fan-out wins while it covers well under half the cluster and loses
+once it covers most of it, which is what sets `kube.MaxNamespaceFanout` at
+16. The fake clientset understates the win: a real targeted List also skips
+the bytes and the protobuf decode of every namespace it did not match.
+
 **Also push filters server-side** where a field selector exists: `defaultsa`,
 `on-node`, `pending` and `nodeips` do. There is no selector for
 `metadata.deletionTimestamp`, which is why `terminating` has to sweep every pod.

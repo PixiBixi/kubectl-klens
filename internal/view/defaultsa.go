@@ -14,7 +14,7 @@ import (
 // pushed down to the apiserver rather than filtered here, so a cluster-wide scan
 // transfers only the offending pods.
 func DefaultSA(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{
+	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{
 		FieldSelector: fields.OneTermEqualSelector("spec.serviceAccountName", "default").String(),
 	})
 	if err != nil {

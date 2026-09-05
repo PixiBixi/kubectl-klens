@@ -22,10 +22,10 @@ import (
 func SvcBackends(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	svcs, epSlices, err := bothLists(
 		func() ([]corev1.Service, error) {
-			return kube.ListServices(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
+			return kube.ListServices(ctx, c, f.Scope(), metav1.ListOptions{})
 		},
 		func() ([]discoveryv1.EndpointSlice, error) {
-			return kube.ListEndpointSlices(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
+			return kube.ListEndpointSlices(ctx, c, f.Scope(), metav1.ListOptions{})
 		},
 	)
 	if err != nil {

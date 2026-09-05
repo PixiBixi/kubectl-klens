@@ -21,7 +21,7 @@ import (
 // order, riskiest at the bottom.
 func Spread(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	pods, nodes, err := bothLists(
-		func() ([]corev1.Pod, error) { return kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{}) },
+		func() ([]corev1.Pod, error) { return kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{}) },
 		func() ([]corev1.Node, error) { return kube.ListNodes(ctx, c, metav1.ListOptions{}) },
 	)
 	if err != nil {

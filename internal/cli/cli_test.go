@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -15,10 +16,23 @@ import (
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
+// namespaceObjs turns names into Namespace objects. Every dispatcher test needs
+// them now: -n is validated against the cluster before the command runs, so a
+// fake with no namespaces makes every scoped command fail.
+func namespaceObjs(names ...string) []runtime.Object {
+	objs := make([]runtime.Object, len(names))
+	for i, n := range names {
+		objs[i] = &corev1.Namespace{Name: n}
+	}
+	return objs
+}
+
 func testApp(out, errw *bytes.Buffer) App {
 	return App{
-		Info:      BuildInfo{Version: "test", Commit: "abc", Date: "today"},
-		NewClient: func(kube.Flags) (kube.Clients, error) { return kube.Clients{Interface: fake.NewClientset()}, nil },
+		Info: BuildInfo{Version: "test", Commit: "abc", Date: "today"},
+		NewClient: func(kube.Flags) (kube.Clients, error) {
+			return kube.Clients{Interface: fake.NewClientset(namespaceObjs("current-ns")...)}, nil
+		},
 		Namespace: func(kube.Flags) (string, error) { return "current-ns", nil },
 		Out:       out,
 		Err:       errw,
@@ -99,7 +113,7 @@ func TestRunDispatchesNodes(t *testing.T) {
 // reqlimApp builds an App whose injected client and namespace resolver are
 // observable: it records resolver calls and exposes the fake clientset.
 func reqlimApp(out, errw *bytes.Buffer, resolved string) (App, *fake.Clientset, *bool) {
-	c := fake.NewClientset()
+	c := fake.NewClientset(namespaceObjs(resolved, "custom")...)
 	called := false
 	return App{
 		Info:      BuildInfo{Version: "test"},
@@ -478,6 +492,101 @@ func TestWantsWatch(t *testing.T) {
 	for _, a := range []string{"-A", "--sort=name", "--wait", "worker-1"} {
 		if wantsWatch([]string{a}) {
 			t.Errorf("wantsWatch(%q) = true, want false", a)
+		}
+	}
+}
+
+// listedNamespaces returns every namespace a pods "list" was scoped to, in
+// order, so a fanned-out glob can be told from a single cluster-wide list.
+func listedNamespaces(c *fake.Clientset) []string {
+	var out []string
+	for _, action := range c.Actions() {
+		if action.GetVerb() == "list" && action.GetResource().Resource == "pods" {
+			out = append(out, action.GetNamespace())
+		}
+	}
+	return out
+}
+
+func TestRunNamespaceGlobFansOut(t *testing.T) {
+	var out, errw bytes.Buffer
+	c := fake.NewClientset(namespaceObjs("be-znof", "be-alpha", "fe-web")...)
+	app := App{
+		Info:      BuildInfo{Version: "test"},
+		NewClient: func(kube.Flags) (kube.Clients, error) { return kube.Clients{Interface: c}, nil },
+		Namespace: func(kube.Flags) (string, error) { return "current-ns", nil },
+		Out:       &out,
+		Err:       &errw,
+	}
+	if code := app.Run([]string{"reqlim", "-n", "be-*"}); code != 0 {
+		t.Fatalf("want exit 0, got %d (err=%q)", code, errw.String())
+	}
+	got := listedNamespaces(c)
+	want := []string{"be-alpha", "be-znof"}
+	if len(got) != 2 || !slices.Equal(slices.Sorted(slices.Values(got)), want) {
+		t.Fatalf("want one list per matched namespace %v, got %v", want, got)
+	}
+}
+
+// TestRunRejectsUnknownNamespace: the old behaviour printed an empty table, so
+// a typo was indistinguishable from a clean namespace.
+func TestRunRejectsUnknownNamespace(t *testing.T) {
+	var out, errw bytes.Buffer
+	if code := testApp(&out, &errw).Run([]string{"reqlim", "-n", "be-znof"}); code != 1 {
+		t.Fatalf("want exit 1, got %d", code)
+	}
+	if !strings.Contains(errw.String(), `namespace "be-znof" not found`) {
+		t.Fatalf("want a not-found error, got %q", errw.String())
+	}
+	if out.String() != "" {
+		t.Fatalf("want no table on a bad namespace, got %q", out.String())
+	}
+}
+
+func TestRunRejectsGlobMatchingNothing(t *testing.T) {
+	var out, errw bytes.Buffer
+	if code := testApp(&out, &errw).Run([]string{"reqlim", "-n", "be-*"}); code != 1 {
+		t.Fatalf("want exit 1, got %d", code)
+	}
+	if !strings.Contains(errw.String(), `no namespace matches "be-*"`) {
+		t.Fatalf("want a no-match error, got %q", errw.String())
+	}
+}
+
+// TestRunSkipsNamespaceResolutionForClusterCommands: -n means nothing to a node
+// view, so it must not cost a request, and must not fail a run that was always
+// going to be correct.
+func TestRunSkipsNamespaceResolutionForClusterCommands(t *testing.T) {
+	var out, errw bytes.Buffer
+	c := fake.NewClientset()
+	app := App{
+		Info:      BuildInfo{Version: "test"},
+		NewClient: func(kube.Flags) (kube.Clients, error) { return kube.Clients{Interface: c}, nil },
+		Namespace: func(kube.Flags) (string, error) { return "current-ns", nil },
+		Out:       &out,
+		Err:       &errw,
+	}
+	if code := app.Run([]string{"nodes", "-n", "does-not-exist"}); code != 0 {
+		t.Fatalf("want exit 0, got %d (err=%q)", code, errw.String())
+	}
+	for _, a := range c.Actions() {
+		if a.GetResource().Resource == "namespaces" {
+			t.Fatalf("a cluster-scoped command must not touch namespaces, got %v", c.Actions())
+		}
+	}
+}
+
+// TestIgnoresNamespaceFlags locks in which commands read only cluster-scoped
+// objects and therefore skip -n resolution. Every other command is validated
+// against the cluster, so moving one here silently drops that check.
+func TestIgnoresNamespaceFlags(t *testing.T) {
+	want := map[string]bool{
+		"nodes": true, "taints": true, "capacity": true, "zones": true,
+		"node-ips": true, "max-pods": true, "node-conditions": true, "autoscaler": true,
+	}
+	for _, c := range commands {
+		if c.IgnoresNamespace != want[c.Name] {
+			t.Errorf("%s: IgnoresNamespace = %v, want %v", c.Name, c.IgnoresNamespace, want[c.Name])
 		}
 	}
 }

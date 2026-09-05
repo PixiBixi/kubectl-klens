@@ -54,13 +54,18 @@ Three packages under `internal/`, layered cli → view → kube:
   `cmd.Run` to the redraw loop in `watch.go`, which re-polls into a buffer every
   interval; `TestWatchFlags` locks the watchable set (`pending`, `restarts`,
   `rollouts`, `terminating`, `autoscaler`, `node-conditions`, `svc-backends`,
-  `max-pods`, `pvc-resize`). Global flags (`-n`, `--context`, ...) live once in
+  `max-pods`, `pvc-resize`). A command that sets `IgnoresNamespace` reads only
+  cluster-scoped objects and skips `-n` resolution (`TestIgnoresNamespaceFlags`).
+  Global flags (`-n`, `--context`, ...) live once in
   the `globalFlags` table, which drives both FlagSet registration and the
   `--help` listing so the two can't drift - add a global flag there, not in two
   places. `complete.go`
   implements the cobra-compatible `__complete` protocol kubectl invokes via the
   `completion/kubectl_complete-klens` shim, plus `completion install` (writes
-  the shim to krew's bin dir, needs no cluster).
+  the shim to krew's bin dir, needs no cluster). Completion after `-n` is the
+  one candidate source that hits the cluster: 2s timeout, and silent (no
+  candidates, no message) on any failure - its output lands on the shell's
+  command line.
 - **`internal/view`** - one file per subcommand, each a `RunFunc`:
   `func(ctx, kube.Clients, kube.Flags, args []string, out io.Writer) error`.
   Shared node helpers live in `view.go`. `secret.go` is the only interactive
@@ -72,8 +77,10 @@ Three packages under `internal/`, layered cli → view → kube:
 - **`internal/kube`** - kubeconfig plumbing (`NewClients`, `CurrentNamespace`,
   `clientConfig` via deferred loading rules + context override), the `Clients`
   bundle (embedded `kubernetes.Interface` + `Dynamic` for CRDs), the `Flags`
-  struct with `NamespaceScope()`, the `Table` helper used for all columnar
-  output, and `color.go` (`Painter` + `ResolveColor` + `IsTTY`). `Table` buffers
+  struct with `Scope()`, `scope.go` (`ResolveScope` expands and validates `-n`,
+  including globs) plus the `listScoped` fan-out that turns a multi-namespace
+  `Scope` into one `List` per namespace up to `MaxNamespaceFanout`, the
+  `Table` helper used for all columnar output, and `color.go` (`Painter` + `ResolveColor` + `IsTTY`). `Table` buffers
   rows and, via `SortBy(column)`, sorts ascending by a named header at `Flush`
   (numeric columns ordered by value); it aligns on *visible* width (ANSI
   stripped) so colored cells don't break columns, and bolds headers via the
@@ -91,6 +98,12 @@ by default. The current `CurrentNSDefault` set (`reqlim`, `no-limits`,
 `hpa`, `spread`, `probes`, `qos`, `rollouts`, `unused-config`) is locked in by
 `TestCurrentNSDefaultFlags` in `cli_test.go`, which is the authoritative list -
 update that map whenever you change a command's scoping.
+
+Separately, `kube.ResolveScope` validates `-n` against the cluster before every
+command that does not set `IgnoresNamespace`: an unknown namespace, or a glob
+matching none, is an error rather than an empty table. Dispatcher tests must
+therefore seed `Namespace` objects into the fake (`namespaceObjs` in
+`cli_test.go`).
 
 ## Adding a subcommand
 

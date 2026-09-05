@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -8,6 +9,11 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
 // completionFlags are the global flag tokens offered during shell completion.
@@ -31,7 +37,7 @@ func (a App) complete(args []string) int {
 	if len(args) > 1 {
 		prior = args[:len(args)-1]
 	}
-	for _, cand := range completions(prior, toComplete) {
+	for _, cand := range a.completions(prior, toComplete) {
 		fmt.Fprintln(a.Out, cand)
 	}
 	// :4 == cobra ShellCompDirectiveNoFileComp (suppress filename fallback).
@@ -39,7 +45,15 @@ func (a App) complete(args []string) int {
 	return 0
 }
 
-func completions(prior []string, toComplete string) []string {
+// completionTimeout bounds the one cluster call completion makes. A TAB that
+// hangs is worse than a TAB that offers nothing, so an unreachable cluster has
+// to give up inside the time a user will wait for their prompt to come back.
+const completionTimeout = 2 * time.Second
+
+// namespaceFlags are the tokens after which a value is a namespace.
+var namespaceFlags = []string{"-n", "--namespace"}
+
+func (a App) completions(prior []string, toComplete string) []string {
 	if len(prior) > 0 && prior[0] == "completion" {
 		if strings.HasPrefix(toComplete, "-") {
 			return withPrefix([]string{"--dir"}, toComplete)
@@ -54,6 +68,9 @@ func completions(prior []string, toComplete string) []string {
 	}
 	if len(prior) > 0 && prior[len(prior)-1] == "--color" {
 		return withPrefix([]string{"auto", "always", "never"}, toComplete)
+	}
+	if len(prior) > 0 && slices.Contains(namespaceFlags, prior[len(prior)-1]) {
+		return a.namespaceCompletions(prior, toComplete)
 	}
 	if strings.HasPrefix(toComplete, "-") {
 		flags := completionFlags
@@ -81,6 +98,44 @@ func completions(prior []string, toComplete string) []string {
 		names = append(names, c.Name)
 	}
 	names = append(names, "completion")
+	return withPrefix(names, toComplete)
+}
+
+// namespaceCompletions lists the cluster's namespaces. This is the only
+// completion that talks to a cluster, so it is also the only one that can fail:
+// no kubeconfig, no network, no list rights on namespaces. Every one of those
+// returns no candidates and no message - a completion helper writing an error to
+// stdout would paste it into the user's command line.
+func (a App) namespaceCompletions(prior []string, toComplete string) []string {
+	if a.NewClient == nil {
+		return nil
+	}
+	f := kube.Flags{RequestTimeout: completionTimeout}
+	// --kubeconfig and --context change which cluster to ask, and the user may
+	// well have typed them before the -n they are completing.
+	for i := 0; i+1 < len(prior); i++ {
+		switch prior[i] {
+		case "--kubeconfig":
+			f.Kubeconfig = prior[i+1]
+		case "--context":
+			f.Context = prior[i+1]
+		}
+	}
+	c, err := a.NewClient(f)
+	if err != nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), completionTimeout)
+	defer cancel()
+	list, err := kube.ListNamespaces(ctx, c, metav1.ListOptions{})
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(list))
+	for i := range list {
+		names = append(names, list[i].Name)
+	}
+	slices.Sort(names)
 	return withPrefix(names, toComplete)
 }
 

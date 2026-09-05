@@ -42,19 +42,25 @@ type Command struct {
 	// changes while the user is looking at it (a rollout, a scale-up, a
 	// crashloop); a static inventory would just redraw the same table.
 	Watch bool
+	// IgnoresNamespace marks a command that reads only cluster-scoped objects,
+	// so -n means nothing to it. The dispatcher skips namespace resolution for
+	// these: validating a namespace the command will never list would cost a
+	// round trip and could fail a run that was always going to be correct.
+	// Locked in by TestIgnoresNamespaceFlags.
+	IgnoresNamespace bool
 }
 
 // commands is the registry of every subcommand. Built once at init; callers
 // only range over it, so sharing the slice is safe.
 var commands = []Command{
-	{Name: "nodes", Summary: "List nodes with their pool, instance-type, compute class and spot/on-demand provisioning", Run: view.Nodes, SortColumns: []string{"name", "status", "nodepool", "instance-type", "class", "provisioning"}},
-	{Name: "taints", Summary: "List taints of all nodes", Run: view.Taints, SortColumns: []string{"name", "taints"}},
-	{Name: "capacity", Summary: "Show CPU/memory capacity and allocatable per node", Run: view.Capacity, SortColumns: []string{"name", "cpu_cap", "cpu_alloc", "mem_cap", "mem_alloc"}},
-	{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones, SortColumns: []string{"name", "region", "zone"}},
-	{Name: "node-ips", Summary: "Show internal and external IP per node; a node name narrows it to that node", Run: view.NodeIPs, SortColumns: []string{"name", "class", "internal-ip", "external-ip"}},
+	{Name: "nodes", Summary: "List nodes with their pool, instance-type, compute class and spot/on-demand provisioning", Run: view.Nodes, SortColumns: []string{"name", "status", "nodepool", "instance-type", "class", "provisioning"}, IgnoresNamespace: true},
+	{Name: "taints", Summary: "List taints of all nodes", Run: view.Taints, SortColumns: []string{"name", "taints"}, IgnoresNamespace: true},
+	{Name: "capacity", Summary: "Show CPU/memory capacity and allocatable per node", Run: view.Capacity, SortColumns: []string{"name", "cpu_cap", "cpu_alloc", "mem_cap", "mem_alloc"}, IgnoresNamespace: true},
+	{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones, SortColumns: []string{"name", "region", "zone"}, IgnoresNamespace: true},
+	{Name: "node-ips", Summary: "Show internal and external IP per node; a node name narrows it to that node", Run: view.NodeIPs, SortColumns: []string{"name", "class", "internal-ip", "external-ip"}, IgnoresNamespace: true},
 	{Name: "pods-per-node", Summary: "Count pods per node", Run: view.PodsPerNode, SortColumns: []string{"node", "pods"}},
-	{Name: "max-pods", Summary: "Show pod ceiling (allocatable), current count, and free slots per node", Run: view.MaxPods, SortColumns: []string{"node", "maxpods", "used", "free"}, Watch: true},
-	{Name: "node-conditions", Summary: "Show node readiness and memory/disk/pid pressure", Run: view.NodeConditions, SortColumns: []string{"name", "status", "memory", "disk", "pid"}, Watch: true},
+	{Name: "max-pods", Summary: "Show pod ceiling (allocatable), current count, and free slots per node", Run: view.MaxPods, SortColumns: []string{"node", "maxpods", "used", "free"}, Watch: true, IgnoresNamespace: true},
+	{Name: "node-conditions", Summary: "Show node readiness and memory/disk/pid pressure", Run: view.NodeConditions, SortColumns: []string{"name", "status", "memory", "disk", "pid"}, Watch: true, IgnoresNamespace: true},
 	{Name: "reqlim", Summary: "Show requests/limits per container in the current namespace (-A for all; -A excludes kube-system)", Run: view.Reqlim, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "req_cpu", "lim_cpu", "req_mem", "lim_mem"}},
 	{Name: "no-limits", Summary: "List containers missing CPU/memory limits in the current namespace (-A for all; -A excludes kube-system)", Run: view.NoLimits, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "missing"}},
 	{Name: "no-requests", Summary: "List containers missing CPU/memory requests in the current namespace (-A for all; -A excludes kube-system)", Run: view.NoRequests, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "missing"}},
@@ -73,12 +79,12 @@ var commands = []Command{
 	{Name: "pdb", Summary: "List PodDisruptionBudgets with a drain-safety verdict in the current namespace (-A for all)", Run: view.Pdb, CurrentNSDefault: true, SortColumns: []string{"ns", "name", "policy", "expected", "desired", "healthy", "allowed", "verdict"}},
 	{Name: "pending", Summary: "List Pending pods with the synthesized blocking reason in the current namespace (-A for all)", Run: view.Pending, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "reason"}, Watch: true},
 	{Name: "hpa", Summary: "List HorizontalPodAutoscalers with an autoscaling verdict in the current namespace (-A for all)", Run: view.Hpa, CurrentNSDefault: true, SortColumns: []string{"ns", "name", "ref", "targets", "min", "max", "current", "desired", "verdict"}},
-	{Name: "spread", Summary: "Show replica placement across nodes/zones with a single-point-of-failure verdict in the current namespace (-A for all)", Run: view.Spread, CurrentNSDefault: true, SortColumns: []string{"ns", "workload", "replicas", "nodes", "zones", "verdict"}},
+	{Name: "spread", Summary: "Show replica placement across nodes/zones with a single-point-of-failure verdict in the current namespace (-A for all)", Run: view.Spread, CurrentNSDefault: true, SortColumns: []string{"ns", "replicas", "nodes", "zones", "verdict"}},
 	{Name: "qos", Summary: "Show each pod's QoS class and effective requests/limits with an eviction-risk verdict in the current namespace (-A for all; -A excludes kube-system)", Run: view.Qos, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "qos", "req_cpu", "lim_cpu", "req_mem", "lim_mem", "verdict"}},
 	{Name: "rollouts", Summary: "List workloads that are not finished rolling out, incl. Argo Rollouts, in the current namespace (-A for all)", Run: view.Rollouts, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "desired", "ready", "updated", "available", "state", "verdict"}, Watch: true},
 	{Name: "probes", Summary: "List containers' readiness/liveness/startup probes with a reliability verdict in the current namespace (-A for all; -A excludes kube-system)", Run: view.Probes, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "readiness", "liveness", "startup", "verdict"}},
 	{Name: "terminating", Summary: "List pods and namespaces stuck being deleted, with the blocker (cluster-wide)", Run: view.Terminating, SortColumns: []string{"kind", "ns", "name", "stuck-for", "blocker", "finalizers", "verdict"}, Watch: true},
-	{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler, SortColumns: []string{"nodegroup", "health", "ready", "target", "min", "max", "scaleup", "scaledown", "last-change"}, Watch: true},
+	{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler, SortColumns: []string{"nodegroup", "health", "ready", "target", "min", "max", "scaleup", "scaledown", "last-change"}, Watch: true, IgnoresNamespace: true},
 	{Name: "unused-config", Summary: "List ConfigMaps and Secrets nothing references in the current namespace (-A for all; -A excludes kube-system)", Run: view.UnusedConfig, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "type", "owner"}},
 	{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},
 }
@@ -97,7 +103,7 @@ var globalFlags = []globalFlag{
 		func(fs *flag.FlagSet, f *kube.Flags, h string) { fs.StringVar(&f.Kubeconfig, "kubeconfig", "", h) }},
 	{"--context string", "kubeconfig context to use",
 		func(fs *flag.FlagSet, f *kube.Flags, h string) { fs.StringVar(&f.Context, "context", "", h) }},
-	{"-n, --namespace string", "namespace scope (pod-based commands)",
+	{"-n, --namespace string", "namespace scope; accepts a glob (e.g. 'be-*')",
 		func(fs *flag.FlagSet, f *kube.Flags, h string) {
 			fs.StringVar(&f.Namespace, "namespace", "", h)
 			fs.StringVar(&f.Namespace, "n", "", h)
@@ -218,6 +224,16 @@ func (a App) Run(args []string) int {
 	// process exit, so a long cluster-wide list stops the moment the user asks.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// Resolve -n once, here, so every command gets the same verdict on a bad
+	// namespace and the same expansion of a glob. Under --watch it stays outside
+	// the redraw loop: the namespace set is what the user asked for, not
+	// something to re-derive every two seconds.
+	if !cmd.IgnoresNamespace {
+		if err := kube.ResolveScope(ctx, client, &f); err != nil {
+			fmt.Fprintln(a.Err, "error:", err)
+			return 1
+		}
+	}
 	if f.Watch {
 		paint := kube.NewPainter(f)
 		header := func() string { return paint.Muted(watchHeader(f.Interval, args, time.Now())) }

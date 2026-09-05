@@ -17,7 +17,7 @@ import (
 func MaxPods(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	nodes, pods, err := bothLists(
 		func() ([]corev1.Node, error) { return kube.ListNodes(ctx, c, metav1.ListOptions{}) },
-		func() ([]corev1.Pod, error) { return kube.ListPods(ctx, c, "", metav1.ListOptions{}) },
+		func() ([]corev1.Pod, error) { return kube.ListPods(ctx, c, kube.Scope{}, metav1.ListOptions{}) },
 	)
 	if err != nil {
 		return err

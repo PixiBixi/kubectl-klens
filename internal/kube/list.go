@@ -2,6 +2,8 @@ package kube
 
 import (
 	"context"
+	"slices"
+	"sync"
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -63,9 +65,102 @@ func listAll[T any](opts metav1.ListOptions, page func(metav1.ListOptions) ([]T,
 	return all, nil
 }
 
-// ListPods returns every pod in ns (empty means all namespaces) matching opts.
-func ListPods(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]corev1.Pod, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]corev1.Pod, metav1.ListMeta, error) {
+// MaxNamespaceFanout caps how many per-namespace Lists listScoped issues before
+// falling back to a single cluster-wide one it filters locally. It bounds both
+// the concurrent requests and the pathological case: `-n '*'` on a 400-namespace
+// cluster would otherwise be 400 requests to rebuild a list the apiserver serves
+// in one.
+//
+// 16 is where the two stop being comparable. Measured on the 6500-pod / 40-
+// namespace bench shape (see internal/view/bench_test.go), against the 11.4ms
+// and 42.9MiB of the cluster-wide list: 16 namespaces fan out in 6.4ms / 20.4MiB,
+// 32 in 12.9ms / 40.8MiB, all 40 in 16.5ms / 51.0MiB. So the fan-out wins while
+// it covers well under half the cluster and loses once it covers most of it -
+// and a matched set of 16 is under half of any cluster big enough for this to
+// matter.
+//
+// Those numbers understate the fan-out twice over, which is why the cap is not
+// lower: the fake clientset transfers nothing, while a real targeted List also
+// skips the bytes and the protobuf decode of every namespace it did not match;
+// and paging makes the cluster-wide list *sequential* (13 requests for 6500
+// pods, per openwiki/performance.md) where the fan-out's are concurrent.
+const MaxNamespaceFanout = 16
+
+// listScoped runs page once per namespace in the scope and concatenates the
+// results, so a glob-expanded -n fetches only the namespaces it matched.
+//
+// The two degenerate scopes take the original single-List path with no extra
+// work: a cluster-wide scope pages with ns "" exactly as before, and a single
+// namespace pages with that name. Only a multi-namespace scope fans out.
+func listScoped[T any, PT interface {
+	*T
+	metav1.Object
+}](s Scope, opts metav1.ListOptions, page func(ns string, o metav1.ListOptions) ([]T, metav1.ListMeta, error)) ([]T, error) {
+	names := s.Names()
+	if len(names) <= 1 {
+		ns := ""
+		if len(names) == 1 {
+			ns = names[0]
+		}
+		return listAll(opts, func(o metav1.ListOptions) ([]T, metav1.ListMeta, error) { return page(ns, o) })
+	}
+	if len(names) > MaxNamespaceFanout {
+		return listWideFiltered[T, PT](s, opts, page)
+	}
+	per := make([][]T, len(names))
+	errs := make([]error, len(names))
+	var wg sync.WaitGroup
+	wg.Add(len(names))
+	for i, ns := range names {
+		go func() {
+			defer wg.Done()
+			per[i], errs[i] = listAll(opts, func(o metav1.ListOptions) ([]T, metav1.ListMeta, error) { return page(ns, o) })
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
+	return slices.Concat(per...), nil
+}
+
+// listWideFiltered serves a scope too wide to fan out: one cluster-wide List,
+// then drop what the pattern did not match. It transfers more bytes than the
+// targeted Lists would, and still wins past MaxNamespaceFanout because it is one
+// round trip instead of dozens.
+func listWideFiltered[T any, PT interface {
+	*T
+	metav1.Object
+}](s Scope, opts metav1.ListOptions, page func(ns string, o metav1.ListOptions) ([]T, metav1.ListMeta, error)) ([]T, error) {
+	all, err := listAll(opts, func(o metav1.ListOptions) ([]T, metav1.ListMeta, error) { return page("", o) })
+	if err != nil {
+		return nil, err
+	}
+	want := make(map[string]struct{}, s.Len())
+	for _, ns := range s.Names() {
+		want[ns] = struct{}{}
+	}
+	// Compacting in place, and only moving an element once something ahead of it
+	// was dropped: these objects are fat (a corev1.Pod is ~1.2 kB), so an
+	// unconditional append would copy the whole list to keep most of it.
+	n := 0
+	for i := range all {
+		if _, ok := want[PT(&all[i]).GetNamespace()]; !ok {
+			continue
+		}
+		if n != i {
+			all[n] = all[i]
+		}
+		n++
+	}
+	return all[:n], nil
+}
+
+// ListPods returns every pod in scope matching opts.
+func ListPods(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]corev1.Pod, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]corev1.Pod, metav1.ListMeta, error) {
 		l, err := c.CoreV1().Pods(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -85,9 +180,9 @@ func ListNodes(ctx context.Context, c kubernetes.Interface, opts metav1.ListOpti
 	})
 }
 
-// ListSecrets returns every secret in ns matching opts.
-func ListSecrets(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]corev1.Secret, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]corev1.Secret, metav1.ListMeta, error) {
+// ListSecrets returns every secret in scope matching opts.
+func ListSecrets(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]corev1.Secret, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]corev1.Secret, metav1.ListMeta, error) {
 		l, err := c.CoreV1().Secrets(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -96,9 +191,9 @@ func ListSecrets(ctx context.Context, c kubernetes.Interface, ns string, opts me
 	})
 }
 
-// ListServices returns every service in ns matching opts.
-func ListServices(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]corev1.Service, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]corev1.Service, metav1.ListMeta, error) {
+// ListServices returns every service in scope matching opts.
+func ListServices(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]corev1.Service, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]corev1.Service, metav1.ListMeta, error) {
 		l, err := c.CoreV1().Services(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -107,9 +202,9 @@ func ListServices(ctx context.Context, c kubernetes.Interface, ns string, opts m
 	})
 }
 
-// ListPodDisruptionBudgets returns every PDB in ns matching opts.
-func ListPodDisruptionBudgets(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]policyv1.PodDisruptionBudget, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]policyv1.PodDisruptionBudget, metav1.ListMeta, error) {
+// ListPodDisruptionBudgets returns every PDB in scope matching opts.
+func ListPodDisruptionBudgets(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]policyv1.PodDisruptionBudget, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]policyv1.PodDisruptionBudget, metav1.ListMeta, error) {
 		l, err := c.PolicyV1().PodDisruptionBudgets(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -118,9 +213,9 @@ func ListPodDisruptionBudgets(ctx context.Context, c kubernetes.Interface, ns st
 	})
 }
 
-// ListHorizontalPodAutoscalers returns every HPA in ns matching opts.
-func ListHorizontalPodAutoscalers(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]autoscalingv2.HorizontalPodAutoscaler, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]autoscalingv2.HorizontalPodAutoscaler, metav1.ListMeta, error) {
+// ListHorizontalPodAutoscalers returns every HPA in scope matching opts.
+func ListHorizontalPodAutoscalers(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]autoscalingv2.HorizontalPodAutoscaler, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]autoscalingv2.HorizontalPodAutoscaler, metav1.ListMeta, error) {
 		l, err := c.AutoscalingV2().HorizontalPodAutoscalers(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -129,11 +224,11 @@ func ListHorizontalPodAutoscalers(ctx context.Context, c kubernetes.Interface, n
 	})
 }
 
-// ListEndpointSlices returns every EndpointSlice in ns matching opts.
+// ListEndpointSlices returns every EndpointSlice in scope matching opts.
 // EndpointSlices, not the legacy Endpoints object: they carry the per-endpoint
 // ready/terminating conditions this needs, and Endpoints is deprecated.
-func ListEndpointSlices(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]discoveryv1.EndpointSlice, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]discoveryv1.EndpointSlice, metav1.ListMeta, error) {
+func ListEndpointSlices(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]discoveryv1.EndpointSlice, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]discoveryv1.EndpointSlice, metav1.ListMeta, error) {
 		l, err := c.DiscoveryV1().EndpointSlices(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -142,9 +237,9 @@ func ListEndpointSlices(ctx context.Context, c kubernetes.Interface, ns string, 
 	})
 }
 
-// ListDeployments returns every Deployment in ns matching opts.
-func ListDeployments(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]appsv1.Deployment, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]appsv1.Deployment, metav1.ListMeta, error) {
+// ListDeployments returns every Deployment in scope matching opts.
+func ListDeployments(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]appsv1.Deployment, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]appsv1.Deployment, metav1.ListMeta, error) {
 		l, err := c.AppsV1().Deployments(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -153,9 +248,9 @@ func ListDeployments(ctx context.Context, c kubernetes.Interface, ns string, opt
 	})
 }
 
-// ListStatefulSets returns every StatefulSet in ns matching opts.
-func ListStatefulSets(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]appsv1.StatefulSet, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]appsv1.StatefulSet, metav1.ListMeta, error) {
+// ListStatefulSets returns every StatefulSet in scope matching opts.
+func ListStatefulSets(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]appsv1.StatefulSet, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]appsv1.StatefulSet, metav1.ListMeta, error) {
 		l, err := c.AppsV1().StatefulSets(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -164,9 +259,9 @@ func ListStatefulSets(ctx context.Context, c kubernetes.Interface, ns string, op
 	})
 }
 
-// ListDaemonSets returns every DaemonSet in ns matching opts.
-func ListDaemonSets(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]appsv1.DaemonSet, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]appsv1.DaemonSet, metav1.ListMeta, error) {
+// ListDaemonSets returns every DaemonSet in scope matching opts.
+func ListDaemonSets(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]appsv1.DaemonSet, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]appsv1.DaemonSet, metav1.ListMeta, error) {
 		l, err := c.AppsV1().DaemonSets(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -175,18 +270,18 @@ func ListDaemonSets(ctx context.Context, c kubernetes.Interface, ns string, opts
 	})
 }
 
-// ListCustom returns every object of a custom resource in ns (empty means all
-// namespaces) through the dynamic client, paginated like the typed lists.
+// ListCustom returns every object of a custom resource in scope through the
+// dynamic client, paginated like the typed lists.
 //
 // A nil client yields no objects and no error: that is how a view reading a CRD
 // stays runnable when the bundle carries no dynamic client (a test, or a caller
 // that never built one). Whether an absent CRD is an error is the caller's call
 // - see view.Rollouts.
-func ListCustom(ctx context.Context, d dynamic.Interface, gvr schema.GroupVersionResource, ns string, opts metav1.ListOptions) ([]unstructured.Unstructured, error) {
+func ListCustom(ctx context.Context, d dynamic.Interface, gvr schema.GroupVersionResource, s Scope, opts metav1.ListOptions) ([]unstructured.Unstructured, error) {
 	if d == nil {
 		return nil, nil
 	}
-	return listAll(opts, func(o metav1.ListOptions) ([]unstructured.Unstructured, metav1.ListMeta, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]unstructured.Unstructured, metav1.ListMeta, error) {
 		l, err := d.Resource(gvr).Namespace(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -197,9 +292,9 @@ func ListCustom(ctx context.Context, d dynamic.Interface, gvr schema.GroupVersio
 	})
 }
 
-// ListIngresses returns every Ingress in ns matching opts.
-func ListIngresses(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]networkingv1.Ingress, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]networkingv1.Ingress, metav1.ListMeta, error) {
+// ListIngresses returns every Ingress in scope matching opts.
+func ListIngresses(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]networkingv1.Ingress, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]networkingv1.Ingress, metav1.ListMeta, error) {
 		l, err := c.NetworkingV1().Ingresses(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -219,9 +314,9 @@ func ListNamespaces(ctx context.Context, c kubernetes.Interface, opts metav1.Lis
 	})
 }
 
-// ListPersistentVolumeClaims returns every PVC in ns matching opts.
-func ListPersistentVolumeClaims(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]corev1.PersistentVolumeClaim, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]corev1.PersistentVolumeClaim, metav1.ListMeta, error) {
+// ListPersistentVolumeClaims returns every PVC in scope matching opts.
+func ListPersistentVolumeClaims(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]corev1.PersistentVolumeClaim, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]corev1.PersistentVolumeClaim, metav1.ListMeta, error) {
 		l, err := c.CoreV1().PersistentVolumeClaims(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -230,9 +325,9 @@ func ListPersistentVolumeClaims(ctx context.Context, c kubernetes.Interface, ns 
 	})
 }
 
-// ListConfigMaps returns every ConfigMap in ns matching opts.
-func ListConfigMaps(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]corev1.ConfigMap, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]corev1.ConfigMap, metav1.ListMeta, error) {
+// ListConfigMaps returns every ConfigMap in scope matching opts.
+func ListConfigMaps(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]corev1.ConfigMap, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]corev1.ConfigMap, metav1.ListMeta, error) {
 		l, err := c.CoreV1().ConfigMaps(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -241,9 +336,9 @@ func ListConfigMaps(ctx context.Context, c kubernetes.Interface, ns string, opts
 	})
 }
 
-// ListServiceAccounts returns every ServiceAccount in ns matching opts.
-func ListServiceAccounts(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]corev1.ServiceAccount, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]corev1.ServiceAccount, metav1.ListMeta, error) {
+// ListServiceAccounts returns every ServiceAccount in scope matching opts.
+func ListServiceAccounts(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]corev1.ServiceAccount, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]corev1.ServiceAccount, metav1.ListMeta, error) {
 		l, err := c.CoreV1().ServiceAccounts(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -252,9 +347,9 @@ func ListServiceAccounts(ctx context.Context, c kubernetes.Interface, ns string,
 	})
 }
 
-// ListJobs returns every Job in ns matching opts.
-func ListJobs(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]batchv1.Job, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]batchv1.Job, metav1.ListMeta, error) {
+// ListJobs returns every Job in scope matching opts.
+func ListJobs(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]batchv1.Job, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]batchv1.Job, metav1.ListMeta, error) {
 		l, err := c.BatchV1().Jobs(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err
@@ -263,9 +358,9 @@ func ListJobs(ctx context.Context, c kubernetes.Interface, ns string, opts metav
 	})
 }
 
-// ListCronJobs returns every CronJob in ns matching opts.
-func ListCronJobs(ctx context.Context, c kubernetes.Interface, ns string, opts metav1.ListOptions) ([]batchv1.CronJob, error) {
-	return listAll(opts, func(o metav1.ListOptions) ([]batchv1.CronJob, metav1.ListMeta, error) {
+// ListCronJobs returns every CronJob in scope matching opts.
+func ListCronJobs(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]batchv1.CronJob, error) {
+	return listScoped(s, opts, func(ns string, o metav1.ListOptions) ([]batchv1.CronJob, metav1.ListMeta, error) {
 		l, err := c.BatchV1().CronJobs(ns).List(ctx, o)
 		if err != nil {
 			return nil, metav1.ListMeta{}, err

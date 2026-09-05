@@ -29,18 +29,18 @@ func PvcUnused(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 		pods     []corev1.Pod
 		stateful []appsv1.StatefulSet
 	)
-	ns := f.NamespaceScope()
+	scope := f.Scope()
 	err := allLists(
 		func() (err error) {
-			pvcs, err = kube.ListPersistentVolumeClaims(ctx, c, ns, metav1.ListOptions{})
+			pvcs, err = kube.ListPersistentVolumeClaims(ctx, c, scope, metav1.ListOptions{})
 			return err
 		},
 		func() (err error) {
-			pods, err = kube.ListPods(ctx, c, ns, metav1.ListOptions{})
+			pods, err = kube.ListPods(ctx, c, scope, metav1.ListOptions{})
 			return err
 		},
 		func() (err error) {
-			stateful, err = kube.ListStatefulSets(ctx, c, ns, metav1.ListOptions{})
+			stateful, err = kube.ListStatefulSets(ctx, c, scope, metav1.ListOptions{})
 			return err
 		},
 	)

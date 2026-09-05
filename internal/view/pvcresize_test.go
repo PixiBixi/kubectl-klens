@@ -279,7 +279,7 @@ func TestPvcResizeScopesPodListToAffectedNamespaces(t *testing.T) {
 // single cluster-wide list.
 func TestPvcResizeFallsBackToOneListPastFanout(t *testing.T) {
 	objs := []runtime.Object{storageClass("expandable", true)}
-	for i := range maxNamespaceFanout + 1 {
+	for i := range kube.MaxNamespaceFanout + 1 {
 		objs = append(objs, resizingPvc("asked", "ns-"+strconv.Itoa(i), "expandable", "150Gi", "180Gi"))
 	}
 	c := fake.NewClientset(objs...)

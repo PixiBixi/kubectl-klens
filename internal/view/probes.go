@@ -18,7 +18,7 @@ import (
 // liveness probe. Batch (Job/CronJob) pods are excluded since they aren't
 // servers. Rows default to VERDICT (risk) order, riskiest at the bottom.
 func Probes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

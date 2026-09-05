@@ -170,10 +170,37 @@ kubens/kubectx); the rest default to **all namespaces**.
   `pending`, `hpa`, `spread`, `probes`, `qos`, `rollouts`, `ingress`,
   `pvc-unused`, `pvc-resize`, `unused-config`.
 - `-A` / `--all-namespaces` widens to all; `-n <ns>` targets one.
-- `autoscaler` ignores namespace flags entirely (always `kube-system`).
+- `nodes`, `taints`, `capacity`, `zones`, `node-ips`, `max-pods`,
+  `node-conditions` and `autoscaler` read only cluster-scoped objects and ignore
+  namespace flags entirely.
 
-This is driven by `Command.CurrentNSDefault` and is locked by a guard test -
-see [architecture.md](architecture.md#namespace-defaulting).
+This is driven by `Command.CurrentNSDefault` and `Command.IgnoresNamespace`, both
+locked by guard tests - see
+[architecture.md](architecture.md#namespace-defaulting).
+
+### Namespace validation and globs (`-n`)
+`-n` is resolved against the cluster before the command runs, so a typo fails
+loudly instead of printing an empty table:
+
+```console
+$ kubectl klens restarts -n be-znoff
+error: namespace "be-znoff" not found
+```
+
+It also accepts a `path.Match` glob (`*`, `?`, `[abc]`) - a shell glob, not a
+regexp, so `.` is literal and `be.*` matches nothing. The error says so when a
+pattern looks like a regexp, on both the no-match and the not-found path.
+The glob is expanded into one List per matched namespace. Quote it so the shell
+does not expand it first:
+
+```bash
+kubectl klens restarts -n 'be-*'
+```
+
+A pattern matching nothing is an error too. Expansion needs cluster-wide `list`
+on namespaces; a literal `-n <name>` only needs `get` on that one.
+`kubectl klens restarts -n <TAB>` completes namespace names from the cluster -
+the only completion that talks to a cluster, and it stays silent on any failure.
 
 ### Sorting (`--sort`)
 A command that declares `SortColumns` opts into `--sort <column>`. The

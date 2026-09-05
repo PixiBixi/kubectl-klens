@@ -17,7 +17,7 @@ func OnNode(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 		return errors.New("on-node requires a node name: kubectl klens on-node <node>")
 	}
 	node := args[0]
-	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{
+	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{
 		FieldSelector: fields.OneTermEqualSelector("spec.nodeName", node).String(),
 	})
 	if err != nil {

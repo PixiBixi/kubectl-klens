@@ -54,6 +54,7 @@ type Command struct {
     CurrentNSDefault bool     // scope to current ns when neither -n nor -A given
     SortColumns      []string // lowercased headers; enables --sort
     Watch            bool     // enables -w/--watch + --interval
+    IgnoresNamespace bool     // cluster-scoped only; skips -n resolution
 }
 ```
 
@@ -116,6 +117,12 @@ subcommand names, global flags, `--sort` columns (per the chosen command), and
 `--color` values - all derived from the same `commands` registry. `completion
 install` writes the shim into krew's bin dir (or `--dir`) and needs no cluster.
 
+One completion does hit the cluster: after `-n` / `--namespace` it lists
+namespaces, honouring a `--kubeconfig` or `--context` already typed on the line.
+It is bounded by a 2s timeout and returns **no candidates and no message** on
+any failure (no kubeconfig, no network, no list rights): completion output goes
+to the shell's stdout, so an error would be pasted into the user's command line.
+
 ## Namespace defaulting
 
 `Command.CurrentNSDefault` controls scoping and is **subtle enough to have a
@@ -126,13 +133,34 @@ guard test**:
   namespace) and sets `Flags.Namespace` before running.
 - `false` → the command lists across all namespaces by default.
 
-`Flags.NamespaceScope()` (`internal/kube/flags.go`) turns this into the actual
-list scope: `-A` → all namespaces (`""`), otherwise the resolved `Namespace`.
-
 The authoritative set of `CurrentNSDefault: true` commands is locked by
 `TestCurrentNSDefaultFlags` in `cli_test.go`. **Update that test's map whenever
 you change a command's scoping** - it is the source of truth, and CI fails if
 the registry and the map disagree.
+
+### Resolving `-n` into a `Scope`
+
+`kube.ResolveScope` (`internal/kube/scope.go`) runs once in the dispatcher,
+after the current-namespace defaulting and before the command, for every command
+that does not set `IgnoresNamespace`. It turns the raw `-n` value into
+`Flags.Namespaces`, and it is strict on purpose - the behaviour it replaces was
+printing an empty table for a typo, which reads as "nothing to report":
+
+- a literal name → one `Get`; `NotFound` and a 403 are reported differently,
+  because "fix your typo" is the wrong advice for a permissions problem;
+- a glob (`*`, `?`, `[`) → one namespace `List` filtered with `path.Match`, and
+  an empty match is an error like an unknown name;
+- `-A`, or no `-n` → nothing, no request.
+
+`Flags.Scope()` turns the result into a `kube.Scope`, the value every namespaced
+`List` helper takes. It falls back to `Flags.Namespace` when `Namespaces` is
+empty, which is what lets a hand-built `kube.Flags{Namespace: "x"}` - every view
+test - work without a dispatcher round trip. `Flags.NamespaceScope()` survives
+only for the two `Get` call sites in `secret.go`, which need a single namespace
+or nothing.
+
+`Flags.ScopeIsAll()` is the allocation-free form used by `skipNamespace`, which
+runs once per object.
 
 ## The `kube` package
 
@@ -148,6 +176,13 @@ An unlimited `List` makes the apiserver materialize the whole collection in one
 response, which spikes memory on both ends on a cluster with tens of thousands
 of pods. Paging stays an implementation detail: callers get the full slice, and
 a single-page collection is returned as the server's own slice with no copy.
+
+Every namespaced helper takes a `kube.Scope` rather than a namespace string, and
+`listScoped` dispatches on it: an all-namespaces or single-namespace scope takes
+the original single-List path unchanged, while a glob-expanded scope fans out one
+concurrent `List` per namespace and concatenates. Past `MaxNamespaceFanout` (16)
+it falls back to a single cluster-wide List filtered locally - the constant's
+doc comment carries the measurement that picked 16.
 
 On top of paging, four views push their filter **down to the apiserver** with a
 field selector instead of listing everything and filtering in the loop:

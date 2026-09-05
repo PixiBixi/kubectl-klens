@@ -14,7 +14,7 @@ import (
 
 // PodsPerNode counts pods grouped by node, sorted by count descending.
 func PodsPerNode(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

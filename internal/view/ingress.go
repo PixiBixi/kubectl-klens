@@ -31,8 +31,8 @@ func Ingress(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 		// the TLS column instead of failing the command.
 		secretsKnown = true
 	)
-	ns := f.NamespaceScope()
-	ings, err := kube.ListIngresses(ctx, c, ns, metav1.ListOptions{})
+	scope := f.Scope()
+	ings, err := kube.ListIngresses(ctx, c, scope, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
@@ -44,11 +44,11 @@ func Ingress(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 	if len(ings) > 0 {
 		err = allLists(
 			func() (err error) {
-				svcs, err = kube.ListServices(ctx, c, ns, metav1.ListOptions{})
+				svcs, err = kube.ListServices(ctx, c, scope, metav1.ListOptions{})
 				return err
 			},
 			func() error {
-				list, err := kube.ListSecrets(ctx, c, ns, metav1.ListOptions{})
+				list, err := kube.ListSecrets(ctx, c, scope, metav1.ListOptions{})
 				if apierrors.IsForbidden(err) {
 					secretsKnown = false
 					return nil

@@ -17,7 +17,7 @@ import (
 // host paths. Init and ephemeral containers are covered too - a privileged init
 // container escalates exactly as far as an app one. Only flagged rows are shown.
 func Privileged(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := kube.ListPods(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

@@ -18,7 +18,7 @@ import (
 // from raw status fields. Rows default to VERDICT (risk) order, riskiest at the
 // bottom.
 func Pdb(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	pdbs, err := kube.ListPodDisruptionBudgets(ctx, c, f.NamespaceScope(), metav1.ListOptions{})
+	pdbs, err := kube.ListPodDisruptionBudgets(ctx, c, f.Scope(), metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

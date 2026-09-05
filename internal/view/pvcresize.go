@@ -33,10 +33,10 @@ func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 		pvcs    []corev1.PersistentVolumeClaim
 		classes []storagev1.StorageClass
 	)
-	ns := f.NamespaceScope()
+	scope := f.Scope()
 	err := allLists(
 		func() (err error) {
-			pvcs, err = kube.ListPersistentVolumeClaims(ctx, c, ns, metav1.ListOptions{})
+			pvcs, err = kube.ListPersistentVolumeClaims(ctx, c, scope, metav1.ListOptions{})
 			return err
 		},
 		func() error {
@@ -80,7 +80,7 @@ func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 	for i := range list {
 		inNamespace[list[i].pvc.Namespace] = true
 	}
-	pods, err := podsForClaims(ctx, c, ns, inNamespace)
+	pods, err := podsForClaims(ctx, c, scope, inNamespace)
 	if err != nil {
 		return err
 	}
@@ -114,33 +114,25 @@ func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 	return t.Flush()
 }
 
-// maxNamespaceFanout caps how many per-namespace pod lists podsForClaims issues
-// before falling back to a single cluster-wide one. Past a handful the extra
-// round trips cost more than the bytes they save.
-const maxNamespaceFanout = 8
-
 // podsForClaims lists pods only where the rows are. The rows are the few claims
 // mid-resize, normally in one or two namespaces out of hundreds, so filling a
 // handful of POD cells does not justify the cluster-wide pod list (~86 MiB and
 // ~3s on a 6500-pod cluster, per the measurement in kube/client.go).
-func podsForClaims(ctx context.Context, c kube.Clients, scope string, namespaces map[string]bool) ([]corev1.Pod, error) {
-	// Already narrowed to one namespace, or too many to be worth fanning out.
-	if scope != "" || len(namespaces) > maxNamespaceFanout {
+//
+// The fan-out itself, and the cap past which it stops paying, live in
+// kube.listScoped: this only decides which namespaces are worth asking for.
+func podsForClaims(ctx context.Context, c kube.Clients, scope kube.Scope, namespaces map[string]bool) ([]corev1.Pod, error) {
+	if !scope.All() {
 		return kube.ListPods(ctx, c, scope, metav1.ListOptions{})
 	}
-	names := slices.Sorted(maps.Keys(namespaces))
-	perNamespace := make([][]corev1.Pod, len(names))
-	fns := make([]func() error, len(names))
-	for i, name := range names {
-		fns[i] = func() (err error) {
-			perNamespace[i], err = kube.ListPods(ctx, c, name, metav1.ListOptions{})
-			return err
-		}
+	if len(namespaces) > kube.MaxNamespaceFanout {
+		// Past the cap the fan-out becomes one cluster-wide List filtered against
+		// a set holding nearly every namespace: the filter pass costs a sweep of
+		// the pod list and drops almost nothing. Ask for the cluster-wide list
+		// directly instead.
+		return kube.ListPods(ctx, c, kube.Scope{}, metav1.ListOptions{})
 	}
-	if err := allLists(fns...); err != nil {
-		return nil, err
-	}
-	return slices.Concat(perNamespace...), nil
+	return kube.ListPods(ctx, c, kube.NamespaceSet(slices.Sorted(maps.Keys(namespaces))...), metav1.ListOptions{})
 }
 
 // resizeVerdict grades a claim's resize state, returning "" for one that has
