@@ -7,7 +7,7 @@
   "labels": ["dependencies"],
   "assignees": ["PixiBixi"],
   "semanticCommits": "enabled",
-  "postUpdateOptions": ["gomodTidy"],
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"],
   "pinDigests": true,
   "packageRules": [
     {
@@ -20,6 +20,11 @@
       "matchUpdateTypes": ["minor", "patch", "digest"],
       "automerge": true,
       "automergeType": "pr"
+    },
+    {
+      "description": "Only offer releases compatible with the go directive. Default is none, so without this Renovate proposes versions that cannot build until go.mod is bumped, and it shows up at build time rather than in the PR",
+      "matchManagers": ["gomod"],
+      "constraintsFiltering": "strict"
     },
     {
       "description": "Minor Go module bumps ship in the binary -> cut a minor release",
@@ -40,9 +45,11 @@
       "semanticCommitType": "chore"
     },
     {
-      "description": "Go toolchain updates",
+      "description": "Go toolchain updates. Both depTypes are needed: golang is the go directive, which Renovate leaves alone unless rangeStrategy bump unlocks it, toolchain is the toolchain directive, which it bumps by default",
       "matchManagers": ["gomod"],
-      "matchDepTypes": ["golang"],
+      "matchDepTypes": ["golang", "toolchain"],
+      "matchDepNames": ["go"],
+      "rangeStrategy": "bump",
       "groupName": "go-toolchain"
     },
     {
