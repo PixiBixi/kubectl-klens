@@ -92,13 +92,19 @@ The authoritative list is the `commands` slice in
   a claim. Claims already at their requested size are not listed, so an empty
   table means nothing is in flight or stuck
 - `default-sa` - pods still on the default service account
-- `privileged` - containers with privileged/host security flags
+- `privileged` - containers with privileged/host security flags. `privesc-default`
+  (`allowPrivilegeEscalation` left unset, which resolves to true) is only ever
+  reported alongside another finding: nearly every container leaves the field
+  unset, so triggering a row on it alone would bury the real findings
 - `certs` - TLS secrets with their certificate expiry and a renewal verdict
   (`EXPIRED`, `EXPIRING` under 7 days, `RENEW-DUE` under 14). The date is the
   earliest in the chain, not the leaf's, since an intermediate expiring first
   breaks the handshake too. Names group by registrable domain past a short
   cell, so an 88-host delivery certificate reads as
-  `smartadserver.com (86), eqtv.io (2)`; naming a secret prints them all
+  `example.com (86), example.net (2)`; in-cluster names (`api.ns.svc`,
+  `.cluster.local`) group as `cluster-internal`, and naming a secret prints them
+  all. The apiserver does the narrowing to TLS secrets, so the command never
+  reads the passwords and tokens it has no business seeing
 - `svc-fqdn` - in-cluster FQDN of services
 
 `reqlim`, `no-limits`, `no-requests`, `images`, `restarts` and `privileged`

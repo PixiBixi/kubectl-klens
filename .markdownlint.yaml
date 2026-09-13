@@ -5,3 +5,11 @@
 MD013:
   code_blocks: false
   tables: false
+
+# MD033 blocks all inline HTML, but the README header needs it: GitHub strips
+# text alignment from Markdown, so a centered title and badge row can only be
+# <p align="center"> with <a>/<img>/<br> inside, and the command catalog folds
+# with <details>/<summary>. Limited to those elements so the rest of the tree
+# stays plain Markdown.
+MD033:
+  allowed_elements: [p, a, img, br, details, summary]
