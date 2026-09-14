@@ -190,13 +190,13 @@ doc comment carries the measurement that picked 16.
 On top of paging, five views push their filter **down to the apiserver** with a
 field selector instead of listing everything and filtering in the loop:
 
-| View | Field selector |
-|---|---|
-| `on-node` | `spec.nodeName=<node>` |
-| `pending` | `status.phase=Pending` |
-| `default-sa` | `spec.serviceAccountName=default` |
+| View              | Field selector                                     |
+| ----------------- | -------------------------------------------------- |
+| `on-node`         | `spec.nodeName=<node>`                             |
+| `pending`         | `status.phase=Pending`                             |
+| `default-sa`      | `spec.serviceAccountName=default`                  |
 | `node-ips <node>` | `metadata.name=<node>` (only when a node is named) |
-| `certs` | `type=kubernetes.io/tls` on secrets |
+| `certs`           | `type=kubernetes.io/tls` on secrets                |
 
 Pushdown only works for the [field selectors the apiserver actually
 supports](../internal/view/fake_test.go) - `podFields` mirrors the pod set, and
@@ -209,7 +209,7 @@ see the Testing section for the fake that honors selectors.
 All columnar output goes through `kube.NewTable(out, painter, headers...)`.
 `Row(cols...)` buffers rows; `Flush()` renders them. Two things make it robust:
 
-- **ANSI-aware alignment.** Column widths are measured on *visible* width
+- **ANSI-aware alignment.** Column widths are measured on _visible_ width
   (`stripANSI`), so colored cells still line up.
 - **Named-column sort.** `SortBy(column)` sorts ascending by a header name at
   `Flush`, auto-detecting numeric columns so counts order by value. `SortRank`
@@ -275,7 +275,7 @@ override. `Client` builds the clientset and sets two things on the `rest.Config`
    `sevPaint`.
 3. The `VERDICT` cell is colored by severity; the table gets a `SortRank` on
    `VERDICT` via `verdictRank(worstFirst...)`, and `SortBy(orDefault(f.Sort,
-   "verdict"))` defaults to risk order so the riskiest rows sit nearest the
+"verdict"))` defaults to risk order so the riskiest rows sit nearest the
    prompt.
 
 A design principle to preserve: **a control that exists but gives zero
@@ -307,7 +307,7 @@ column and only needs `SortBy`).
   distinct on purpose: it means the kubelet stopped reporting altogether (the
   state that starts the eviction clock), not a kubelet answering unready.
 - `bothLists(listA, listB)` runs two independent list calls concurrently and
-  returns the first error. `max-pods` and `spread` each need nodes *and* pods with
+  returns the first error. `max-pods` and `spread` each need nodes _and_ pods with
   no dependency between them; issued in sequence, the smaller list's latency is
   pure addition (measured ~14% and ~10% of total on a 6300-pod cluster).
   `allLists(fns...)` is the n-way form, used by `--by-owner` for its six
@@ -318,7 +318,7 @@ column and only needs `SortBy`).
 
 Six views (`reqlim`, `no-limits`, `no-requests`, `images`, `probes`, `qos`) set
 `ByOwner: true` in the registry and fetch through `podsForView` instead of
-`kube.ListPods`. Without the flag it *is* `ListPods`; with it, `workloadPods`
+`kube.ListPods`. Without the flag it _is_ `ListPods`; with it, `workloadPods`
 lists Deployments, StatefulSets, DaemonSets, Argo Rollouts, Strimzi PodSets and
 CloudNativePG Clusters concurrently (`allLists`) and turns each into a
 **synthetic pod**: Namespace/Name from the controller, `Spec` its pod template,
@@ -341,7 +341,7 @@ Three mechanics to preserve when adding a kind:
   `instances` and `resources`, so it is `probes,images` unknown while the
   resource columns and the QoS class stay correct.
 - **A missing CRD is not an error.** `absentCRD(err)` swallows no-match,
-  `NotFound` *and* `Forbidden`, so a cluster without Argo Rollouts / Strimzi /
+  `NotFound` _and_ `Forbidden`, so a cluster without Argo Rollouts / Strimzi /
   CNPG installed - or a user without rights on them - still gets a table of the
   built-in kinds instead of a failure. Strimzi is tried at `v1` then the legacy
   `v1beta2`. `kube.ListCustom` returns nothing on a nil `Dynamic`, which is how
@@ -356,7 +356,7 @@ The `nodes` view answers "which pool, which class, spot or on-demand?" from node
 labels, and every cloud spells those differently. `nodelabels.go` holds that
 mapping in three ordered tables - `nodePoolLabels`, `computeClassLabels`,
 `provisioningLabels` - read by `firstLabel` (first key present wins) and
-`nodeProvisioning` (first key whose *value* is recognised wins). The `CLASS`
+`nodeProvisioning` (first key whose _value_ is recognised wins). The `CLASS`
 cell goes through `nodeClass(paint, labels)` rather than `firstLabel` directly,
 because two views print it (`nodes`, `node-ips`): adding a class label key to
 `computeClassLabels` must reach both, not just the one being edited. Order is the
@@ -373,7 +373,7 @@ Three rules the tables encode, worth keeping when adding a cloud:
   present, and the caller draws a muted `<none>`. Reporting `on-demand` for a
   node klens knows nothing about would be a confident wrong answer.
 - **But do infer the unlabeled default.** On-demand is usually implicit - an AKS
-  "regular" node carries no `scalesetpriority` label - so a node bearing *any*
+  "regular" node carries no `scalesetpriority` label - so a node bearing _any_
   label from a known cloud namespace (`cloudLabelPrefixes`) resolves to
   `on-demand` rather than unknown.
 - **`CLASS` stays empty off GKE.** Only GKE has a real compute class (Autopilot
@@ -402,14 +402,14 @@ colored too, not only the anomaly.
    value** - `for i := range pods { p := &pods[i] }`, and take `*corev1.Pod` in
    helpers. gocritic's `performance` tag is enabled in `.golangci.yml` and fails
    CI on `for _, p := range pods`, because `corev1.Pod` is 1192 bytes (`Node` 768,
-   `Container` 408). Two things this rule deliberately does *not* cover:
+   `Container` 408). Two things this rule deliberately does _not_ cover:
    `hugeParam`'s threshold is raised to 256 so `kube.Flags` (104 B) and `cli.App`
    (96 B) stay by-value - they are threaded through every `RunFunc` by design and
    copied once per process, and making them pointers would invite mutation of
    shared flags for nothing. And it is not a speed optimisation: measured on a
    6400-pod cluster the conversion was inside run-to-run noise, since wall time
    is apiserver-bound and loop copies never reach peak RSS. It exists to stop the
-   copy from being reintroduced where it *would* matter - a long-lived slice of
+   copy from being reintroduced where it _would_ matter - a long-lived slice of
    Pods, or a nested loop.
 2. Register it in the `commands` slice in `internal/cli/cli.go`:
    - set `CurrentNSDefault: true` if it should scope to the current namespace
@@ -419,7 +419,7 @@ colored too, not only the anomaly.
      those columns actually exist as headers;
    - set `Watch: true` only if the view's answer changes while you watch it (and
      update `TestWatchFlags`);
-   - set `ByOwner: true` only if the view's rows are pod *spec* and nothing else,
+   - set `ByOwner: true` only if the view's rows are pod _spec_ and nothing else,
      fetch through `podsForView`, and update `TestByOwnerFlags`. A view of
      runtime state would hide the one pod that differs from its template.
 3. Add a `_test.go` next to it. Completion, `--help`, and dispatch are all
@@ -463,18 +463,18 @@ apiserver indexes for it.
 
 ## Where to change what
 
-| You want to… | Touch |
-|---|---|
-| Add/rename a command | `commands` slice in `internal/cli/cli.go` (+ its view file + test) |
-| Add a global flag | `globalFlags` table in `cli.go` (drives registration *and* help) |
-| Change a command's namespace scope | `CurrentNSDefault` in the registry + `TestCurrentNSDefaultFlags` |
-| Fetch a new resource kind / change paging | `internal/kube/list.go` |
-| Change table alignment/sorting | `internal/kube/table.go` |
-| Change colors / color precedence | `internal/kube/color.go` |
-| Change kubeconfig/context resolution | `internal/kube/client.go` |
-| Change request bounds / interrupts | `cfg.Timeout` in `client.go` + the exit-code switch in `cli.go` |
-| Change the watch loop / which commands watch | `internal/cli/watch.go` + `Watch` in the registry + `TestWatchFlags` |
-| Add/adjust a health verdict | the command's `xVerdict` in `internal/view/<name>.go` |
-| Add a controller kind to `--by-owner` | `internal/view/byowner.go` (+ `unknownAnnotation` for what it cannot answer) |
-| Support another cloud's node-pool / spot labels | the ordered tables in `internal/view/nodelabels.go` |
-| Change completion behaviour | `internal/cli/complete.go` |
+| You want to…                                    | Touch                                                                        |
+| ----------------------------------------------- | ---------------------------------------------------------------------------- |
+| Add/rename a command                            | `commands` slice in `internal/cli/cli.go` (+ its view file + test)           |
+| Add a global flag                               | `globalFlags` table in `cli.go` (drives registration _and_ help)             |
+| Change a command's namespace scope              | `CurrentNSDefault` in the registry + `TestCurrentNSDefaultFlags`             |
+| Fetch a new resource kind / change paging       | `internal/kube/list.go`                                                      |
+| Change table alignment/sorting                  | `internal/kube/table.go`                                                     |
+| Change colors / color precedence                | `internal/kube/color.go`                                                     |
+| Change kubeconfig/context resolution            | `internal/kube/client.go`                                                    |
+| Change request bounds / interrupts              | `cfg.Timeout` in `client.go` + the exit-code switch in `cli.go`              |
+| Change the watch loop / which commands watch    | `internal/cli/watch.go` + `Watch` in the registry + `TestWatchFlags`         |
+| Add/adjust a health verdict                     | the command's `xVerdict` in `internal/view/<name>.go`                        |
+| Add a controller kind to `--by-owner`           | `internal/view/byowner.go` (+ `unknownAnnotation` for what it cannot answer) |
+| Support another cloud's node-pool / spot labels | the ordered tables in `internal/view/nodelabels.go`                          |
+| Change completion behaviour                     | `internal/cli/complete.go`                                                   |

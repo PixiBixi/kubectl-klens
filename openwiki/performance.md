@@ -10,11 +10,11 @@ klens is a one-shot CLI dominated by **the apiserver**, not by Go. Local
 processing of a 6500-pod cluster is tens of milliseconds; the command takes
 seconds. The order of magnitude that matters:
 
-| Cost | Scale on a 6500-pod cluster |
-| --- | --- |
-| Listing every pod | ~86 MiB, ~3s (measured, see `internal/kube/client.go`) |
-| Local processing of that list | ~20-35 ms |
-| Rendering the table | ~10 ms |
+| Cost                          | Scale on a 6500-pod cluster                            |
+| ----------------------------- | ------------------------------------------------------ |
+| Listing every pod             | ~86 MiB, ~3s (measured, see `internal/kube/client.go`) |
+| Local processing of that list | ~20-35 ms                                              |
+| Rendering the table           | ~10 ms                                                 |
 
 So the lever is **not fetching what you do not need**. Allocation tuning in the
 view layer is noise by comparison.
@@ -34,7 +34,7 @@ benchstat old.txt new.txt
 **What they cannot tell you:** the fake clientset serves from memory, so there is
 no apiserver latency and no protobuf decode - the two things that dominate a real
 run - and it DeepCopies every object it hands out, which a real client does not.
-Treat the numbers as a *local processing* ratchet, never as a wall-clock
+Treat the numbers as a _local processing_ ratchet, never as a wall-clock
 prediction. Always compare with `benchstat` over `COUNT=6`; single runs on a
 laptop swing 10%.
 
@@ -55,11 +55,11 @@ list.
 
 Measured (fake clientset, so the real gain is larger):
 
-| Benchmark | sec/op | B/op | allocs/op |
-| --- | --- | --- | --- |
-| `PvcResizeSettled` (nothing resizing) | -64.7% | -67.6% | -68.7% |
-| `PvcResizeFewRows` (3 claims resizing) | -59.1% | -65.5% | -66.9% |
-| `IngressNone` (no ingress, 6500 secrets) | -99.9% | -99.98% | -99.9% |
+| Benchmark                                | sec/op | B/op    | allocs/op |
+| ---------------------------------------- | ------ | ------- | --------- |
+| `PvcResizeSettled` (nothing resizing)    | -64.7% | -67.6%  | -68.7%    |
+| `PvcResizeFewRows` (3 claims resizing)   | -59.1% | -65.5%  | -66.9%    |
+| `IngressNone` (no ingress, 6500 secrets) | -99.9% | -99.98% | -99.9%    |
 
 The trade: a deferred list no longer overlaps with the one before it. That is
 paid only on the path that has rows, which narrowing then more than refunds.
@@ -72,17 +72,16 @@ expands to the matched namespaces and issues one List each instead of a
 cluster-wide one. Measured on the bench shape (6500 pods over 40 namespaces),
 against 11.4ms / 42.9MiB for the cluster-wide list:
 
-| Scope | sec/op | B/op |
-| --- | --- | --- |
-| fan-out, 16 of 40 namespaces | 6.4 ms | 20.4 MiB |
-| fan-out, 32 of 40 | 12.9 ms | 40.8 MiB |
-| fan-out, 40 of 40 | 16.5 ms | 51.0 MiB |
+| Scope                        | sec/op  | B/op     |
+| ---------------------------- | ------- | -------- |
+| fan-out, 16 of 40 namespaces | 6.4 ms  | 20.4 MiB |
+| fan-out, 32 of 40            | 12.9 ms | 40.8 MiB |
+| fan-out, 40 of 40            | 16.5 ms | 51.0 MiB |
 
 So the fan-out wins while it covers well under half the cluster and loses
-once it covers most of it, which is what sets `kube.MaxNamespaceFanout` at
-16. The fake clientset understates the win twice over: a real targeted List
+once it covers most of it, which is what sets `kube.MaxNamespaceFanout` at 16. The fake clientset understates the win twice over: a real targeted List
 also skips the bytes and the protobuf decode of every namespace it did not
-match, and paging makes the cluster-wide List *sequential* (4 requests for
+match, and paging makes the cluster-wide List _sequential_ (4 requests for
 6500 pods) where the fan-out's are concurrent.
 
 **Ask the controllers, not the pods (`--by-owner`).** `reqlim`, `no-limits`,
@@ -98,10 +97,10 @@ unmodified.
 The controllers are two orders of magnitude fewer objects than the pods
 behind them. Measured on a 7209-pod GKE cluster, `qos -A`:
 
-| Listing | objects | payload | wall clock |
-| --- | --- | --- | --- |
-| pods (no flag) | 7209 | ~77 MB | 3.8-10.9 s |
-| deploy + sts + ds + rollouts (`--by-owner`) | 164 | ~700 kB | 0.6-1.0 s |
+| Listing                                     | objects | payload | wall clock |
+| ------------------------------------------- | ------- | ------- | ---------- |
+| pods (no flag)                              | 7209    | ~77 MB  | 3.8-10.9 s |
+| deploy + sts + ds + rollouts (`--by-owner`) | 164     | ~700 kB | 0.6-1.0 s  |
 
 `BenchmarkReqlimByOwner` against `BenchmarkReqlim` shows the same shape on a
 fake clientset, where the network cost is invisible and only the local walk
@@ -143,12 +142,12 @@ largest cost in a one-shot CLI after the bytes themselves.
 Measured on a 7209-pod GKE cluster, `reqlim -A --by-owner`, the two
 binaries run back to back six times:
 
-| `ChunkSize` | pages | wall clock (median) | peak RSS |
-| --- | --- | --- | --- |
-| 500 | 15 | ~4.8 s | 373-410 MiB |
-| 1000 | 8 | ~3.7 s | - |
-| 2000 | 4 | ~2.6 s | 351-397 MiB |
-| 4000 | 2 | ~2.4 s | - |
+| `ChunkSize` | pages | wall clock (median) | peak RSS    |
+| ----------- | ----- | ------------------- | ----------- |
+| 500         | 15    | ~4.8 s              | 373-410 MiB |
+| 1000        | 8     | ~3.7 s              | -           |
+| 2000        | 4     | ~2.6 s              | 351-397 MiB |
+| 4000        | 2     | ~2.4 s              | -           |
 
 kubectl's 500 buys a memory ceiling klens does not get anyway: it
 accumulates the whole collection before rendering, so the page size barely
@@ -181,7 +180,7 @@ Net on `BenchmarkTableFlush` (20k rows, 8 columns): 20061 -> 67 allocs/op
 
 `cfg.QPS = -1` removes client-side throttling, which is right for a one-shot
 CLI (see below) but leaves nothing capping concurrency - and klens has two
-fan-out layers that *multiply*. `unused-config` issues 10 concurrent lists;
+fan-out layers that _multiply_. `unused-config` issues 10 concurrent lists;
 under a glob matching `MaxNamespaceFanout` (16) namespaces each of those fans
 out again, so 160 requests hit the apiserver at the same instant. HTTP/2
 multiplexes them onto one connection, so the client never notices; a shared
@@ -196,12 +195,12 @@ Measured with `unused-config -n 'be-m*'` on a 7209-pod GKE cluster (10 lists x 7
 namespaces = 70 requests unbounded), medians over four runs:
 
 | `MaxInFlight` | wall clock |
-| --- | --- |
-| 16 | 1.53 s |
-| 32 | 0.98 s |
-| 48 | 0.97 s |
-| 64 | 1.01 s |
-| unbounded | 0.82 s |
+| ------------- | ---------- |
+| 16            | 1.53 s     |
+| 32            | 0.98 s     |
+| 48            | 0.97 s     |
+| 64            | 1.01 s     |
+| unbounded     | 0.82 s     |
 
 32 is the knee: 16 costs 60%, 48 buys nothing over 32. It caps the worst-case
 burst at a fifth of what it was for ~15% on a command that was already fast.
@@ -212,12 +211,12 @@ overlapping at all - a bound that never binds would make the test vacuous.
 
 Do not re-litigate these without a new measurement:
 
-| Tried | Result |
-| --- | --- |
-| Preallocating the view row slices and index maps | No significant change in sec/op (p=0.13-0.82). Worse on filtering views, which then size for rows they discard. |
-| `GOGC=off` for the process | -8% on `Restarts`, nothing on `PvcResize` (p=0.84). Not worth an unbounded RSS on a large cluster, for 8% of the ~1% of wall time that is local CPU. |
-| Padding without `strings.Repeat` in `writeLine` | Already free: the 67 remaining allocations in `Flush` show the compiler stack-allocates it. |
-| Forcing protobuf explicitly | No-op, already negotiated. |
-| Deferring `terminating`'s node list | ~10% of a command dominated by its pod list. Below the bar for the added branch. |
-| `sync.Pool` anywhere | Nothing is reused across requests in a process that exits in seconds. |
+| Tried                                             | Result                                                                                                                                                                                             |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Preallocating the view row slices and index maps  | No significant change in sec/op (p=0.13-0.82). Worse on filtering views, which then size for rows they discard.                                                                                    |
+| `GOGC=off` for the process                        | -8% on `Restarts`, nothing on `PvcResize` (p=0.84). Not worth an unbounded RSS on a large cluster, for 8% of the ~1% of wall time that is local CPU.                                               |
+| Padding without `strings.Repeat` in `writeLine`   | Already free: the 67 remaining allocations in `Flush` show the compiler stack-allocates it.                                                                                                        |
+| Forcing protobuf explicitly                       | No-op, already negotiated.                                                                                                                                                                         |
+| Deferring `terminating`'s node list               | ~10% of a command dominated by its pod list. Below the bar for the added branch.                                                                                                                   |
+| `sync.Pool` anywhere                              | Nothing is reused across requests in a process that exits in seconds.                                                                                                                              |
 | Passing `kube.Flags` by value to a per-row helper | +3.6% on `BenchmarkReqlim` (p=0.015, B/op and allocs/op identical) against passing the one field it reads. `Flags` is ~120 bytes: anything called once per object takes the field, not the struct. |

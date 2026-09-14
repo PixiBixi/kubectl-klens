@@ -3,7 +3,7 @@
 `kubectl-klens` is a single-binary **kubectl plugin** (`kubectl klens`) bundling
 ~34 read-only cluster-inspection shortcuts behind one dispatcher. It is the
 codified form of a pile of "quick look at the cluster" one-liners: nodes,
-capacity, requests/limits, images, restarts, PVCs, and a set of *verdict*
+capacity, requests/limits, images, restarts, PVCs, and a set of _verdict_
 commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `rollouts`,
 `ingress`, `terminating`, `pending`) that classify a resource's health at a
 glance instead of making you read raw status fields.
@@ -13,7 +13,7 @@ glance instead of making you read raw status fields.
   (interactive pickers, `secret` only), `golang.org/x/term` (TTY detection).
 - **No cobra:** dispatch is a hand-rolled flag-based `switch` over a package-level
   command registry.
-- **Read-only:** every command only *lists/reads* cluster state; nothing mutates
+- **Read-only:** every command only _lists/reads_ cluster state; nothing mutates
   the cluster.
 
 Entry point: `main.go` injects ldflags version metadata into `cli.NewApp(...)`
@@ -38,6 +38,7 @@ The authoritative list is the `commands` slice in
 [`internal/cli/cli.go`](../internal/cli/cli.go). Grouped by what they inspect:
 
 **Nodes / capacity**
+
 - `nodes` - nodes + pool + instance-type + compute class + provisioning
   (spot/on-demand, from GKE, EKS/Karpenter and AKS labels)
 - `taints` - taints per node
@@ -62,6 +63,7 @@ The authoritative list is the `commands` slice in
   structured format - it stays empty against a legacy-format autoscaler
 
 **Workload hygiene (namespace-scoped)**
+
 - `reqlim` - requests/limits per container
 - `no-limits` / `no-requests` - containers missing limits / requests
 - `images` - image per container per pod
@@ -119,6 +121,7 @@ container's. `reqlim`, `no-limits`, `no-requests`, `probes`, `qos` and
 the `KIND` and `FLAGS` values.
 
 **Verdict commands** (compute a health classification, default-sorted worst-last)
+
 - `pdb` - PodDisruptionBudget drain-safety verdict
 - `pending` - Pending pods with a synthesized blocking reason
 - `hpa` - HorizontalPodAutoscaler current/target metrics + autoscaling verdict.
@@ -161,6 +164,7 @@ the `KIND` and `FLAGS` values.
   (finalizer, unreachable node, namespace condition); cluster-wide
 
 **Interactive**
+
 - `secret` - browse secrets interactively (pick secret, then key); positional
   args skip the pickers. The only command that draws promptui pickers, and only
   when stdout is a TTY.
@@ -247,7 +251,7 @@ and `--sort workload` are both accepted in both modes.
 The set of kinds is closed and the set of pod-owning controllers is not, so
 anything owned by another custom resource has no row with the flag; without it
 nothing is missed. An operator can also attach pods directly to a controller
-that *is* listed, and they need not match its template - Flink in native mode
+that _is_ listed, and they need not match its template - Flink in native mode
 attaches TaskManagers (2 CPU / 8Gi measured) to a Deployment whose template
 describes only the JobManager (500m / 2Gi), so that workload reads far smaller
 than it is. Kinds also differ in what they can answer: a StrimziPodSet
@@ -397,12 +401,12 @@ Version/commit/date are injected via `-X main.version=...` ldflags.
 Each release carries three supply-chain artifacts, all produced in that same
 job. **SBOMs**: goreleaser shells out to syft over each archive (`sboms:` in
 `.goreleaser.yml`), which is why the workflow installs syft up front - a missing
-syft fails the release *after* the archives are built. A **cosign signature**
+syft fails the release _after_ the archives are built. A **cosign signature**
 over `checksums.txt` (`signs:`), keyless, so the identity is the workflow rather
 than a key; cosign v3 emits a single `.sigstore.json` bundle instead of the old
 `.sig`/`.pem` pair. And a **build-provenance attestation** over the archives,
 `checksums.txt` and the SBOMs (`actions/attest-build-provenance`, signed with
-the job's `id-token`). The signature says who published; provenance says *how*
+the job's `id-token`). The signature says who published; provenance says _how_
 the artifact was built - which repo, workflow and commit. Signing
 `checksums.txt` alone is enough because it pins the SHA256 of every archive.
 
@@ -420,13 +424,13 @@ gh attestation verify kubectl-klens_<version>_Darwin_arm64.tar.gz \
 
 `SECURITY.md` is the user-facing copy of those commands.
 
-A second **`verify` job** replays exactly that sequence against the *published*
+A second **`verify` job** replays exactly that sequence against the _published_
 release: it downloads the archives from the GitHub release, checks the
 checksums, verifies the cosign bundle and verifies the provenance of every
 archive. Signing is only worth having if it verifies, and without this job a
 broken signing config ships in silence and the first person to hit it is a user.
 The load-bearing part is the pinned `--certificate-identity-regexp`: a keyless
-signature with an unchecked identity proves only that *somebody* signed. The job
+signature with an unchecked identity proves only that _somebody_ signed. The job
 is gated on `needs.release.outputs.tag != ''`, so a push that produced no
 release skips it.
 
@@ -438,7 +442,7 @@ Renovate drives the version bumps (`renovate.json`): minor Go-module updates map
 to `feat(deps)` (minor release), patch/digest to `fix(deps)` (patch release),
 and GitHub-Actions updates stay `chore(deps)` (**no** release - they don't ship
 in the binary). Runner-label bumps ride that same rule: `github-runners` is a
-Renovate *datasource*, not a manager, so the `github-actions` manager carries
+Renovate _datasource_, not a manager, so the `github-actions` manager carries
 them and listing it under `matchManagers` would be invalid. Minor/patch/digest
 updates automerge via PR once CI passes, but
 only after a **5-day `minimumReleaseAge` cooldown**: a hijacked package is
@@ -453,6 +457,16 @@ moving instead of trusting a mutable tag. Two tools are pinned as plain
 goimports (`golang.org/x/tools`) in `go-format.yml` - so a regex
 `customManager` keyed on the `# renovate:` comment above each keeps those pins
 current too.
+
+Three `gomod`-manager settings decide _which_ Go updates Renovate proposes in
+the first place. `constraintsFiltering: "strict"` limits it to releases
+compatible with the `go` directive - the default is none, so without it
+Renovate offers versions that cannot build and the breakage surfaces at build
+time instead of in the PR. The `go-toolchain` rule matches both the `golang`
+and `toolchain` depTypes with `rangeStrategy: "bump"`, because Renovate bumps
+the `toolchain` directive by default but leaves the `go` directive alone unless
+`bump` unlocks it. `gomodUpdateImportPaths` (in `postUpdateOptions`, next to
+`gomodTidy`) rewrites import paths when a module bumps its major version.
 
 ## Where to go next
 
