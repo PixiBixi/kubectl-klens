@@ -415,6 +415,18 @@ func ListCronJobs(ctx context.Context, c kubernetes.Interface, s Scope, opts met
 	})
 }
 
+// ListPersistentVolumes returns every PersistentVolume matching opts.
+// Cluster-scoped: callers holding only namespace rights must tolerate the error.
+func ListPersistentVolumes(ctx context.Context, c kubernetes.Interface, opts metav1.ListOptions) ([]corev1.PersistentVolume, error) {
+	return listAll(opts, func(o metav1.ListOptions) ([]corev1.PersistentVolume, metav1.ListMeta, error) {
+		l, err := c.CoreV1().PersistentVolumes().List(ctx, o)
+		if err != nil {
+			return nil, metav1.ListMeta{}, err
+		}
+		return l.Items, l.ListMeta, nil
+	})
+}
+
 // ListStorageClasses returns every StorageClass matching opts. Cluster-scoped:
 // callers holding only namespace rights must tolerate the error.
 func ListStorageClasses(ctx context.Context, c kubernetes.Interface, opts metav1.ListOptions) ([]storagev1.StorageClass, error) {

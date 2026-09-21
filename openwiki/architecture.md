@@ -265,7 +265,8 @@ override. `Client` builds the clientset and sets two things on the `rest.Config`
 ## The verdict-command pattern
 
 `pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `rollouts`, `ingress`,
-`terminating`, `pvc-unused`, `pvc-resize`, `certs` and `pending` share a shape (see
+`terminating`, `pvc-unused`, `pvc-resize`, `pv-orphan`, `certs` and `pending`
+share a shape (see
 [`internal/view/pdb.go`](../internal/view/pdb.go) as the reference):
 
 1. List the resource, then classify each item with a pure `xVerdict(...)`
@@ -286,7 +287,8 @@ replica at once. See `pdbVerdict` for the canonical example.
 Shared helpers (`orDefault`, `sevPaint`, `verdictRank`) live in
 [`internal/view/verdict.go`](../internal/view/verdict.go); `pdb`, `hpa`,
 `spread`, `probes`, `qos`, `svc-backends`, `rollouts`, `ingress`, and
-`terminating`, `pvc-unused`, `pvc-resize` and `certs` reuse them (`pending`
+`terminating`, `pvc-unused`, `pvc-resize`, `pv-orphan` and `certs` reuse them
+(`pending`
 renders a plain `REASON`
 column and only needs `SortBy`).
 
