@@ -17,6 +17,10 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -101,11 +105,40 @@ func TestCertVerdict(t *testing.T) {
 		{"comfortable", 60 * 24 * time.Hour, "OK", "ok"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			v, sev := certVerdict(now.Add(tc.in), now)
-			if v != tc.verdict || sev != tc.sev {
-				t.Fatalf("got %s/%s, want %s/%s", v, sev, tc.verdict, tc.sev)
+			v := certVerdict(now.Add(tc.in), now)
+			if v != tc.verdict || certSeverity[v] != tc.sev {
+				t.Fatalf("got %s/%s, want %s/%s", v, certSeverity[v], tc.verdict, tc.sev)
 			}
 		})
+	}
+}
+
+// TestCertVerdictsHaveSeverity: an unranked or uncolored verdict sorts to the
+// top of the table and prints green, which is the failure this view exists to
+// avoid.
+func TestCertVerdictsHaveSeverity(t *testing.T) {
+	if len(certSeverity) != len(certVerdictsWorstFirst) {
+		t.Fatalf("%d verdicts ranked, %d colored", len(certVerdictsWorstFirst), len(certSeverity))
+	}
+	for _, v := range certVerdictsWorstFirst {
+		if certSeverity[v] == "" {
+			t.Errorf("verdict %s has no severity", v)
+		}
+	}
+}
+
+// TestWorstCertVerdict: an imminent expiry outranks a stuck Certificate, and a
+// stuck Certificate outranks anything that still fixes itself.
+func TestWorstCertVerdict(t *testing.T) {
+	for _, tc := range []struct{ a, b, want string }{
+		{"EXPIRING", "NOT-READY", "EXPIRING"},
+		{"NOT-READY", "EXPIRED", "EXPIRED"},
+		{"RENEW-DUE", "NOT-READY", "NOT-READY"},
+		{"OK", "NOT-READY", "NOT-READY"},
+	} {
+		if got := worstCertVerdict(tc.a, tc.b); got != tc.want {
+			t.Errorf("worstCertVerdict(%s, %s) = %s, want %s", tc.a, tc.b, got, tc.want)
+		}
 	}
 }
 
@@ -355,4 +388,156 @@ func TestDaysRank(t *testing.T) {
 	if daysRank("-") <= daysRank("3438d") {
 		t.Error("a cell with no number sorts as the far future")
 	}
+}
+
+// certificateObj builds a cert-manager Certificate as the dynamic client sees
+// it. A ready status of "" leaves the Ready condition out entirely, which is
+// how a Certificate cert-manager has never reconciled looks.
+func certificateObj(ns, name, secret, ready, reason string) *unstructured.Unstructured {
+	status := map[string]any{}
+	if ready != "" {
+		status["conditions"] = []any{
+			map[string]any{"type": "Issuing", "status": "True"},
+			map[string]any{"type": "Ready", "status": ready, "reason": reason},
+		}
+	}
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "cert-manager.io/v1",
+		"kind":       "Certificate",
+		"metadata":   map[string]any{"name": name, "namespace": ns},
+		"spec":       map[string]any{"secretName": secret},
+		"status":     status,
+	}}
+}
+
+// certManagerClients bundles a typed fake with a dynamic fake serving the
+// cert-manager CRD.
+func certManagerClients(typed *fake.Clientset, objs ...runtime.Object) kube.Clients {
+	d := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{certificateGVR: "CertificateList"},
+		objs...,
+	)
+	return kube.Clients{Interface: typed, Dynamic: d}
+}
+
+// TestCertsFlagsStuckCertificate is the case that made this view mislead:
+// `kubectl get certificate` reads False while the secret still holds a
+// certificate valid for months, so the expiry alone said OK.
+func TestCertsFlagsStuckCertificate(t *testing.T) {
+	c := certManagerClients(
+		fake.NewClientset(
+			tlsSecret("prod", "stuck-tls", mintCert(t, certOpts{
+				cn: "stuck.eqtv.io", dns: []string{"stuck.eqtv.io"},
+				notAfter: time.Now().Add(87 * 24 * time.Hour),
+			})),
+			tlsSecret("prod", "healthy-tls", mintCert(t, certOpts{
+				cn: "ok.eqtv.io", dns: []string{"ok.eqtv.io"},
+				notAfter: time.Now().Add(87 * 24 * time.Hour),
+			})),
+		),
+		certificateObj("prod", "stuck", "stuck-tls", "False", "Failed"),
+		certificateObj("prod", "healthy", "healthy-tls", "True", "Ready"),
+	)
+	var buf bytes.Buffer
+	if err := Certs(context.Background(), c, kube.Flags{Namespace: "prod"}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	stuck, healthy := rowFor(t, out, "stuck-tls"), rowFor(t, out, "healthy-tls")
+	if !strings.Contains(stuck, "NOT-READY") {
+		t.Errorf("want the stuck certificate flagged:\n%s", out)
+	}
+	if !strings.Contains(healthy, "OK") {
+		t.Errorf("a Ready Certificate must not change the expiry verdict:\n%s", out)
+	}
+	// Worst last, like every other verdict view.
+	if strings.Index(out, "stuck-tls") < strings.Index(out, "healthy-tls") {
+		t.Errorf("want the stuck row below the healthy one:\n%s", out)
+	}
+}
+
+// TestCertsExpiryOutranksNotReady: a certificate expiring this week is the
+// urgent fact, whatever its Certificate says.
+func TestCertsExpiryOutranksNotReady(t *testing.T) {
+	c := certManagerClients(
+		fake.NewClientset(tlsSecret("prod", "api-tls", mintCert(t, certOpts{
+			cn: "api.eqtv.io", dns: []string{"api.eqtv.io"},
+			notAfter: time.Now().Add(3 * 24 * time.Hour),
+		}))),
+		certificateObj("prod", "api", "api-tls", "False", "Failed"),
+	)
+	var buf bytes.Buffer
+	if err := Certs(context.Background(), c, kube.Flags{Namespace: "prod"}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "EXPIRING") {
+		t.Fatalf("want EXPIRING to win over NOT-READY:\n%s", buf.String())
+	}
+}
+
+// TestCertsFlagsNeverIssued: a Certificate whose secret does not exist is the
+// loudest case and the one a secret-only sweep showed as nothing at all.
+func TestCertsFlagsNeverIssued(t *testing.T) {
+	c := certManagerClients(
+		fake.NewClientset(),
+		certificateObj("prod", "new", "new-tls", "False", "DoesNotExist"),
+	)
+	var buf bytes.Buffer
+	if err := Certs(context.Background(), c, kube.Flags{Namespace: "prod"}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"new-tls", "MISSING", "DoesNotExist"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestCertsUnreconciledCertificateIsNotReady: a Certificate carrying no
+// conditions at all has not been acted on, which is where a stuck one sits.
+func TestCertsUnreconciledCertificateIsNotReady(t *testing.T) {
+	c := certManagerClients(
+		fake.NewClientset(tlsSecret("prod", "api-tls", mintCert(t, certOpts{
+			cn: "api.eqtv.io", dns: []string{"api.eqtv.io"},
+			notAfter: time.Now().Add(300 * 24 * time.Hour),
+		}))),
+		certificateObj("prod", "api", "api-tls", "", ""),
+	)
+	var buf bytes.Buffer
+	if err := Certs(context.Background(), c, kube.Flags{Namespace: "prod"}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "NOT-READY") {
+		t.Fatalf("want an unreconciled Certificate flagged:\n%s", buf.String())
+	}
+}
+
+// TestCertsWithoutCertManager: the CRD is absent on most clusters and the
+// secrets alone still make a table.
+func TestCertsWithoutCertManager(t *testing.T) {
+	c := fake.NewClientset(tlsSecret("prod", "api-tls", mintCert(t, certOpts{
+		cn: "api.eqtv.io", dns: []string{"api.eqtv.io"}, notAfter: time.Now().Add(300 * 24 * time.Hour),
+	})))
+	var buf bytes.Buffer
+	if err := Certs(context.Background(), clients(c), kube.Flags{Namespace: "prod"}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "OK") {
+		t.Fatalf("want the secret rendered without cert-manager:\n%s", buf.String())
+	}
+}
+
+// rowFor returns the output line holding name, so a per-row assertion cannot
+// pass on another row's cells.
+func rowFor(t *testing.T, out, name string) string {
+	t.Helper()
+	for line := range strings.SplitSeq(out, "\n") {
+		if strings.Contains(line, name) {
+			return line
+		}
+	}
+	t.Fatalf("no row for %q:\n%s", name, out)
+	return ""
 }

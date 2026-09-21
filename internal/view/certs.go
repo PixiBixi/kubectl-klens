@@ -15,6 +15,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"golang.org/x/net/publicsuffix"
 
@@ -27,6 +29,12 @@ import (
 // it has no business reading.
 const tlsSecretSelector = "type=" + string(corev1.SecretTypeTLS)
 
+// certificateGVR is the cert-manager Certificate CRD, read through the dynamic
+// client for the same reason as the Argo Rollout: the typed clientset has no
+// scheme for it. It answers the question the secret cannot - whether anything
+// is still able to renew that certificate.
+var certificateGVR = schema.GroupVersionResource{Group: "cert-manager.io", Version: "v1", Resource: "certificates"}
+
 // Certs reports when each TLS secret's certificate stops being valid, worst
 // last. `kubectl get secret` shows that one exists; nothing shows that it
 // expired last Tuesday, which is how a certificate takes a service down in
@@ -36,18 +44,41 @@ const tlsSecretSelector = "type=" + string(corev1.SecretTypeTLS)
 // summarized cell, the same way `node-ips <node>` narrows to one node: a
 // sweep has to stay one line per object, and a certificate can carry 88 names.
 func Certs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	secrets, err := kube.ListSecrets(ctx, c, f.Scope(), metav1.ListOptions{FieldSelector: tlsSecretSelector})
+	var (
+		secrets []corev1.Secret
+		certs   []unstructured.Unstructured
+	)
+	scope := f.Scope()
+	err := allLists(
+		func() (err error) {
+			secrets, err = kube.ListSecrets(ctx, c, scope, metav1.ListOptions{FieldSelector: tlsSecretSelector})
+			return err
+		},
+		func() error {
+			list, err := kube.ListCustom(ctx, c.Dynamic, certificateGVR, scope, metav1.ListOptions{})
+			// A cluster without cert-manager, or a user without access to its
+			// CRD, is the normal case rather than a failure: the secrets alone
+			// still say when each certificate stops working.
+			if absentCRD(err) {
+				return nil
+			}
+			certs = list
+			return err
+		},
+	)
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
+	states := certManagerStates(certs)
 
 	type entry struct {
 		ns, name, names, issuer string
 		expiry                  time.Time
-		verdict, sev            string
+		verdict                 string
 	}
 	list := make([]entry, 0, len(secrets))
+	shown := make(map[string]bool, len(secrets))
 	for i := range secrets {
 		s := &secrets[i]
 		if skipNamespace(f, s.Namespace) {
@@ -56,6 +87,7 @@ func Certs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out
 		if len(args) > 0 && s.Name != args[0] {
 			continue
 		}
+		shown[s.Namespace+"/"+s.Name] = true
 		chain, err := parseCertChain(s.Data[corev1.TLSCertKey])
 		if err != nil || len(chain) == 0 {
 			// A secret typed as TLS whose tls.crt is missing or unparseable is
@@ -64,13 +96,19 @@ func Certs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out
 				ns: s.Namespace, name: s.Name,
 				names:   paint.Muted("<unparseable>"),
 				issuer:  paint.Muted("-"),
-				verdict: "INVALID", sev: "bad",
+				verdict: "INVALID",
 			})
 			continue
 		}
 		leaf := chain[0]
 		expiry := earliestExpiry(chain)
-		verdict, sev := certVerdict(expiry, time.Now())
+		verdict := certVerdict(expiry, time.Now())
+		// Reading the secret alone is what made this view mislead: cert-manager
+		// can have been failing to reissue for days while the secret still
+		// holds a certificate valid for months, and the row read OK.
+		if st, ok := states[s.Namespace+"/"+s.Name]; ok && !st.ready {
+			verdict = worstCertVerdict(verdict, "NOT-READY")
+		}
 		names := certNames(leaf)
 		cell := summarizeNames(names)
 		if len(args) > 0 {
@@ -82,7 +120,26 @@ func Certs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out
 		list = append(list, entry{
 			ns: s.Namespace, name: s.Name, names: cell,
 			issuer: issuerOf(leaf), expiry: expiry,
-			verdict: verdict, sev: sev,
+			verdict: verdict,
+		})
+	}
+	// A Certificate whose secret does not exist at all is the loudest case and
+	// the one a secret-only sweep cannot show: nothing is being served, so the
+	// ingress is answering with its controller's default certificate.
+	for i := range certs {
+		st := certState(&certs[i])
+		ns := certs[i].GetNamespace()
+		if st.secret == "" || shown[ns+"/"+st.secret] || skipNamespace(f, ns) {
+			continue
+		}
+		if len(args) > 0 && st.secret != args[0] {
+			continue
+		}
+		list = append(list, entry{
+			ns: ns, name: st.secret,
+			names:   paint.Muted(noSecretCell(st.reason)),
+			issuer:  paint.Muted("-"),
+			verdict: "MISSING",
 		})
 	}
 
@@ -98,14 +155,15 @@ func Certs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out
 	t := kube.NewTable(out, paint, "NS", "SECRET", "NAMES", "ISSUER", "NOT_AFTER", "IN", "VERDICT")
 	for i := range list {
 		e := &list[i]
+		sev := certSeverity[e.verdict]
 		t.Row(
 			e.ns, e.name, e.names, e.issuer,
 			notAfterCell(paint, e.expiry),
-			remainingCell(paint, e.expiry, e.sev),
-			sevPaint(paint, e.sev)(e.verdict),
+			remainingCell(paint, e.expiry, sev),
+			sevPaint(paint, sev)(e.verdict),
 		)
 	}
-	t.SortRank("VERDICT", verdictRank("EXPIRED", "INVALID", "EXPIRING", "RENEW-DUE", "OK"))
+	t.SortRank("VERDICT", verdictRank(certVerdictsWorstFirst...))
 	// "64d" does not parse as a number, so without this the column sorts
 	// lexically and reads 1090d, 296d, 33d, 3438d. Plain ascending by days, so
 	// --sort in puts the soonest first, as every non-verdict column does.
@@ -122,19 +180,112 @@ const (
 	certRenewDue = 14 * 24 * time.Hour
 )
 
+// certVerdictsWorstFirst is the single order both the precedence between rules
+// and the VERDICT sort read. Two rules can fire on one row - a certificate
+// expiring next week whose Certificate is also stuck - and the earlier verdict
+// wins, so the column sorts the way the rules resolve.
+//
+// NOT-READY outranks RENEW-DUE because it says the renewal will not happen on
+// its own: a RENEW-DUE row backed by a healthy Certificate still fixes itself.
+var certVerdictsWorstFirst = []string{"EXPIRED", "MISSING", "INVALID", "EXPIRING", "NOT-READY", "RENEW-DUE", "OK"}
+
+// certSeverity is the color tier per verdict. NOT-READY is a warning rather
+// than an error: the machinery is broken but nothing is down yet, and red stays
+// for the rows that take traffic with them.
+var certSeverity = map[string]string{
+	"EXPIRED":   "bad",
+	"MISSING":   "bad",
+	"INVALID":   "bad",
+	"EXPIRING":  "bad",
+	"NOT-READY": "warn",
+	"RENEW-DUE": "warn",
+	"OK":        "ok",
+}
+
+// worstCertVerdict returns whichever verdict sits earlier in
+// certVerdictsWorstFirst.
+func worstCertVerdict(a, b string) string {
+	if slices.Index(certVerdictsWorstFirst, a) <= slices.Index(certVerdictsWorstFirst, b) {
+		return a
+	}
+	return b
+}
+
 // certVerdict grades time left. The first matching rule wins and the rules are
 // total.
-func certVerdict(expiry, now time.Time) (verdict, sev string) {
+func certVerdict(expiry, now time.Time) string {
 	switch left := expiry.Sub(now); {
 	case left <= 0:
-		return "EXPIRED", "bad"
+		return "EXPIRED"
 	case left < certExpiring:
-		return "EXPIRING", "bad"
+		return "EXPIRING"
 	case left < certRenewDue:
-		return "RENEW-DUE", "warn"
+		return "RENEW-DUE"
 	default:
-		return "OK", "ok"
+		return "OK"
 	}
+}
+
+// certManagerState is what a cert-manager Certificate says about the secret it
+// owns: which secret that is, whether it currently holds what the spec asks
+// for, and cert-manager's own word for why not.
+type certManagerState struct {
+	secret string
+	ready  bool
+	reason string
+}
+
+// certManagerStates indexes the Certificates by the secret they own. Two
+// Certificates pointing at one secret is a misconfiguration rather than a
+// pattern, but the failing one is the one worth reporting, so it wins.
+func certManagerStates(objs []unstructured.Unstructured) map[string]certManagerState {
+	states := make(map[string]certManagerState, len(objs))
+	for i := range objs {
+		st := certState(&objs[i])
+		if st.secret == "" {
+			continue
+		}
+		key := objs[i].GetNamespace() + "/" + st.secret
+		if prev, ok := states[key]; ok && !prev.ready {
+			continue
+		}
+		states[key] = st
+	}
+	return states
+}
+
+// certState reads one Certificate's Ready condition. Every field is optional by
+// construction: a Certificate cert-manager has not reconciled yet carries no
+// conditions at all, which is exactly the state a stuck one sits in, so a
+// missing condition reads as not ready rather than as ready.
+func certState(u *unstructured.Unstructured) certManagerState {
+	st := certManagerState{}
+	st.secret, _, _ = unstructured.NestedString(u.Object, "spec", "secretName")
+	conds, _, _ := unstructured.NestedSlice(u.Object, "status", "conditions")
+	for _, raw := range conds {
+		cond, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if t, _ := cond["type"].(string); t != "Ready" {
+			continue
+		}
+		status, _ := cond["status"].(string)
+		st.ready = status == "True"
+		st.reason, _ = cond["reason"].(string)
+		break
+	}
+	return st
+}
+
+// noSecretCell fills the NAMES column of a Certificate with no secret. There
+// are no names to print for a certificate that was never issued, and
+// cert-manager's reason is the only thing that column can usefully say.
+func noSecretCell(reason string) string {
+	if reason == "" {
+		return "<no secret>"
+	}
+	return "<no secret: " + reason + ">"
 }
 
 // parseCertChain decodes every CERTIFICATE block in a PEM bundle. A secret

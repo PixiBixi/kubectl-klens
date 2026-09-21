@@ -182,7 +182,7 @@ app-a-training-prod   app-a-training   1         Burstable   4        none     1
 | --- | --- |
 | `default-sa` | pods still using the default service account |
 | `privileged` † | containers with privileged/host security flags |
-| `certs` † | TLS secrets + certificate expiry + renewal verdict |
+| `certs` † | TLS secrets + certificate expiry + cert-manager readiness |
 
 </details>
 
@@ -305,8 +305,10 @@ a `KIND` column:
 ## Certificate expiry
 
 `certs` lists every `kubernetes.io/tls` secret with the date its certificate
-stops working, how long that is from now, and a verdict. Why the date is the
-earliest in the chain and how `NAMES` groups hosts is in the
+stops working, how long that is from now, and a verdict. Where cert-manager is
+installed it also reads the `Certificate` resources, so a stuck renewal shows up
+while the stored certificate is still valid. Why the date is the earliest in the
+chain and how `NAMES` groups hosts is in the
 [command catalog](openwiki/quickstart.md#command-catalog).
 
 ```console
@@ -318,10 +320,14 @@ video-prod  video-app-tls  example.com (74), example.net (4)  Let's Encrypt  202
 | verdict | when |
 | --- | --- |
 | `EXPIRED` | already past |
+| `MISSING` | a `Certificate` whose secret does not exist |
+| `INVALID` | `tls.crt` missing or unparseable |
 | `EXPIRING` | under 7 days |
+| `NOT-READY` | the `Certificate` is not `Ready` |
 | `RENEW-DUE` | under 14 days |
 | `OK` | beyond that |
-| `INVALID` | `tls.crt` missing or unparseable |
+
+Worst first; a row matching several takes the first one.
 
 ## Sorting
 

@@ -101,7 +101,15 @@ The authoritative list is the `commands` slice in
 - `certs` - TLS secrets with their certificate expiry and a renewal verdict
   (`EXPIRED`, `EXPIRING` under 7 days, `RENEW-DUE` under 14). The date is the
   earliest in the chain, not the leaf's, since an intermediate expiring first
-  breaks the handshake too. Names group by registrable domain past a short
+  breaks the handshake too. Where the cert-manager CRD is installed the view
+  also reads the `Certificate` resources: one that is not `Ready` while its
+  secret still holds a valid certificate is `NOT-READY`, and one whose secret
+  does not exist at all gets a `MISSING` row of its own, which a secret-only
+  sweep showed as nothing. That is the gap the expiry alone could not see - a
+  reissue can have been failing for days behind a certificate valid for months.
+  `NOT-READY` outranks `RENEW-DUE` because it says the renewal will not happen
+  on its own, and loses to `EXPIRING`, which is the urgent fact whatever the
+  `Certificate` says. Names group by registrable domain past a short
   cell, so an 88-host delivery certificate reads as
   `example.com (86), example.net (2)`; in-cluster names (`api.ns.svc`,
   `.cluster.local`) group as `cluster-internal`, and naming a secret prints them
