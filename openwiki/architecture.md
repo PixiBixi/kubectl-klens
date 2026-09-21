@@ -106,9 +106,9 @@ own required positional args (e.g. `on-node` returns a "requires a node" error).
 dynamic.Interface`. The embedding is what keeps every view calling
 `c.CoreV1()` unchanged and passable to the `kube.List*` helpers; `Dynamic` is
 only for resources the typed clientset has no scheme for - CRDs such as Argo
-Rollouts, read by `rollouts`. `Dynamic` is nil in tests that never touch a CRD,
-so a view must treat a missing dynamic client as "CRD unavailable" rather than
-dereference it.
+Rollouts, read by `rollouts`, or cert-manager `Certificate`s, read by `certs`.
+`Dynamic` is nil in tests that never touch a CRD, so a view must treat a missing
+dynamic client as "CRD unavailable" rather than dereference it.
 
 ### Completion (`complete.go`)
 
@@ -342,8 +342,9 @@ Three mechanics to preserve when adding a kind:
   resource columns and the QoS class stay correct.
 - **A missing CRD is not an error.** `absentCRD(err)` swallows no-match,
   `NotFound` _and_ `Forbidden`, so a cluster without Argo Rollouts / Strimzi /
-  CNPG installed - or a user without rights on them - still gets a table of the
-  built-in kinds instead of a failure. Strimzi is tried at `v1` then the legacy
+  CNPG / cert-manager installed - or a user without rights on them - still gets
+  a table of the built-in kinds instead of a failure. `certs` uses the same
+  helper for its cert-manager read. Strimzi is tried at `v1` then the legacy
   `v1beta2`. `kube.ListCustom` returns nothing on a nil `Dynamic`, which is how
   these paths survive tests that never wire a dynamic client.
 
