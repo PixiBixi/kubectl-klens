@@ -2,7 +2,7 @@
 
 <p align="center">
   Read-only cluster inspection for kubectl.<br>
-  One binary, one dispatcher, 35 commands.
+  One binary, one dispatcher, 36 commands.
 </p>
 
 <p align="center">
@@ -167,6 +167,7 @@ app-a-training-prod   app-a-training   1         Burstable   4        none     1
 | `pvc` † | PVCs bound to pod + node + storage class + size |
 | `pvc-unused` † | PVCs no pod mounts + why they are still there |
 | `pvc-resize` † | PVCs whose size does not match the request + why |
+| `pv-orphan` | PersistentVolumes no claim depends on + their provider handle |
 | `svc-fqdn` † | in-cluster FQDN of services |
 | `svc-backends` † | services + the pods behind them + wiring verdict |
 | `ingress` † | ingress rules flattened + backend/TLS checks |
@@ -338,8 +339,8 @@ the valid names per command.
 Defaults that differ: `image-count` and `restarts` sort count-descending,
 `autoscaler` by `LAST-CHANGE` descending, and verdict commands (`pdb`, `hpa`,
 `spread`, `probes`, `qos`, `svc-backends`, `rollouts`, `ingress`, `terminating`,
-`pvc-unused`, `pvc-resize`) by `VERDICT` severity least-risky first, so the
-riskiest rows land nearest the prompt.
+`pvc-unused`, `pvc-resize`, `pv-orphan`) by `VERDICT` severity least-risky
+first, so the riskiest rows land nearest the prompt.
 
 ## Watch
 
@@ -388,6 +389,7 @@ prod   api-7f9c-x2k    Insufficient cpu
 | `terminating` | - | `DELETING` | `STUCK` | `GRACE` |
 | `pvc-unused` | - | `STS-RESERVED`/`SCALED-DOWN` | `ORPHAN`/`LOST` | `UNBOUND` |
 | `pvc-resize` | - | `PENDING`/`RESIZING`/`FS-PENDING`/`SHRINK` | `FAILED`/`INFEASIBLE`/`SC-NO-EXPAND` | - |
+| `pv-orphan` | - | `RECLAIMING`/`UNCLAIMED` | `RETAINED`/`FAILED` | - |
 
 </details>
 

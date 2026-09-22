@@ -601,6 +601,7 @@ func TestIgnoresNamespaceFlags(t *testing.T) {
 	want := map[string]bool{
 		"nodes": true, "taints": true, "capacity": true, "zones": true,
 		"node-ips": true, "max-pods": true, "node-conditions": true, "autoscaler": true,
+		"pv-orphan": true,
 	}
 	for _, c := range commands {
 		if c.IgnoresNamespace != want[c.Name] {

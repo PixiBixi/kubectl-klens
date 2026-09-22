@@ -1,7 +1,7 @@
 # kubectl-klens - Quickstart
 
 `kubectl-klens` is a single-binary **kubectl plugin** (`kubectl klens`) bundling
-~34 read-only cluster-inspection shortcuts behind one dispatcher. It is the
+36 read-only cluster-inspection shortcuts behind one dispatcher. It is the
 codified form of a pile of "quick look at the cluster" one-liners: nodes,
 capacity, requests/limits, images, restarts, PVCs, and a set of _verdict_
 commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `rollouts`,
@@ -86,6 +86,23 @@ The authoritative list is the `commands` slice in
   `SCALED-DOWN` a StatefulSet leftover that scaling back up would reuse, and
   `STS-RESERVED` a slot inside the set's replica count whose pod is expected
   back. A claim held by a still-terminating pod counts as in use
+- `pv-orphan` - PersistentVolumes no claim depends on any more, the mirror image
+  of `pvc-unused`: that one finds claims nobody mounts, this one finds volumes
+  nobody claims. Nothing PVC-oriented can see these, by construction - once the
+  claim is deleted there is no namespaced object left to list, so a `pvc-unused`
+  sweep comes back empty. `RETAINED` is the one to act on (claim gone,
+  `reclaimPolicy: Retain`, no controller will ever reclaim the volume), `FAILED`
+  means the reclaim itself errored, `RECLAIMING` a deletion still pending,
+  `UNCLAIMED` a volume provisioned and never bound. The `DISK` column carries
+  the provider-side handle trimmed to the disk name, which is what a cloud CLI
+  takes to look it up or delete it. Cluster-scoped, so it needs cluster read
+  rights and ignores `-n`.
+  A row means **no claim references the volume**, not that a disk is still
+  billed: the handle is what the PV recorded at bind time, so it can name a disk
+  someone has already deleted, leaving the PV as a stale object. Pair it with a
+  cloud-side sweep ([`unused`](https://github.com/grafana/unused)) to settle the
+  billing question - that one cannot see a volume a live PVC still holds but no
+  pod mounts, which is what `pvc-unused` is for
 - `pvc-resize` - PVCs whose capacity does not match the request, with where the
   resize stalled: `SC-NO-EXPAND` never starts (the StorageClass forbids
   expansion, and only a new PVC gets you out), `INFEASIBLE` is past the disk
