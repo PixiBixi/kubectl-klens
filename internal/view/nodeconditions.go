@@ -5,7 +5,6 @@ import (
 	"io"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -13,24 +12,15 @@ import (
 // NodeConditions shows each node's readiness and its pressure conditions, where
 // a "True" memory/disk/pid column flags a node under that pressure.
 func NodeConditions(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
-	paint := kube.NewPainter(f)
-	t := kube.NewTable(out, paint, "NAME", "STATUS", "MEMORY", "DISK", "PID")
-	for i := range nodes {
-		n := &nodes[i]
-		t.Row(
+	return nodeTable(ctx, c, f, out, []string{"NAME", "STATUS", "MEMORY", "DISK", "PID"}, func(paint kube.Painter, n *corev1.Node) []string {
+		return []string{
 			n.Name,
 			paint.Status(nodeStatus(n)),
 			pressure(paint, conditionStatus(n, corev1.NodeMemoryPressure)),
 			pressure(paint, conditionStatus(n, corev1.NodeDiskPressure)),
 			pressure(paint, conditionStatus(n, corev1.NodePIDPressure)),
-		)
-	}
-	t.SortBy(f.Sort)
-	return t.Flush()
+		}
+	})
 }
 
 // conditionStatus returns the status (True/False/Unknown) of a node condition,

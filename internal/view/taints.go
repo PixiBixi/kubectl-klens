@@ -6,33 +6,23 @@ import (
 	"io"
 	"strings"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
 // Taints lists each node's taints as key=value:effect, comma-joined.
 func Taints(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
-	paint := kube.NewPainter(f)
-	t := kube.NewTable(out, paint, "NAME", "TAINTS")
-	for i := range nodes {
-		n := &nodes[i]
-		var ts []string
-		for _, taint := range n.Spec.Taints {
-			ts = append(ts, fmt.Sprintf("%s=%s:%s", taint.Key, taint.Value, taintEffect(paint, string(taint.Effect))))
+	return nodeTable(ctx, c, f, out, []string{"NAME", "TAINTS"}, func(paint kube.Painter, n *corev1.Node) []string {
+		if len(n.Spec.Taints) == 0 {
+			return []string{n.Name, paint.Muted("<none>")}
 		}
-		val := strings.Join(ts, ",")
-		if val == "" {
-			val = paint.Muted("<none>")
+		ts := make([]string, len(n.Spec.Taints))
+		for i, taint := range n.Spec.Taints {
+			ts[i] = fmt.Sprintf("%s=%s:%s", taint.Key, taint.Value, taintEffect(paint, string(taint.Effect)))
 		}
-		t.Row(n.Name, val)
-	}
-	t.SortBy(f.Sort)
-	return t.Flush()
+		return []string{n.Name, strings.Join(ts, ",")}
+	})
 }
 
 // taintEffect colors a taint's effect by how aggressively it repels pods:

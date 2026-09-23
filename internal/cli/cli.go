@@ -105,6 +105,9 @@ type globalFlag struct {
 	register func(fs *flag.FlagSet, f *kube.Flags, help string)
 }
 
+// colorModes are the values --color accepts.
+var colorModes = []string{"auto", "always", "never"}
+
 var globalFlags = []globalFlag{
 	{"--kubeconfig string", "path to the kubeconfig file",
 		func(fs *flag.FlagSet, f *kube.Flags, h string) { fs.StringVar(&f.Kubeconfig, "kubeconfig", "", h) }},
@@ -120,11 +123,37 @@ var globalFlags = []globalFlag{
 			fs.BoolVar(&f.AllNamespaces, "all-namespaces", false, h)
 			fs.BoolVar(&f.AllNamespaces, "A", false, h)
 		}},
-	{"--color string", "colorize output: auto|always|never (default auto)",
+	{"--color string", "colorize output: " + strings.Join(colorModes, "|") + " (default auto)",
 		func(fs *flag.FlagSet, f *kube.Flags, h string) { fs.StringVar(&f.ColorMode, "color", "", h) }},
 	{"--request-timeout duration", "per-request timeout, 0 for none (default 1m0s)",
 		func(fs *flag.FlagSet, f *kube.Flags, h string) {
 			fs.DurationVar(&f.RequestTimeout, "request-timeout", kube.DefaultRequestTimeout, h)
+		}},
+}
+
+// commandFlag is a flag only the commands that opt in register. The
+// commandFlags table drives both registration (Run) and completion, so a
+// completion never offers a flag the dispatcher would reject.
+type commandFlag struct {
+	on       func(c Command) bool
+	tokens   []string // as offered by completion
+	register func(fs *flag.FlagSet, f *kube.Flags, c Command)
+}
+
+var commandFlags = []commandFlag{
+	{func(c Command) bool { return len(c.SortColumns) > 0 }, []string{"--sort"},
+		func(fs *flag.FlagSet, f *kube.Flags, c Command) {
+			fs.StringVar(&f.Sort, "sort", "", "sort by column: "+strings.Join(c.SortColumns, "|"))
+		}},
+	{func(c Command) bool { return c.Watch }, []string{"-w", "--watch", "--interval"},
+		func(fs *flag.FlagSet, f *kube.Flags, _ Command) {
+			fs.BoolVar(&f.Watch, "watch", false, "re-run until interrupted")
+			fs.BoolVar(&f.Watch, "w", false, "re-run until interrupted")
+			fs.DurationVar(&f.Interval, "interval", kube.DefaultWatchInterval, "--watch poll period")
+		}},
+	{func(c Command) bool { return c.ByOwner }, []string{"--by-owner"},
+		func(fs *flag.FlagSet, f *kube.Flags, _ Command) {
+			fs.BoolVar(&f.ByOwner, "by-owner", false, "one row per owning workload instead of per pod")
 		}},
 }
 
@@ -177,56 +206,41 @@ func (a App) Run(args []string) int {
 	// listing; catch it here to explain itself instead of letting the flag
 	// package print a bare "flag provided but not defined".
 	if !cmd.Watch && wantsWatch(args[1:]) {
-		fmt.Fprintf(a.Err, "error: %s does not support --watch\n", cmd.Name)
-		return 1
+		return a.fail("%s does not support --watch", cmd.Name)
 	}
-	if cmd.Watch {
-		fs.BoolVar(&f.Watch, "watch", false, "re-run until interrupted")
-		fs.BoolVar(&f.Watch, "w", false, "re-run until interrupted")
-		fs.DurationVar(&f.Interval, "interval", kube.DefaultWatchInterval, "--watch poll period")
-	}
-	if len(cmd.SortColumns) > 0 {
-		fs.StringVar(&f.Sort, "sort", "", "sort by column: "+strings.Join(cmd.SortColumns, "|"))
-	}
-	if cmd.ByOwner {
-		fs.BoolVar(&f.ByOwner, "by-owner", false, "one row per owning workload instead of per pod")
+	for _, cf := range commandFlags {
+		if cf.on(cmd) {
+			cf.register(fs, &f, cmd)
+		}
 	}
 	if err := fs.Parse(args[1:]); err != nil {
 		return 1
 	}
 	if f.Sort != "" && !slices.Contains(cmd.SortColumns, f.Sort) {
-		fmt.Fprintf(a.Err, "error: invalid --sort %q for %s (want %s)\n", f.Sort, cmd.Name, strings.Join(cmd.SortColumns, "|"))
-		return 1
+		return a.fail("invalid --sort %q for %s (want %s)", f.Sort, cmd.Name, strings.Join(cmd.SortColumns, "|"))
 	}
 	if f.Watch {
 		if f.Interval < kube.MinWatchInterval {
-			fmt.Fprintf(a.Err, "error: --interval %s is below the %s minimum\n", f.Interval, kube.MinWatchInterval)
-			return 1
+			return a.fail("--interval %s is below the %s minimum", f.Interval, kube.MinWatchInterval)
 		}
 		// Redrawing means clear-screen escapes, which are garbage in a pipe or a
 		// file. Refusing beats emitting them.
 		if !kube.IsTTY(a.Out) {
-			fmt.Fprintln(a.Err, "error: --watch needs a terminal, output is not a TTY")
-			return 1
+			return a.fail("--watch needs a terminal, output is not a TTY")
 		}
 	}
-	switch f.ColorMode {
-	case "", "auto", "always", "never":
-	default:
-		fmt.Fprintf(a.Err, "error: invalid --color %q (want auto|always|never)\n", f.ColorMode)
-		return 1
+	if f.ColorMode != "" && !slices.Contains(colorModes, f.ColorMode) {
+		return a.fail("invalid --color %q (want %s)", f.ColorMode, strings.Join(colorModes, "|"))
 	}
 	f.Color = kube.ResolveColor(f.ColorMode, a.Out)
 	client, err := a.NewClient(f)
 	if err != nil {
-		fmt.Fprintln(a.Err, "error: failed to build kubernetes clients:", err)
-		return 1
+		return a.fail("failed to build kubernetes clients: %v", err)
 	}
 	if cmd.CurrentNSDefault && !f.AllNamespaces && f.Namespace == "" {
 		ns, err := a.Namespace(f)
 		if err != nil {
-			fmt.Fprintln(a.Err, "error: failed to resolve current namespace:", err)
-			return 1
+			return a.fail("failed to resolve current namespace: %v", err)
 		}
 		f.Namespace = ns
 	}
@@ -240,8 +254,7 @@ func (a App) Run(args []string) int {
 	// something to re-derive every two seconds.
 	if !cmd.IgnoresNamespace {
 		if err := kube.ResolveScope(ctx, client, &f); err != nil {
-			fmt.Fprintln(a.Err, "error:", err)
-			return 1
+			return a.fail("%v", err)
 		}
 	}
 	if f.Watch {
@@ -269,30 +282,30 @@ func (a App) Run(args []string) int {
 	// defaults to a bound, so a user on a cluster big enough to hit it would
 	// otherwise get an opaque failure with no hint that a flag controls it.
 	case errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &timeout) && timeout.Timeout()):
-		fmt.Fprintf(a.Err, "error: request timed out after %s; raise it or pass --request-timeout=0 to disable\n", f.RequestTimeout)
-		return 1
+		return a.fail("request timed out after %s; raise it or pass --request-timeout=0 to disable", f.RequestTimeout)
 
 	default:
-		fmt.Fprintln(a.Err, "error:", err)
-		return 1
+		return a.fail("%v", err)
 	}
+}
+
+// fail reports a dispatch error on stderr and returns the exit code for it.
+func (a App) fail(format string, args ...any) int {
+	fmt.Fprintf(a.Err, "error: "+format+"\n", args...)
+	return 1
 }
 
 // lookup resolves a subcommand by name, accepting singular or plural forms
 // (e.g. "image" and "images") by toggling a trailing "s".
 func lookup(name string) (Command, bool) {
-	for _, c := range commands {
-		if c.Name == name {
-			return c, true
-		}
-	}
 	alt := name + "s"
 	if before, ok := strings.CutSuffix(name, "s"); ok {
 		alt = before
 	}
-	for _, c := range commands {
-		if c.Name == alt {
-			return c, true
+	// The exact name wins over the toggled one.
+	for _, n := range []string{name, alt} {
+		if i := slices.IndexFunc(commands, func(c Command) bool { return c.Name == n }); i >= 0 {
+			return commands[i], true
 		}
 	}
 	return Command{}, false

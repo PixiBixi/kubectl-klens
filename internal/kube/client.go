@@ -23,14 +23,11 @@ type Clients struct {
 // rules plus the explicit kubeconfig path and context override. Same pattern
 // as kubearch. Shared by NewClients and CurrentNamespace.
 func clientConfig(f Flags) clientcmd.ClientConfig {
+	// Empty values are no-ops: ExplicitPath "" falls back to KUBECONFIG/~/.kube,
+	// CurrentContext "" keeps the kubeconfig's own.
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	if f.Kubeconfig != "" {
-		loadingRules.ExplicitPath = f.Kubeconfig
-	}
-	overrides := &clientcmd.ConfigOverrides{}
-	if f.Context != "" {
-		overrides.CurrentContext = f.Context
-	}
+	loadingRules.ExplicitPath = f.Kubeconfig
+	overrides := &clientcmd.ConfigOverrides{CurrentContext: f.Context}
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
 }
 

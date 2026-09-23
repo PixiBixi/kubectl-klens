@@ -14,9 +14,11 @@ import (
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
+type imageKey struct{ registry, repo, tag string }
+
 type imageCount struct {
-	registry, repo, tag string
-	n                   int
+	imageKey
+	n int
 }
 
 // ImageCount counts container image occurrences across pods, splitting each
@@ -33,17 +35,16 @@ func ImageCount(ctx context.Context, c kube.Clients, f kube.Flags, args []string
 	if err != nil {
 		return err
 	}
-	type key struct{ registry, repo, tag string }
-	counts := map[key]int{}
+	counts := map[imageKey]int{}
 	for i := range pods {
 		for _, pc := range podContainers(&pods[i]) {
 			registry, repo, tag := parseImageRef(pc.Spec.Image)
-			counts[key{registry, repo, tag}]++
+			counts[imageKey{registry, repo, tag}]++
 		}
 	}
 	list := make([]imageCount, 0, len(counts))
 	for k, n := range counts {
-		list = append(list, imageCount{k.registry, k.repo, k.tag, n})
+		list = append(list, imageCount{k, n})
 	}
 	slices.SortFunc(list, compare)
 	paint := kube.NewPainter(f)

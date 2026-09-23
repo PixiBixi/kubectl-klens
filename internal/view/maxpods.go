@@ -42,9 +42,9 @@ func MaxPods(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 		u := used[n.Name]
 		maxCell, freeCell := paint.Muted("none"), paint.Muted("none")
 		if q, ok := n.Status.Allocatable[corev1.ResourcePods]; ok {
-			max := int(q.Value())
-			maxCell = strconv.Itoa(max)
-			freeCell = freeSlots(paint, max-u, max)
+			ceiling := int(q.Value())
+			maxCell = strconv.Itoa(ceiling)
+			freeCell = freeSlots(paint, ceiling-u, ceiling)
 		}
 		t.Row(n.Name, maxCell, strconv.Itoa(u), freeCell)
 	}
@@ -54,14 +54,14 @@ func MaxPods(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 
 // freeSlots colors a node's remaining pod slots by how much headroom is left:
 // under 10% of the ceiling is bad, under 25% is a warning, otherwise healthy.
-func freeSlots(paint kube.Painter, free, max int) string {
+func freeSlots(paint kube.Painter, free, ceiling int) string {
 	s := strconv.Itoa(free)
 	switch {
-	case max <= 0:
+	case ceiling <= 0:
 		return s
-	case free*10 < max:
+	case free*10 < ceiling:
 		return paint.Bad(s)
-	case free*4 < max:
+	case free*4 < ceiling:
 		return paint.Warn(s)
 	default:
 		return paint.OK(s)

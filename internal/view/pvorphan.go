@@ -65,7 +65,7 @@ func PvOrphan(ctx context.Context, c kube.Clients, f kube.Flags, _ []string, out
 		t.Row(
 			e.pv.Name,
 			paint.Status(string(e.pv.Status.Phase)),
-			reclaimCell(paint, e.pv.Spec.PersistentVolumeReclaimPolicy),
+			orMutedDash(paint, e.pv.Spec.PersistentVolumeReclaimPolicy),
 			pvCapacity(e.pv),
 			formerClaim(paint, e.pv.Spec.ClaimRef),
 			diskCell(paint, e.pv),
@@ -73,9 +73,7 @@ func PvOrphan(ctx context.Context, c kube.Clients, f kube.Flags, _ []string, out
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
-	t.SortRank("VERDICT", verdictRank("FAILED", "RETAINED", "RECLAIMING", "UNCLAIMED"))
-	t.SortBy(orDefault(f.Sort, "verdict"))
-	return t.Flush()
+	return flushVerdicts(t, f.Sort, "FAILED", "RETAINED", "RECLAIMING", "UNCLAIMED")
 }
 
 // pvVerdict grades a volume, reporting false for the ones a claim still uses.
@@ -107,13 +105,6 @@ func pvCapacity(p *corev1.PersistentVolume) string {
 	return "-"
 }
 
-func reclaimCell(paint kube.Painter, policy corev1.PersistentVolumeReclaimPolicy) string {
-	if policy == "" {
-		return paint.Muted("-")
-	}
-	return string(policy)
-}
-
 // formerClaim names the claim the volume was bound to. It is the only clue left
 // as to what the disk held, and it routinely points at an object that no longer
 // exists - a StatefulSet ordinal past the current replica count, typically.
@@ -134,11 +125,11 @@ func formerClaim(paint kube.Painter, ref *corev1.ObjectReference) string {
 // it can name a disk that has since been deleted.
 func diskCell(paint kube.Painter, p *corev1.PersistentVolume) string {
 	if csi := p.Spec.CSI; csi != nil && csi.VolumeHandle != "" {
-		h := csi.VolumeHandle
-		if i := strings.LastIndex(h, "/"); i >= 0 {
-			h = h[i+1:]
+		_, name, found := strings.CutLast(csi.VolumeHandle, "/")
+		if !found {
+			return csi.VolumeHandle
 		}
-		return h
+		return name
 	}
 	return paint.Muted("-")
 }

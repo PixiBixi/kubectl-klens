@@ -2,7 +2,6 @@ package view
 
 import (
 	"context"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -107,63 +106,33 @@ const replicasAnnotation = "klens.io/replicas"
 // installed, Argo Rollouts, and turns each into one synthetic pod.
 func workloadPods(ctx context.Context, c kube.Clients, f kube.Flags) ([]corev1.Pod, error) {
 	var (
-		deploys  []appsv1.Deployment
-		stateful []appsv1.StatefulSet
-		daemons  []appsv1.DaemonSet
-		argo     []unstructured.Unstructured
-		strimzi  []unstructured.Unstructured
-		cnpg     []unstructured.Unstructured
+		w                   builtinWorkloads
+		argo, strimzi, cnpg []unstructured.Unstructured
 	)
 	scope := f.Scope()
-	err := allLists(
-		func() (err error) {
-			deploys, err = kube.ListDeployments(ctx, c, scope, metav1.ListOptions{})
-			return err
-		},
-		func() (err error) {
-			stateful, err = kube.ListStatefulSets(ctx, c, scope, metav1.ListOptions{})
-			return err
-		},
-		func() (err error) {
-			daemons, err = kube.ListDaemonSets(ctx, c, scope, metav1.ListOptions{})
-			return err
-		},
-		func() error {
-			list, err := kube.ListCustom(ctx, c.Dynamic, rolloutGVR, scope, metav1.ListOptions{})
-			if absentCRD(err) {
-				return nil
-			}
-			argo = list
-			return err
-		},
+	err := kube.Concurrent(append(w.listers(ctx, c, scope),
+		optionalCRD(ctx, c, rolloutGVR, scope, &argo),
 		func() (err error) {
 			strimzi, err = listStrimziPodSets(ctx, c, scope)
 			return err
 		},
-		func() error {
-			list, err := kube.ListCustom(ctx, c.Dynamic, cnpgClusterGVR, scope, metav1.ListOptions{})
-			if absentCRD(err) {
-				return nil
-			}
-			cnpg = list
-			return err
-		},
-	)
+		optionalCRD(ctx, c, cnpgClusterGVR, scope, &cnpg),
+	)...)
 	if err != nil {
 		return nil, err
 	}
 
-	pods := make([]corev1.Pod, 0, len(deploys)+len(stateful)+len(daemons)+len(argo))
-	for i := range deploys {
-		d := &deploys[i]
+	pods := make([]corev1.Pod, 0, w.len()+len(argo)+len(strimzi)+len(cnpg))
+	for i := range w.deploys {
+		d := &w.deploys[i]
 		pods = append(pods, syntheticPod(d.Namespace, d.Name, replicasOrOne(d.Spec.Replicas), &d.Spec.Template.Spec))
 	}
-	for i := range stateful {
-		s := &stateful[i]
+	for i := range w.stateful {
+		s := &w.stateful[i]
 		pods = append(pods, syntheticPod(s.Namespace, s.Name, replicasOrOne(s.Spec.Replicas), &s.Spec.Template.Spec))
 	}
-	for i := range daemons {
-		d := &daemons[i]
+	for i := range w.daemons {
+		d := &w.daemons[i]
 		// A DaemonSet has no spec.replicas: its population is however many
 		// nodes its selector and tolerations reach.
 		pods = append(pods, syntheticPod(d.Namespace, d.Name, int(d.Status.DesiredNumberScheduled), &d.Spec.Template.Spec))
@@ -192,18 +161,13 @@ func workloadPods(ctx context.Context, c kube.Clients, f kube.Flags) ([]corev1.P
 		if err != nil {
 			continue
 		}
-		p := syntheticPod(u.GetNamespace(), u.GetName(), cnpgInstances(u), spec)
+		// Unlike the built-in kinds there is no default to fall back on:
+		// spec.instances is required.
+		p := syntheticPod(u.GetNamespace(), u.GetName(), nestedInt(u, "spec", "instances"), spec)
 		p.Annotations[unknownAnnotation] = unknownForCNPG
 		pods = append(pods, p)
 	}
 	return pods, nil
-}
-
-// cnpgInstances reads a Cluster's replica count. Unlike the built-in kinds
-// there is no default to fall back on: spec.instances is required.
-func cnpgInstances(u *unstructured.Unstructured) int {
-	n, _, _ := unstructured.NestedInt64(u.Object, "spec", "instances")
-	return int(n)
 }
 
 // cnpgPodSpec builds the two containers CNPG runs, both carrying the cluster's
@@ -213,15 +177,9 @@ func cnpgInstances(u *unstructured.Unstructured) int {
 // limits and the QoS class derived from them match the running pod. Images and
 // probes are deliberately left unset and the row is marked unknown for them.
 func cnpgPodSpec(u *unstructured.Unstructured) (*corev1.PodSpec, error) {
-	var res corev1.ResourceRequirements
-	raw, found, err := unstructured.NestedMap(u.Object, "spec", "resources")
+	res, _, err := nestedTyped[corev1.ResourceRequirements](u.Object, "spec", "resources")
 	if err != nil {
 		return nil, err
-	}
-	if found {
-		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(raw, &res); err != nil {
-			return nil, err
-		}
 	}
 	return &corev1.PodSpec{
 		InitContainers: []corev1.Container{{Name: "bootstrap-controller", Resources: res}},
@@ -244,14 +202,6 @@ func listStrimziPodSets(ctx context.Context, c kube.Clients, scope kube.Scope) (
 	return list, err
 }
 
-// absentCRD reports the errors that mean "this custom resource is not something
-// we can read here", which for an optional CRD is the normal case rather than a
-// failure: the built-in kinds still make a useful table, so those rows are
-// simply absent.
-func absentCRD(err error) bool {
-	return meta.IsNoMatchError(err) || apierrors.IsNotFound(err) || apierrors.IsForbidden(err)
-}
-
 // strimziPodSpec reads a StrimziPodSet. Unlike every other kind here it carries
 // no pod *template*: spec.pods is a list of complete, already-materialized pod
 // manifests, one per replica, differing in name and volumes. The first one is
@@ -271,12 +221,8 @@ func strimziPodSpec(u *unstructured.Unstructured) (*corev1.PodSpec, int, error) 
 	if !ok {
 		return nil, 0, nil
 	}
-	raw, found, err := unstructured.NestedMap(first, "spec")
+	spec, found, err := nestedTyped[corev1.PodSpec](first, "spec")
 	if err != nil || !found {
-		return nil, 0, err
-	}
-	var spec corev1.PodSpec
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(raw, &spec); err != nil {
 		return nil, 0, err
 	}
 	return &spec, len(items), nil
@@ -300,11 +246,12 @@ const unknownAnnotation = "klens.io/unknown"
 // pod, and every synthetic one built from a genuine pod template, answers for
 // all of them.
 func specKnows(p *corev1.Pod, aspect string) bool {
-	unknown := p.Annotations[unknownAnnotation]
-	if unknown == "" {
-		return true
+	for u := range strings.SplitSeq(p.Annotations[unknownAnnotation], ",") {
+		if u == aspect {
+			return false
+		}
 	}
-	return !slices.Contains(strings.Split(unknown, ","), aspect)
+	return true
 }
 
 // replicasOf reads back the replica count syntheticPod stashed. A pod with no
@@ -341,13 +288,66 @@ func argoReplicas(u *unstructured.Unstructured) int {
 // template at all, which is not an error: it yields an empty spec and so no
 // container rows.
 func argoPodSpec(u *unstructured.Unstructured) (*corev1.PodSpec, error) {
-	raw, found, err := unstructured.NestedMap(u.Object, "spec", "template", "spec")
-	if err != nil || !found {
-		return &corev1.PodSpec{}, err
-	}
-	var spec corev1.PodSpec
-	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(raw, &spec); err != nil {
+	spec, _, err := nestedTyped[corev1.PodSpec](u.Object, "spec", "template", "spec")
+	if err != nil {
 		return nil, err
 	}
 	return &spec, nil
+}
+
+// builtinWorkloads holds the three built-in pod controllers, listed together by
+// every view that reads workload templates.
+type builtinWorkloads struct {
+	deploys  []appsv1.Deployment
+	stateful []appsv1.StatefulSet
+	daemons  []appsv1.DaemonSet
+}
+
+// listers returns the kube.Concurrent calls that fill w.
+func (w *builtinWorkloads) listers(ctx context.Context, c kube.Clients, scope kube.Scope) []func() error {
+	var opts metav1.ListOptions
+	return []func() error{
+		func() (err error) { w.deploys, err = kube.ListDeployments(ctx, c, scope, opts); return err },
+		func() (err error) { w.stateful, err = kube.ListStatefulSets(ctx, c, scope, opts); return err },
+		func() (err error) { w.daemons, err = kube.ListDaemonSets(ctx, c, scope, opts); return err },
+	}
+}
+
+func (w *builtinWorkloads) len() int { return len(w.deploys) + len(w.stateful) + len(w.daemons) }
+
+// absentCRD reports the errors that mean "this custom resource is not something
+// we can read here", which for an optional CRD is the normal case rather than a
+// failure: the built-in kinds still make a useful table, so those rows are
+// simply absent.
+func absentCRD(err error) bool {
+	return meta.IsNoMatchError(err) || apierrors.IsNotFound(err) || apierrors.IsForbidden(err)
+}
+
+// optionalCRD is a kube.Concurrent call listing a CRD that may not be
+// installed or readable (see absentCRD); dst stays empty in that case.
+func optionalCRD(ctx context.Context, c kube.Clients, gvr schema.GroupVersionResource, scope kube.Scope, dst *[]unstructured.Unstructured) func() error {
+	return func() error {
+		list, err := kube.ListCustom(ctx, c.Dynamic, gvr, scope, metav1.ListOptions{})
+		if absentCRD(err) {
+			return nil
+		}
+		*dst = list
+		return err
+	}
+}
+
+// nestedTyped converts the object at fields into a T, the zero T when absent.
+func nestedTyped[T any](obj map[string]any, fields ...string) (v T, found bool, err error) {
+	raw, found, err := unstructured.NestedMap(obj, fields...)
+	if err != nil || !found {
+		return v, found, err
+	}
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(raw, &v)
+	return v, true, err
+}
+
+// nestedInt reads an integer field, 0 when absent or mistyped.
+func nestedInt(u *unstructured.Unstructured, fields ...string) int {
+	n, _, _ := unstructured.NestedInt64(u.Object, fields...)
+	return int(n)
 }

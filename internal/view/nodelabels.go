@@ -53,17 +53,6 @@ var cloudLabelPrefixes = []string{
 	"kubernetes.azure.com/",
 }
 
-// firstLabel returns the value of the first key present in keys, or a muted
-// "<none>" when none match.
-func firstLabel(paint kube.Painter, labels map[string]string, keys []string) string {
-	for _, k := range keys {
-		if v, ok := labels[k]; ok && v != "" {
-			return v
-		}
-	}
-	return paint.Muted("<none>")
-}
-
 // nodeProvisioning resolves the provisioning model from labels, normalized to
 // one lowercase vocabulary across clouds. Returns "" when no cloud label at all
 // is present: that case must render as a caller-drawn <none>, never a guessed
@@ -90,5 +79,5 @@ func nodeProvisioning(labels map[string]string) string {
 // `node-ips`), so a new compute-class label key reaches every one of them at
 // once instead of only the view it was added to.
 func nodeClass(paint kube.Painter, labels map[string]string) string {
-	return firstLabel(paint, labels, computeClassLabels)
+	return kube.Label(paint, labels, computeClassLabels...)
 }

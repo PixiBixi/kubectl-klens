@@ -33,9 +33,6 @@ func NamespaceSet(names ...string) Scope {
 // All reports whether the scope covers every namespace.
 func (s Scope) All() bool { return len(s.names) == 0 }
 
-// Len returns how many namespaces the scope names; 0 means all of them.
-func (s Scope) Len() int { return len(s.names) }
-
 // Names returns the namespaces in the scope, empty for cluster-wide. The slice
 // is owned by the Scope; callers must not mutate it.
 func (s Scope) Names() []string { return s.names }
@@ -54,10 +51,10 @@ func (s Scope) One() (string, bool) {
 // namespace name into a pattern.
 const globChars = "*?["
 
-// IsPattern reports whether a -n value is a glob rather than a literal name.
+// isPattern reports whether a -n value is a glob rather than a literal name.
 // A namespace name is a DNS label, so none of these characters can appear in
 // one: any occurrence is unambiguously a pattern.
-func IsPattern(value string) bool { return strings.ContainsAny(value, globChars) }
+func isPattern(value string) bool { return strings.ContainsAny(value, globChars) }
 
 // ResolveScope expands f.Namespace into f.Namespaces, validating it against the
 // cluster. It is the only place a -n value is checked, and it is strict on
@@ -71,7 +68,7 @@ func ResolveScope(ctx context.Context, c kubernetes.Interface, f *Flags) error {
 	if f.AllNamespaces || f.Namespace == "" {
 		return nil
 	}
-	if !IsPattern(f.Namespace) {
+	if !isPattern(f.Namespace) {
 		if _, err := c.CoreV1().Namespaces().Get(ctx, f.Namespace, metav1.GetOptions{}); err != nil {
 			if apierrors.IsNotFound(err) {
 				// A regexp with no glob metacharacter ("zz.+", "^be") never
@@ -87,22 +84,33 @@ func ResolveScope(ctx context.Context, c kubernetes.Interface, f *Flags) error {
 	if _, err := path.Match(f.Namespace, ""); err != nil {
 		return fmt.Errorf("invalid namespace pattern %q: %w", f.Namespace, err)
 	}
-	all, err := ListNamespaces(ctx, c, metav1.ListOptions{})
+	names, err := NamespaceNames(ctx, c)
 	if err != nil {
 		return fmt.Errorf("cannot expand namespace pattern %q: %w", f.Namespace, err)
 	}
-	matched := make([]string, 0, 8)
-	for i := range all {
-		if ok, _ := path.Match(f.Namespace, all[i].Name); ok {
-			matched = append(matched, all[i].Name)
-		}
-	}
+	matched := slices.DeleteFunc(names, func(n string) bool {
+		ok, _ := path.Match(f.Namespace, n)
+		return !ok
+	})
 	if len(matched) == 0 {
 		return fmt.Errorf("no namespace matches %q%s", f.Namespace, globHint(f.Namespace))
 	}
-	slices.Sort(matched)
 	f.Namespaces = matched
 	return nil
+}
+
+// NamespaceNames returns the name of every namespace in the cluster, sorted.
+func NamespaceNames(ctx context.Context, c kubernetes.Interface) ([]string, error) {
+	list, err := ListNamespaces(ctx, c, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, len(list))
+	for i := range list {
+		names[i] = list[i].Name
+	}
+	slices.Sort(names)
+	return names, nil
 }
 
 // globHint explains a pattern that reads like a regexp. It is the mistake -n

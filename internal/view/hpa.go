@@ -1,7 +1,6 @@
 package view
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -36,14 +35,7 @@ func Hpa(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 		v, sev := hpaVerdict(h.Spec, h.Status)
 		list = append(list, entry{h, v, sev})
 	}
-	// Deterministic tiebreak for rows with equal sort keys; the VERDICT sort
-	// applied at Flush is stable, so this order survives within each verdict.
-	slices.SortStableFunc(list, func(a, b entry) int {
-		return cmp.Or(
-			cmp.Compare(a.hpa.Namespace, b.hpa.Namespace),
-			cmp.Compare(a.hpa.Name, b.hpa.Name),
-		)
-	})
+	slices.SortStableFunc(list, func(a, b entry) int { return byNsName(&a.hpa.ObjectMeta, &b.hpa.ObjectMeta) })
 
 	t := kube.NewTable(out, paint, "NS", "NAME", "REF", "TARGETS", "MIN", "MAX", "CURRENT", "DESIRED", "VERDICT")
 	for i := range list {
@@ -65,9 +57,7 @@ func Hpa(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
-	t.SortRank("VERDICT", verdictRank("NO-METRICS", "MAXED", "SCALING", "AT-MIN", "OK"))
-	t.SortBy(orDefault(f.Sort, "verdict"))
-	return t.Flush()
+	return flushVerdicts(t, f.Sort, "NO-METRICS", "MAXED", "SCALING", "AT-MIN", "OK")
 }
 
 // hpaTargets renders the current/target value of every metric the HPA drives
@@ -108,57 +98,55 @@ const unknownMetric = "<unknown>"
 // which may be nil) into the metric's name, its current value and its target.
 // Utilization targets print as a percentage, value targets as a quantity.
 func hpaMetricTarget(spec autoscalingv2.MetricSpec, st *autoscalingv2.MetricStatus) (name, cur, target string) {
+	var (
+		tgt     *autoscalingv2.MetricTarget
+		current *autoscalingv2.MetricValueStatus
+	)
 	switch spec.Type {
 	case autoscalingv2.ResourceMetricSourceType:
 		if spec.Resource == nil {
 			break
 		}
-		name = string(spec.Resource.Name)
-		var current *autoscalingv2.MetricValueStatus
+		name, tgt = string(spec.Resource.Name), &spec.Resource.Target
 		if st != nil && st.Resource != nil {
 			current = &st.Resource.Current
 		}
-		cur, target = hpaMetricValues(current, spec.Resource.Target)
 	case autoscalingv2.ContainerResourceMetricSourceType:
 		if spec.ContainerResource == nil {
 			break
 		}
 		name = string(spec.ContainerResource.Name) + "(" + spec.ContainerResource.Container + ")"
-		var current *autoscalingv2.MetricValueStatus
+		tgt = &spec.ContainerResource.Target
 		if st != nil && st.ContainerResource != nil {
 			current = &st.ContainerResource.Current
 		}
-		cur, target = hpaMetricValues(current, spec.ContainerResource.Target)
 	case autoscalingv2.PodsMetricSourceType:
 		if spec.Pods == nil {
 			break
 		}
-		name = spec.Pods.Metric.Name
-		var current *autoscalingv2.MetricValueStatus
+		name, tgt = spec.Pods.Metric.Name, &spec.Pods.Target
 		if st != nil && st.Pods != nil {
 			current = &st.Pods.Current
 		}
-		cur, target = hpaMetricValues(current, spec.Pods.Target)
 	case autoscalingv2.ObjectMetricSourceType:
 		if spec.Object == nil {
 			break
 		}
-		name = spec.Object.Metric.Name
-		var current *autoscalingv2.MetricValueStatus
+		name, tgt = spec.Object.Metric.Name, &spec.Object.Target
 		if st != nil && st.Object != nil {
 			current = &st.Object.Current
 		}
-		cur, target = hpaMetricValues(current, spec.Object.Target)
 	case autoscalingv2.ExternalMetricSourceType:
 		if spec.External == nil {
 			break
 		}
-		name = spec.External.Metric.Name
-		var current *autoscalingv2.MetricValueStatus
+		name, tgt = spec.External.Metric.Name, &spec.External.Target
 		if st != nil && st.External != nil {
 			current = &st.External.Current
 		}
-		cur, target = hpaMetricValues(current, spec.External.Target)
+	}
+	if tgt != nil {
+		cur, target = hpaMetricValues(current, *tgt)
 	}
 	if target == "" {
 		return name, unknownMetric, "<auto>"

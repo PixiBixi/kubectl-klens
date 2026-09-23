@@ -1,6 +1,12 @@
 package view
 
-import "github.com/PixiBixi/kubectl-klens/internal/kube"
+import (
+	"cmp"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/PixiBixi/kubectl-klens/internal/kube"
+)
 
 // Shared helpers for the verdict commands (pdb, hpa, spread, probes): each
 // classifies rows into a VERDICT column with a severity tier (ok/warn/bad/
@@ -14,6 +20,21 @@ func orDefault(sort, fallback string) string {
 		return fallback
 	}
 	return sort
+}
+
+// byNsName orders objects by namespace, then name. Verdict views pre-sort
+// with it as a deterministic tiebreak: the VERDICT sort applied at Flush is
+// stable, so this order survives within each verdict.
+func byNsName(a, b *metav1.ObjectMeta) int {
+	return cmp.Or(cmp.Compare(a.Namespace, b.Namespace), cmp.Compare(a.Name, b.Name))
+}
+
+// flushVerdicts renders a verdict table: VERDICT ranked by the command's
+// worst-first order, sorted by it unless --sort names another column.
+func flushVerdicts(t *kube.Table, sort string, worstFirst ...string) error {
+	t.SortRank("VERDICT", verdictRank(worstFirst...))
+	t.SortBy(orDefault(sort, "verdict"))
+	return t.Flush()
 }
 
 func sevPaint(paint kube.Painter, sev string) func(string) string {

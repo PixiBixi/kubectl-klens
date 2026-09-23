@@ -130,3 +130,25 @@ func TestPendingColor(t *testing.T) {
 		}
 	}
 }
+
+// TestPendingReasonInitFirst: while an init container is stuck, the kubelet
+// reports every app container as Waiting PodInitializing. The init
+// container's own reason is the one that explains the pod.
+func TestPendingReasonInitFirst(t *testing.T) {
+	waiting := func(name, reason string) corev1.ContainerStatus {
+		return corev1.ContainerStatus{Name: name, State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: reason}}}
+	}
+	p := &corev1.Pod{
+		Spec: corev1.PodSpec{
+			InitContainers: []corev1.Container{{Name: "migrate", Image: "myreg/migrate:bad"}},
+			Containers:     []corev1.Container{{Name: "app", Image: "myreg/app:1"}},
+		},
+		Status: corev1.PodStatus{
+			InitContainerStatuses: []corev1.ContainerStatus{waiting("migrate", "ErrImagePull")},
+			ContainerStatuses:     []corev1.ContainerStatus{waiting("app", "PodInitializing")},
+		},
+	}
+	if reason, detail := pendingReason(p); reason != "ErrImagePull" || detail != "myreg/migrate:bad" {
+		t.Fatalf("got (%q, %q), want (ErrImagePull, myreg/migrate:bad)", reason, detail)
+	}
+}

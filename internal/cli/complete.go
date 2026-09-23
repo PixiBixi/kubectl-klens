@@ -11,31 +11,31 @@ import (
 	"strings"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
-// completionFlags are the global flag tokens offered during shell completion.
-// TestCompletionOffersEveryGlobalFlag checks this stays in step with the
-// globalFlags table, which is the source of truth for registration and --help.
-var completionFlags = []string{
-	"--kubeconfig", "--context", "--namespace", "-n",
-	"--all-namespaces", "-A", "--color", "--request-timeout",
-	"--version", "--help", "-h",
-}
+// completionFlags are the global flag tokens offered during shell completion,
+// derived from the globalFlags usage strings so the two cannot drift.
+var completionFlags = func() []string {
+	var out []string
+	for _, gf := range globalFlags {
+		for token := range strings.FieldsSeq(strings.ReplaceAll(gf.usage, ",", " ")) {
+			if strings.HasPrefix(token, "-") { // skip the type word, e.g. "string"
+				out = append(out, token)
+			}
+		}
+	}
+	return append(out, "--version", "--help", "-h")
+}()
 
 // complete implements the cobra-compatible "__complete" protocol that kubectl
 // invokes (through the kubectl_complete-klens shim) to complete "kubectl klens".
 // It prints candidate completions followed by a ShellCompDirective line.
 func (a App) complete(args []string) int {
-	toComplete := ""
-	if len(args) > 0 {
-		toComplete = args[len(args)-1]
-	}
+	var toComplete string
 	var prior []string
-	if len(args) > 1 {
-		prior = args[:len(args)-1]
+	if n := len(args); n > 0 {
+		toComplete, prior = args[n-1], args[:n-1]
 	}
 	for _, cand := range a.completions(prior, toComplete) {
 		fmt.Fprintln(a.Out, cand)
@@ -60,40 +60,27 @@ func (a App) completions(prior []string, toComplete string) []string {
 		}
 		return withPrefix([]string{"install"}, toComplete)
 	}
-	if len(prior) > 0 && prior[len(prior)-1] == "--sort" {
-		if c, ok := chosenCommand(prior); ok {
-			return withPrefix(c.SortColumns, toComplete)
-		}
-		return nil
+	var prev string
+	if len(prior) > 0 {
+		prev = prior[len(prior)-1]
 	}
-	if len(prior) > 0 && prior[len(prior)-1] == "--color" {
-		return withPrefix([]string{"auto", "always", "never"}, toComplete)
-	}
-	if len(prior) > 0 && slices.Contains(namespaceFlags, prior[len(prior)-1]) {
+	cmd, chosen := chosenCommand(prior)
+	switch {
+	case prev == "--sort":
+		return withPrefix(cmd.SortColumns, toComplete)
+	case prev == "--color":
+		return withPrefix(colorModes, toComplete)
+	case slices.Contains(namespaceFlags, prev):
 		return a.namespaceCompletions(prior, toComplete)
-	}
-	if strings.HasPrefix(toComplete, "-") {
-		flags := completionFlags
-		if c, ok := chosenCommand(prior); ok {
-			// Per-command flags are only offered where they are registered, so a
-			// completion never suggests a flag the dispatcher would reject.
-			var extra []string
-			if len(c.SortColumns) > 0 {
-				extra = append(extra, "--sort")
-			}
-			if c.Watch {
-				extra = append(extra, "-w", "--watch", "--interval")
-			}
-			if c.ByOwner {
-				extra = append(extra, "--by-owner")
-			}
-			if len(extra) > 0 {
-				flags = slices.Concat(completionFlags, extra)
+	case strings.HasPrefix(toComplete, "-"):
+		flags := slices.Clone(completionFlags)
+		for _, cf := range commandFlags {
+			if chosen && cf.on(cmd) {
+				flags = append(flags, cf.tokens...)
 			}
 		}
 		return withPrefix(flags, toComplete)
-	}
-	if subcommandChosen(prior) {
+	case chosen:
 		return nil
 	}
 	names := make([]string, 0, len(commands)+1)
@@ -116,12 +103,20 @@ func (a App) namespaceCompletions(prior []string, toComplete string) []string {
 	f := kube.Flags{RequestTimeout: completionTimeout}
 	// --kubeconfig and --context change which cluster to ask, and the user may
 	// well have typed them before the -n they are completing.
-	for i := 0; i+1 < len(prior); i++ {
-		switch prior[i] {
+	// Both spellings the flag package accepts: "--context x" and "--context=x".
+	for i, arg := range prior {
+		name, val, inline := strings.Cut(arg, "=")
+		if !inline {
+			if i+1 == len(prior) {
+				break
+			}
+			val = prior[i+1]
+		}
+		switch name {
 		case "--kubeconfig":
-			f.Kubeconfig = prior[i+1]
+			f.Kubeconfig = val
 		case "--context":
-			f.Context = prior[i+1]
+			f.Context = val
 		}
 	}
 	c, err := a.NewClient(f)
@@ -130,21 +125,11 @@ func (a App) namespaceCompletions(prior []string, toComplete string) []string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), completionTimeout)
 	defer cancel()
-	list, err := kube.ListNamespaces(ctx, c, metav1.ListOptions{})
+	names, err := kube.NamespaceNames(ctx, c)
 	if err != nil {
 		return nil
 	}
-	names := make([]string, 0, len(list))
-	for i := range list {
-		names = append(names, list[i].Name)
-	}
-	slices.Sort(names)
 	return withPrefix(names, toComplete)
-}
-
-func subcommandChosen(prior []string) bool {
-	_, ok := chosenCommand(prior)
-	return ok
 }
 
 // chosenCommand returns the first already-typed word that resolves to a command
@@ -234,10 +219,5 @@ func completionDir(override string) (string, error) {
 
 func dirOnPath(dir string) bool {
 	want := filepath.Clean(dir)
-	for _, p := range filepath.SplitList(os.Getenv("PATH")) {
-		if filepath.Clean(p) == want {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(filepath.SplitList(os.Getenv("PATH")), func(p string) bool { return filepath.Clean(p) == want })
 }

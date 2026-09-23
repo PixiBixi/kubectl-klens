@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -12,25 +12,17 @@ import (
 // Nodes lists nodes with cross-cloud pool, compute-class, and
 // provisioning-model (spot/on-demand) labels.
 func Nodes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
-	paint := kube.NewPainter(f)
-	t := kube.NewTable(out, paint, "NAME", "STATUS", "NODEPOOL", "INSTANCE-TYPE", "CLASS", "PROVISIONING")
-	for i := range nodes {
-		n := &nodes[i]
-		t.Row(
+	headers := []string{"NAME", "STATUS", "NODEPOOL", "INSTANCE-TYPE", "CLASS", "PROVISIONING"}
+	return nodeTable(ctx, c, f, out, headers, func(paint kube.Painter, n *corev1.Node) []string {
+		return []string{
 			n.Name,
 			paint.Status(nodeStatus(n)),
-			firstLabel(paint, n.Labels, nodePoolLabels),
-			kube.Label(paint, n.Labels, "node.kubernetes.io/instance-type"),
+			kube.Label(paint, n.Labels, nodePoolLabels...),
+			kube.Label(paint, n.Labels, corev1.LabelInstanceTypeStable),
 			nodeClass(paint, n.Labels),
 			paintProvisioning(paint, nodeProvisioning(n.Labels)),
-		)
-	}
-	t.SortBy(f.Sort)
-	return t.Flush()
+		}
+	})
 }
 
 // paintProvisioning colors the common on-demand state green and the reclaimable

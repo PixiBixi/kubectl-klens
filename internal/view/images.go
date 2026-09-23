@@ -37,7 +37,7 @@ func Images(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 		for _, pc := range podContainers(p) {
 			image, tag := splitImageTag(pc.Spec.Image)
 			row = append(row[:0], p.Name)
-			row = appendOwnerCells(row, paint, f, p)
+			row = appendOwnerCells(row, paint, f.ByOwner, p)
 			row = append(row, pc.Spec.Name, pc.Kind, string(pc.Spec.ImagePullPolicy), image, latestTag(paint, tag))
 			t.Row(row...)
 		}

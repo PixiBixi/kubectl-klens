@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"slices"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -46,7 +45,7 @@ func reportMissing(ctx context.Context, c kube.Clients, f kube.Flags, out io.Wri
 		for _, pc := range podContainers(p) {
 			if m := missingResources(pick(pc.Spec)); m != "" {
 				row = append(row[:0], p.Namespace, p.Name)
-				row = appendOwnerCells(row, paint, f, p)
+				row = appendOwnerCells(row, paint, f.ByOwner, p)
 				row = append(row, pc.Spec.Name, pc.Kind, paint.Warn(m))
 				t.Row(row...)
 			}
@@ -59,12 +58,15 @@ func reportMissing(ctx context.Context, c kube.Clients, f kube.Flags, out io.Wri
 // missingResources returns which of cpu/memory are absent from rl as a
 // comma-joined string, or "" when both are present.
 func missingResources(rl corev1.ResourceList) string {
-	var missing []string
-	if _, ok := rl[corev1.ResourceCPU]; !ok {
-		missing = append(missing, "cpu")
+	_, cpu := rl[corev1.ResourceCPU]
+	_, mem := rl[corev1.ResourceMemory]
+	switch {
+	case !cpu && !mem:
+		return "cpu,memory"
+	case !cpu:
+		return "cpu"
+	case !mem:
+		return "memory"
 	}
-	if _, ok := rl[corev1.ResourceMemory]; !ok {
-		missing = append(missing, "memory")
-	}
-	return strings.Join(missing, ",")
+	return ""
 }

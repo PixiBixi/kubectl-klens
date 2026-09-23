@@ -1,7 +1,6 @@
 package view
 
 import (
-	"cmp"
 	"context"
 	"io"
 	"slices"
@@ -35,14 +34,7 @@ func Pdb(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 		v, sev := pdbVerdict(p.Status)
 		list = append(list, entry{p, v, sev})
 	}
-	// Deterministic tiebreak for rows with equal sort keys; the VERDICT sort
-	// applied at Flush is stable, so this order survives within each verdict.
-	slices.SortStableFunc(list, func(a, b entry) int {
-		return cmp.Or(
-			cmp.Compare(a.pdb.Namespace, b.pdb.Namespace),
-			cmp.Compare(a.pdb.Name, b.pdb.Name),
-		)
-	})
+	slices.SortStableFunc(list, func(a, b entry) int { return byNsName(&a.pdb.ObjectMeta, &b.pdb.ObjectMeta) })
 
 	t := kube.NewTable(out, paint, "NS", "NAME", "POLICY", "EXPECTED", "DESIRED", "HEALTHY", "ALLOWED", "VERDICT")
 	for i := range list {
@@ -59,9 +51,7 @@ func Pdb(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
-	t.SortRank("VERDICT", verdictRank("NO-GUARD", "PERMABLOCK", "BLOCKED", "AT-FLOOR", "ORPHAN", "OK"))
-	t.SortBy(orDefault(f.Sort, "verdict"))
-	return t.Flush()
+	return flushVerdicts(t, f.Sort, "NO-GUARD", "PERMABLOCK", "BLOCKED", "AT-FLOOR", "ORPHAN", "OK")
 }
 
 // pdbVerdict classifies a PDB's drain-safety state from its status fields. The

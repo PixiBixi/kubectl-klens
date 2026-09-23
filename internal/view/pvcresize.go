@@ -1,7 +1,6 @@
 package view
 
 import (
-	"cmp"
 	"context"
 	"io"
 	"maps"
@@ -11,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -34,7 +34,7 @@ func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 		classes []storagev1.StorageClass
 	)
 	scope := f.Scope()
-	err := allLists(
+	err := kube.Concurrent(
 		func() (err error) {
 			pvcs, err = kube.ListPersistentVolumeClaims(ctx, c, scope, metav1.ListOptions{})
 			return err
@@ -86,32 +86,23 @@ func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 	}
 	mounts := claimMounts(pods)
 
-	// Deterministic tiebreak for rows sharing a verdict; the VERDICT sort applied
-	// at Flush is stable, so this order survives within each verdict.
-	slices.SortStableFunc(list, func(a, b entry) int {
-		return cmp.Or(
-			cmp.Compare(a.pvc.Namespace, b.pvc.Namespace),
-			cmp.Compare(a.pvc.Name, b.pvc.Name),
-		)
-	})
+	slices.SortStableFunc(list, func(a, b entry) int { return byNsName(&a.pvc.ObjectMeta, &b.pvc.ObjectMeta) })
 
 	for i := range list {
 		e := &list[i]
 		t.Row(
 			e.pvc.Namespace,
 			e.pvc.Name,
-			storageCell(paint, e.pvc.Status.Capacity),
-			storageCell(paint, e.pvc.Spec.Resources.Requests),
+			qtyOr(paint, e.pvc.Status.Capacity, corev1.ResourceStorage, "-"),
+			qtyOr(paint, e.pvc.Spec.Resources.Requests, corev1.ResourceStorage, "-"),
 			storageClassCell(paint, e.pvc),
-			podCell(paint, mounts[e.pvc.Namespace+"/"+e.pvc.Name]),
+			podCell(paint, mounts[objKey(&e.pvc.ObjectMeta)]),
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
-	t.SortRank("VERDICT", verdictRank(
+	return flushVerdicts(t, f.Sort,
 		"SC-NO-EXPAND", "INFEASIBLE", "FAILED", "SHRINK", "FS-PENDING", "RESIZING", "PENDING",
-	))
-	t.SortBy(orDefault(f.Sort, "verdict"))
-	return t.Flush()
+	)
 }
 
 // podsForClaims lists pods only where the rows are. The rows are the few claims
@@ -149,6 +140,9 @@ func resizeVerdict(p *corev1.PersistentVolumeClaim, expandable map[string]bool) 
 	}
 	requested, asked := p.Spec.Resources.Requests[corev1.ResourceStorage]
 	growing := asked && requested.Cmp(capacity) > 0
+	// Only a class we actually resolved can refuse expansion: map keys are
+	// StorageClass names, so an unnamed or unlisted class is not known.
+	allowed, known := expandable[className(p)]
 
 	switch {
 	case hasResourceStatus(p, corev1.PersistentVolumeClaimControllerResizeInfeasible,
@@ -159,7 +153,7 @@ func resizeVerdict(p *corev1.PersistentVolumeClaim, expandable map[string]bool) 
 	case hasCondition(p, corev1.PersistentVolumeClaimControllerResizeError,
 		corev1.PersistentVolumeClaimNodeResizeError):
 		return "FAILED", "bad"
-	case growing && hasClass(expandable, className(p)) && !expandable[className(p)]:
+	case growing && known && !allowed:
 		// allowVolumeExpansion is false on the class: the request will sit there
 		// forever. The only way out is a new PVC, so this is the worst verdict.
 		return "SC-NO-EXPAND", "bad"
@@ -194,16 +188,6 @@ func expansionPolicies(classes []storagev1.StorageClass) map[string]bool {
 	return out
 }
 
-// hasClass reports whether the class was actually resolved. An unnamed class, or
-// one we could not list, must not be reported as refusing expansion.
-func hasClass(expandable map[string]bool, name string) bool {
-	if name == "" {
-		return false
-	}
-	_, ok := expandable[name]
-	return ok
-}
-
 func className(p *corev1.PersistentVolumeClaim) string {
 	if p.Spec.StorageClassName == nil {
 		return ""
@@ -228,18 +212,12 @@ func hasResourceStatus(p *corev1.PersistentVolumeClaim, statuses ...corev1.Claim
 	return slices.Contains(statuses, p.Status.AllocatedResourceStatuses[corev1.ResourceStorage])
 }
 
-// claimMounts indexes the pods mounting each "ns/name" claim. Which pod holds it
+// claimMounts indexes the pods mounting each claim. Which pod holds it
 // is the actionable half of FS-PENDING: that is the one to restart.
-func claimMounts(pods []corev1.Pod) map[string][]string {
-	out := map[string][]string{}
-	for i := range pods {
-		p := &pods[i]
-		for j := range p.Spec.Volumes {
-			if pvc := p.Spec.Volumes[j].PersistentVolumeClaim; pvc != nil {
-				key := p.Namespace + "/" + pvc.ClaimName
-				out[key] = append(out[key], p.Name)
-			}
-		}
+func claimMounts(pods []corev1.Pod) map[types.NamespacedName][]string {
+	out := map[types.NamespacedName][]string{}
+	for claim, p := range claimRefs(pods) {
+		out[claim] = append(out[claim], p.Name)
 	}
 	return out
 }
@@ -252,11 +230,4 @@ func podCell(paint kube.Painter, pods []string) string {
 	}
 	slices.Sort(pods)
 	return strings.Join(pods, ",")
-}
-
-func storageCell(paint kube.Painter, l corev1.ResourceList) string {
-	if q, ok := l[corev1.ResourceStorage]; ok {
-		return q.String()
-	}
-	return paint.Muted("-")
 }

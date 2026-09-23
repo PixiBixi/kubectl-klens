@@ -1,7 +1,6 @@
 package view
 
 import (
-	"cmp"
 	"context"
 	"io"
 	"slices"
@@ -11,6 +10,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -30,7 +30,7 @@ func PvcUnused(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 		stateful []appsv1.StatefulSet
 	)
 	scope := f.Scope()
-	err := allLists(
+	err := kube.Concurrent(
 		func() (err error) {
 			pvcs, err = kube.ListPersistentVolumeClaims(ctx, c, scope, metav1.ListOptions{})
 			return err
@@ -58,20 +58,13 @@ func PvcUnused(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 	var list []entry
 	for i := range pvcs {
 		p := &pvcs[i]
-		if mounted[p.Namespace+"/"+p.Name] {
+		if mounted[objKey(&p.ObjectMeta)] {
 			continue
 		}
 		v, sev := pvcVerdict(p, owners)
 		list = append(list, entry{p, v, sev})
 	}
-	// Deterministic tiebreak for rows sharing a verdict; the VERDICT sort applied
-	// at Flush is stable, so this order survives within each verdict.
-	slices.SortStableFunc(list, func(a, b entry) int {
-		return cmp.Or(
-			cmp.Compare(a.pvc.Namespace, b.pvc.Namespace),
-			cmp.Compare(a.pvc.Name, b.pvc.Name),
-		)
-	})
+	slices.SortStableFunc(list, func(a, b entry) int { return byNsName(&a.pvc.ObjectMeta, &b.pvc.ObjectMeta) })
 
 	t := kube.NewTable(out, paint, "NS", "PVC", "STATUS", "CAPACITY", "CLASS", "VOLUME", "VERDICT")
 	for i := range list {
@@ -82,13 +75,11 @@ func PvcUnused(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 			paint.Status(string(e.pvc.Status.Phase)),
 			pvcCapacity(e.pvc),
 			storageClassCell(paint, e.pvc),
-			volumeCell(paint, e.pvc.Spec.VolumeName),
+			orMutedDash(paint, e.pvc.Spec.VolumeName),
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
-	t.SortRank("VERDICT", verdictRank("LOST", "ORPHAN", "SCALED-DOWN", "STS-RESERVED", "UNBOUND"))
-	t.SortBy(orDefault(f.Sort, "verdict"))
-	return t.Flush()
+	return flushVerdicts(t, f.Sort, "LOST", "ORPHAN", "SCALED-DOWN", "STS-RESERVED", "UNBOUND")
 }
 
 // pvcVerdict grades an unmounted claim. A claim a StatefulSet can still hand
@@ -112,17 +103,11 @@ func pvcVerdict(p *corev1.PersistentVolumeClaim, owners map[string]stsClaim) (ve
 	}
 }
 
-// mountedClaims is the set of "ns/name" claims some pod references. Pods being
-// deleted count: their volumes are still attached until they are gone.
-func mountedClaims(pods []corev1.Pod) map[string]bool {
-	mounted := map[string]bool{}
-	for i := range pods {
-		p := &pods[i]
-		for j := range p.Spec.Volumes {
-			if pvc := p.Spec.Volumes[j].PersistentVolumeClaim; pvc != nil {
-				mounted[p.Namespace+"/"+pvc.ClaimName] = true
-			}
-		}
+// mountedClaims is the set of claims some pod references.
+func mountedClaims(pods []corev1.Pod) map[types.NamespacedName]bool {
+	mounted := map[types.NamespacedName]bool{}
+	for claim := range claimRefs(pods) {
+		mounted[claim] = true
 	}
 	return mounted
 }
@@ -152,20 +137,24 @@ func statefulSetClaims(sets []appsv1.StatefulSet) map[string]stsClaim {
 // matchStatefulSetClaim resolves a namespaced claim ("ns/name") to the
 // StatefulSet slot that owns it, reporting whether the slot sits beyond the
 // set's current replica count.
+//
+// A claim is "<template>-<set>-<ordinal>" and the ordinal holds no "-", so the
+// owner is a direct lookup on everything up to the last one.
 func matchStatefulSetClaim(key string, owners map[string]stsClaim) (stsClaim, bool) {
-	for prefix, owner := range owners {
-		rest, ok := strings.CutPrefix(key, prefix)
-		if !ok {
-			continue
-		}
-		ordinal, err := strconv.Atoi(rest)
-		if err != nil {
-			continue
-		}
-		owner.beyondScale = ordinal >= owner.replicas
-		return owner, true
+	prefix, rest, ok := strings.CutLast(key, "-")
+	if !ok {
+		return stsClaim{}, false
 	}
-	return stsClaim{}, false
+	owner, ok := owners[prefix+"-"]
+	if !ok {
+		return stsClaim{}, false
+	}
+	ordinal, err := strconv.Atoi(rest)
+	if err != nil {
+		return stsClaim{}, false
+	}
+	owner.beyondScale = ordinal >= owner.replicas
+	return owner, true
 }
 
 // pvcCapacity prefers the bound size over the requested one: what is billed is
@@ -181,15 +170,8 @@ func pvcCapacity(p *corev1.PersistentVolumeClaim) string {
 }
 
 func storageClassCell(paint kube.Painter, p *corev1.PersistentVolumeClaim) string {
-	if p.Spec.StorageClassName != nil && *p.Spec.StorageClassName != "" {
-		return *p.Spec.StorageClassName
+	if name := className(p); name != "" {
+		return name
 	}
 	return paint.Muted("<default>")
-}
-
-func volumeCell(paint kube.Painter, name string) string {
-	if name == "" {
-		return paint.Muted("-")
-	}
-	return name
 }

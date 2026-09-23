@@ -7,12 +7,11 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
+	"unicode/utf8"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/util/duration"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -54,11 +53,7 @@ func Pending(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 	t := kube.NewTable(out, paint, "NS", "POD", "AGE", "REASON", "DETAIL")
 	for i := range list {
 		e := &list[i]
-		detail := e.detail
-		if detail == "" || detail == "-" {
-			detail = paint.Muted("-")
-		}
-		t.Row(e.pod.Namespace, e.pod.Name, age(e.pod.CreationTimestamp), paint.Status(e.reason), detail)
+		t.Row(e.pod.Namespace, e.pod.Name, age(e.pod.CreationTimestamp), paint.Status(e.reason), orMutedDash(paint, e.detail))
 	}
 	t.SortBy(f.Sort)
 	return t.Flush()
@@ -77,34 +72,30 @@ func pendingReason(p *corev1.Pod) (reason, detail string) {
 			return r, schedulerCause(cond.Message)
 		}
 	}
-	for _, css := range [][]corev1.ContainerStatus{p.Status.ContainerStatuses, p.Status.InitContainerStatuses} {
-		for j := range css {
-			cs := &css[j]
-			if cs.State.Waiting != nil && cs.State.Waiting.Reason != "" {
-				reason = cs.State.Waiting.Reason
-				switch reason {
-				case "ImagePullBackOff", "ErrImagePull", "InvalidImageName":
-					return reason, containerImage(p, cs.Name)
-				default:
-					return reason, "-"
-				}
+	// Init first: while one is stuck, every app container reads PodInitializing,
+	// which hides the init container's own reason.
+	for _, cs := range podContainerStatuses(p) {
+		if w := cs.Status.State.Waiting; w != nil && w.Reason != "" {
+			switch w.Reason {
+			case "ImagePullBackOff", "ErrImagePull", "InvalidImageName":
+				return w.Reason, containerImage(p, cs.Status.Name)
+			default:
+				return w.Reason, ""
 			}
 		}
 	}
-	return "Pending", "-"
+	return "Pending", ""
 }
 
-// containerImage returns the configured image for the named (init) container.
+// containerImage returns the configured image for the named container.
+// Container names are unique across init, app and ephemeral containers.
 func containerImage(p *corev1.Pod, name string) string {
-	for _, css := range [][]corev1.Container{p.Spec.Containers, p.Spec.InitContainers} {
-		for j := range css {
-			c := &css[j]
-			if c.Name == name {
-				return c.Image
-			}
+	for _, pc := range podContainers(p) {
+		if pc.Spec.Name == name {
+			return pc.Spec.Image
 		}
 	}
-	return "-"
+	return ""
 }
 
 // schedulerCause condenses a verbose scheduler message into one clause, e.g.
@@ -117,18 +108,13 @@ func schedulerCause(msg string) string {
 	if !ok {
 		return trimSentence(msg)
 	}
-	tail := after
-	if j := strings.Index(tail, ". "); j >= 0 {
-		tail = tail[:j] // drop the trailing "preemption: ..." sentence
-	}
+	tail, _, _ := strings.Cut(after, ". ") // drop the trailing "preemption: ..." sentence
 	tail = strings.TrimRight(tail, ".")
 
 	bestPhrase, bestCount := "", -1
 	for clause := range strings.SplitSeq(tail, ", ") {
 		count, phrase := splitLeadingCount(strings.TrimSpace(clause))
-		if k := strings.Index(phrase, " {"); k >= 0 {
-			phrase = phrase[:k] // strip the " {key: value}" blob
-		}
+		phrase, _, _ = strings.Cut(phrase, " {") // strip the " {key: value}" blob
 		phrase = strings.TrimSpace(phrase)
 		if count > bestCount {
 			bestCount, bestPhrase = count, phrase
@@ -146,10 +132,9 @@ func schedulerCause(msg string) string {
 // splitLeadingCount splits a leading integer off "3 Insufficient cpu" → (3,
 // "Insufficient cpu"); returns (-1, s) when there is no leading count.
 func splitLeadingCount(s string) (int, string) {
-	// Named parts, not fields: this file imports the fields package now.
-	if parts := strings.SplitN(s, " ", 2); len(parts) == 2 {
-		if n, err := strconv.Atoi(parts[0]); err == nil {
-			return n, parts[1]
+	if count, rest, ok := strings.Cut(s, " "); ok {
+		if n, err := strconv.Atoi(count); err == nil {
+			return n, rest
 		}
 	}
 	return -1, s
@@ -158,20 +143,10 @@ func splitLeadingCount(s string) (int, string) {
 // trimSentence keeps the first sentence of s, capped at 60 runes.
 func trimSentence(s string) string {
 	s = strings.TrimSpace(s)
-	if i := strings.Index(s, ". "); i >= 0 {
-		s = s[:i]
-	}
+	s, _, _ = strings.Cut(s, ". ")
 	s = strings.TrimRight(s, ".")
-	if r := []rune(s); len(r) > 60 {
-		return string(r[:60])
+	if utf8.RuneCountInString(s) > 60 {
+		return string([]rune(s)[:60])
 	}
 	return s
-}
-
-// age renders a kubectl-style short duration since t, or "-" when unset.
-func age(t metav1.Time) string {
-	if t.IsZero() {
-		return "-"
-	}
-	return duration.ShortHumanDuration(time.Since(t.Time))
 }
