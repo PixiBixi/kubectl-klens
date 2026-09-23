@@ -103,12 +103,20 @@ func (a App) namespaceCompletions(prior []string, toComplete string) []string {
 	f := kube.Flags{RequestTimeout: completionTimeout}
 	// --kubeconfig and --context change which cluster to ask, and the user may
 	// well have typed them before the -n they are completing.
-	for i := 0; i+1 < len(prior); i++ {
-		switch prior[i] {
+	// Both spellings the flag package accepts: "--context x" and "--context=x".
+	for i, arg := range prior {
+		name, val, inline := strings.Cut(arg, "=")
+		if !inline {
+			if i+1 == len(prior) {
+				break
+			}
+			val = prior[i+1]
+		}
+		switch name {
 		case "--kubeconfig":
-			f.Kubeconfig = prior[i+1]
+			f.Kubeconfig = val
 		case "--context":
-			f.Context = prior[i+1]
+			f.Context = val
 		}
 	}
 	c, err := a.NewClient(f)

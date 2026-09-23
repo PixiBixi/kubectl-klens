@@ -191,6 +191,26 @@ func TestCompleteNamespaces(t *testing.T) {
 	}
 }
 
+// TestCompleteNamespacesHonorsClusterFlags: the namespaces offered must come
+// from the cluster the user already pointed at, in either flag spelling.
+func TestCompleteNamespacesHonorsClusterFlags(t *testing.T) {
+	var got kube.Flags
+	app := App{NewClient: func(f kube.Flags) (kube.Clients, error) {
+		got = f
+		return kube.Clients{}, errors.New("stop")
+	}}
+	for _, prior := range [][]string{
+		{"reqlim", "--context", "prod", "--kubeconfig", "/k", "-n"},
+		{"reqlim", "--context=prod", "--kubeconfig=/k", "-n"},
+	} {
+		got = kube.Flags{}
+		app.completions(prior, "")
+		if got.Context != "prod" || got.Kubeconfig != "/k" {
+			t.Errorf("%v: client built with context %q kubeconfig %q, want prod and /k", prior, got.Context, got.Kubeconfig)
+		}
+	}
+}
+
 // TestCompleteNamespacesStaysSilentOnFailure: completion writes to the shell's
 // stdout, so an unreachable cluster has to yield nothing rather than an error
 // the shell would paste into the command line.
