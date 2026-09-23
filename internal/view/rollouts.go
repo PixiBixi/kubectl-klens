@@ -8,9 +8,7 @@ import (
 	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
@@ -30,52 +28,25 @@ var rolloutGVR = schema.GroupVersionResource{Group: "argoproj.io", Version: "v1a
 // the bottom.
 func Rollouts(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	var (
-		deploys  []appsv1.Deployment
-		stateful []appsv1.StatefulSet
-		daemons  []appsv1.DaemonSet
-		argo     []unstructured.Unstructured
+		w    builtinWorkloads
+		argo []unstructured.Unstructured
 	)
 	scope := f.Scope()
-	err := allLists(
-		func() (err error) {
-			deploys, err = kube.ListDeployments(ctx, c, scope, metav1.ListOptions{})
-			return err
-		},
-		func() (err error) {
-			stateful, err = kube.ListStatefulSets(ctx, c, scope, metav1.ListOptions{})
-			return err
-		},
-		func() (err error) {
-			daemons, err = kube.ListDaemonSets(ctx, c, scope, metav1.ListOptions{})
-			return err
-		},
-		func() error {
-			list, err := kube.ListCustom(ctx, c.Dynamic, rolloutGVR, scope, metav1.ListOptions{})
-			// A cluster without Argo Rollouts installed, or a user without
-			// access to them, is the normal case rather than a failure: the
-			// other three kinds still make a useful table, so the CRD rows are
-			// simply absent.
-			if meta.IsNoMatchError(err) || apierrors.IsNotFound(err) || apierrors.IsForbidden(err) {
-				return nil
-			}
-			argo = list
-			return err
-		},
-	)
+	err := kube.Concurrent(append(w.listers(ctx, c, scope), optionalCRD(ctx, c, rolloutGVR, scope, &argo))...)
 	if err != nil {
 		return err
 	}
 	paint := kube.NewPainter(f)
 
-	rows := make([]rolloutRow, 0, len(deploys)+len(stateful)+len(daemons)+len(argo))
-	for i := range deploys {
-		rows = append(rows, deploymentRow(&deploys[i]))
+	rows := make([]rolloutRow, 0, w.len()+len(argo))
+	for i := range w.deploys {
+		rows = append(rows, deploymentRow(&w.deploys[i]))
 	}
-	for i := range stateful {
-		rows = append(rows, statefulSetRow(&stateful[i]))
+	for i := range w.stateful {
+		rows = append(rows, statefulSetRow(&w.stateful[i]))
 	}
-	for i := range daemons {
-		rows = append(rows, daemonSetRow(&daemons[i]))
+	for i := range w.daemons {
+		rows = append(rows, daemonSetRow(&w.daemons[i]))
 	}
 	for i := range argo {
 		rows = append(rows, argoRolloutRow(&argo[i]))
@@ -102,13 +73,11 @@ func Rollouts(ctx context.Context, c kube.Clients, f kube.Flags, args []string, 
 			countCell(paint, r.ready, r.desired),
 			countCell(paint, r.updated, r.desired),
 			countCell(paint, r.available, r.desired),
-			stateCell(paint, r.state),
+			orMutedDash(paint, r.state),
 			sevPaint(paint, sev)(v),
 		)
 	}
-	t.SortRank("VERDICT", verdictRank("STALLED", "DOWN", "NOT-OBSERVED", "PROGRESSING", "PAUSED", "SCALED-ZERO", "OK"))
-	t.SortBy(orDefault(f.Sort, "verdict"))
-	return t.Flush()
+	return flushVerdicts(t, f.Sort, "STALLED", "DOWN", "NOT-OBSERVED", "PROGRESSING", "PAUSED", "SCALED-ZERO", "OK")
 }
 
 // rolloutRow is one workload normalized across the four kinds, so the verdict
@@ -142,17 +111,18 @@ func rolloutVerdict(r *rolloutRow) (verdict, sev string) {
 }
 
 func deploymentRow(d *appsv1.Deployment) rolloutRow {
+	state, failed := progressing(d.Status.Conditions)
 	return rolloutRow{
 		ns: d.Namespace, kind: "Deployment", name: d.Name,
 		desired:   replicasOrOne(d.Spec.Replicas),
 		ready:     int(d.Status.ReadyReplicas),
 		updated:   int(d.Status.UpdatedReplicas),
 		available: int(d.Status.AvailableReplicas),
-		state:     progressState(d.Status.Conditions),
+		state:     state,
 		paused:    d.Spec.Paused,
 		// Progressing=False is how the deployment controller reports
 		// ProgressDeadlineExceeded, the one state that will not resolve itself.
-		degraded: progressingFailed(d.Status.Conditions),
+		degraded: failed,
 		observed: d.Status.ObservedGeneration >= d.Generation,
 	}
 }
@@ -191,20 +161,12 @@ func daemonSetRow(d *appsv1.DaemonSet) rolloutRow {
 // as zero rather than fail the whole table.
 func argoRolloutRow(u *unstructured.Unstructured) rolloutRow {
 	phase, _, _ := unstructured.NestedString(u.Object, "status", "phase")
-	spec, _, _ := unstructured.NestedInt64(u.Object, "spec", "replicas")
-	if spec == 0 {
-		// Argo defaults spec.replicas to 1 like the built-in controllers do, so
-		// an unset field means one replica, not zero.
-		if _, found, _ := unstructured.NestedFieldNoCopy(u.Object, "spec", "replicas"); !found {
-			spec = 1
-		}
-	}
 	return rolloutRow{
 		ns: u.GetNamespace(), kind: "Rollout", name: u.GetName(),
-		desired:   int(spec),
-		ready:     nestedCount(u, "readyReplicas"),
-		updated:   nestedCount(u, "updatedReplicas"),
-		available: nestedCount(u, "availableReplicas"),
+		desired:   argoReplicas(u),
+		ready:     nestedInt(u, "status", "readyReplicas"),
+		updated:   nestedInt(u, "status", "updatedReplicas"),
+		available: nestedInt(u, "status", "availableReplicas"),
 		state:     argoState(u, phase),
 		paused:    phase == "Paused",
 		degraded:  phase == "Degraded",
@@ -213,11 +175,6 @@ func argoRolloutRow(u *unstructured.Unstructured) rolloutRow {
 		// whether the controller is acting on the Rollout.
 		observed: true,
 	}
-}
-
-func nestedCount(u *unstructured.Unstructured, field string) int {
-	n, _, _ := unstructured.NestedInt64(u.Object, "status", field)
-	return int(n)
 }
 
 // argoState reports the phase with the canary step the rollout sits on, which is
@@ -243,22 +200,15 @@ func replicasOrOne(n *int32) int {
 	return int(*n)
 }
 
-func progressState(conds []appsv1.DeploymentCondition) string {
+// progressing reads a Deployment's Progressing condition: its reason, and
+// whether it is False.
+func progressing(conds []appsv1.DeploymentCondition) (reason string, failed bool) {
 	for i := range conds {
 		if conds[i].Type == appsv1.DeploymentProgressing {
-			return conds[i].Reason
+			return conds[i].Reason, conds[i].Status == corev1.ConditionFalse
 		}
 	}
-	return ""
-}
-
-func progressingFailed(conds []appsv1.DeploymentCondition) bool {
-	for i := range conds {
-		if conds[i].Type == appsv1.DeploymentProgressing {
-			return conds[i].Status == "False"
-		}
-	}
-	return false
+	return "", false
 }
 
 // revisionState names an in-flight StatefulSet update: the two revisions differ
@@ -293,12 +243,4 @@ func countCell(paint kube.Painter, n, desired int) string {
 	default:
 		return paint.Warn(s)
 	}
-}
-
-// stateCell mutes the placeholder for the kinds that report no state.
-func stateCell(paint kube.Painter, state string) string {
-	if state == "" {
-		return paint.Muted("-")
-	}
-	return state
 }

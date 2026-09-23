@@ -6,6 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -19,7 +20,7 @@ func Pvc(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 		pvcs []corev1.PersistentVolumeClaim
 	)
 	scope := f.Scope()
-	err := allLists(
+	err := kube.Concurrent(
 		func() (err error) {
 			pods, err = kube.ListPods(ctx, c, scope, metav1.ListOptions{})
 			return err
@@ -32,28 +33,21 @@ func Pvc(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 	if err != nil {
 		return err
 	}
-	byClaim := make(map[string]*corev1.PersistentVolumeClaim, len(pvcs))
+	byClaim := make(map[types.NamespacedName]*corev1.PersistentVolumeClaim, len(pvcs))
 	for i := range pvcs {
-		byClaim[pvcs[i].Namespace+"/"+pvcs[i].Name] = &pvcs[i]
+		byClaim[objKey(&pvcs[i].ObjectMeta)] = &pvcs[i]
 	}
 
 	paint := kube.NewPainter(f)
 	t := kube.NewTable(out, paint, "NS", "POD", "NODE", "PVC", "CLASS", "CAPACITY")
-	for i := range pods {
-		p := &pods[i]
-		for j := range p.Spec.Volumes {
-			vol := &p.Spec.Volumes[j]
-			if vol.PersistentVolumeClaim == nil {
-				continue
-			}
-			// The pod may reference a claim that does not exist: it will never start,
-			// but it is still worth listing, so both cells fall back to a dash.
-			class, capacity := paint.Muted("-"), paint.Muted("-")
-			if pvc, ok := byClaim[p.Namespace+"/"+vol.PersistentVolumeClaim.ClaimName]; ok {
-				class, capacity = storageClassCell(paint, pvc), pvcCapacity(pvc)
-			}
-			t.Row(p.Namespace, p.Name, p.Spec.NodeName, vol.PersistentVolumeClaim.ClaimName, class, capacity)
+	for claim, p := range claimRefs(pods) {
+		// The pod may reference a claim that does not exist: it will never start,
+		// but it is still worth listing, so both cells fall back to a dash.
+		class, capacity := paint.Muted("-"), paint.Muted("-")
+		if pvc, ok := byClaim[claim]; ok {
+			class, capacity = storageClassCell(paint, pvc), pvcCapacity(pvc)
 		}
+		t.Row(p.Namespace, p.Name, p.Spec.NodeName, claim.Name, class, capacity)
 	}
 	t.SortBy(f.Sort)
 	return t.Flush()

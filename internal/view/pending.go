@@ -7,12 +7,11 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
+	"unicode/utf8"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/util/duration"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -109,18 +108,13 @@ func schedulerCause(msg string) string {
 	if !ok {
 		return trimSentence(msg)
 	}
-	tail := after
-	if j := strings.Index(tail, ". "); j >= 0 {
-		tail = tail[:j] // drop the trailing "preemption: ..." sentence
-	}
+	tail, _, _ := strings.Cut(after, ". ") // drop the trailing "preemption: ..." sentence
 	tail = strings.TrimRight(tail, ".")
 
 	bestPhrase, bestCount := "", -1
 	for clause := range strings.SplitSeq(tail, ", ") {
 		count, phrase := splitLeadingCount(strings.TrimSpace(clause))
-		if k := strings.Index(phrase, " {"); k >= 0 {
-			phrase = phrase[:k] // strip the " {key: value}" blob
-		}
+		phrase, _, _ = strings.Cut(phrase, " {") // strip the " {key: value}" blob
 		phrase = strings.TrimSpace(phrase)
 		if count > bestCount {
 			bestCount, bestPhrase = count, phrase
@@ -138,10 +132,9 @@ func schedulerCause(msg string) string {
 // splitLeadingCount splits a leading integer off "3 Insufficient cpu" → (3,
 // "Insufficient cpu"); returns (-1, s) when there is no leading count.
 func splitLeadingCount(s string) (int, string) {
-	// Named parts, not fields: this file imports the fields package now.
-	if parts := strings.SplitN(s, " ", 2); len(parts) == 2 {
-		if n, err := strconv.Atoi(parts[0]); err == nil {
-			return n, parts[1]
+	if count, rest, ok := strings.Cut(s, " "); ok {
+		if n, err := strconv.Atoi(count); err == nil {
+			return n, rest
 		}
 	}
 	return -1, s
@@ -150,20 +143,10 @@ func splitLeadingCount(s string) (int, string) {
 // trimSentence keeps the first sentence of s, capped at 60 runes.
 func trimSentence(s string) string {
 	s = strings.TrimSpace(s)
-	if i := strings.Index(s, ". "); i >= 0 {
-		s = s[:i]
-	}
+	s, _, _ = strings.Cut(s, ". ")
 	s = strings.TrimRight(s, ".")
-	if r := []rune(s); len(r) > 60 {
-		return string(r[:60])
+	if utf8.RuneCountInString(s) > 60 {
+		return string([]rune(s)[:60])
 	}
 	return s
-}
-
-// age renders a kubectl-style short duration since t, or "-" when unset.
-func age(t metav1.Time) string {
-	if t.IsZero() {
-		return "-"
-	}
-	return duration.ShortHumanDuration(time.Since(t.Time))
 }

@@ -5,30 +5,13 @@ import (
 	"io"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
 // Capacity shows CPU/memory capacity and allocatable per node.
 func Capacity(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	nodes, err := kube.ListNodes(ctx, c, metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
-	paint := kube.NewPainter(f)
-	t := kube.NewTable(out, paint, "NAME", "CPU_CAP", "CPU_ALLOC", "MEM_CAP", "MEM_ALLOC")
-	for i := range nodes {
-		n := &nodes[i]
-		cap, alloc := n.Status.Capacity, n.Status.Allocatable
-		t.Row(
-			n.Name,
-			qtyOrNone(paint, cap, corev1.ResourceCPU),
-			qtyOrNone(paint, alloc, corev1.ResourceCPU),
-			qtyOrNone(paint, cap, corev1.ResourceMemory),
-			qtyOrNone(paint, alloc, corev1.ResourceMemory),
-		)
-	}
-	t.SortBy(f.Sort)
-	return t.Flush()
+	return nodeTable(ctx, c, f, out, []string{"NAME", "CPU_CAP", "CPU_ALLOC", "MEM_CAP", "MEM_ALLOC"}, func(paint kube.Painter, n *corev1.Node) []string {
+		return appendCPUMem([]string{n.Name}, paint, n.Status.Capacity, n.Status.Allocatable)
+	})
 }

@@ -1,7 +1,6 @@
 package view
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -31,42 +30,33 @@ import (
 //	secret <name> all    print all decoded key/value pairs
 func Secret(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	paint := kube.NewPainter(f)
+	var (
+		s   *corev1.Secret
+		err error
+	)
+	// Resolve the secret (named, listed or picked), then the key.
 	switch {
-	case len(args) >= 2:
-		s, err := getSecret(ctx, c, f.NamespaceScope(), args[0])
-		if err != nil {
-			return err
-		}
-		return emitValue(out, paint, s, args[1])
-
-	case len(args) == 1 && args[0] != "":
-		s, err := getSecret(ctx, c, f.NamespaceScope(), args[0])
-		if err != nil {
-			return err
-		}
-		if !kube.IsTTY(out) {
-			return emitKeys(out, paint, s)
-		}
-		key, err := pickKey(s)
-		if err != nil {
-			return err
-		}
-		return emitValue(out, paint, s, key)
-
+	case len(args) >= 2 || len(args) == 1 && args[0] != "":
+		s, err = getSecret(ctx, c, f.NamespaceScope(), args[0])
+	case !kube.IsTTY(out):
+		return listSecrets(ctx, c, f, out)
 	default:
-		if !kube.IsTTY(out) {
-			return listSecrets(ctx, c, f, out)
-		}
-		s, err := pickSecret(ctx, c, f)
-		if err != nil {
-			return err
-		}
-		key, err := pickKey(s)
-		if err != nil {
-			return err
-		}
-		return emitValue(out, paint, s, key)
+		s, err = pickSecret(ctx, c, f)
 	}
+	if err != nil {
+		return err
+	}
+	if len(args) >= 2 {
+		return emitValue(out, paint, s, args[1])
+	}
+	if !kube.IsTTY(out) {
+		return emitKeys(out, paint, s)
+	}
+	key, err := pickKey(s)
+	if err != nil {
+		return err
+	}
+	return emitValue(out, paint, s, key)
 }
 
 func getSecret(ctx context.Context, c kubernetes.Interface, ns, name string) (*corev1.Secret, error) {
@@ -171,12 +161,7 @@ func substringSearcher(items []string) func(input string, index int) bool {
 }
 
 func sortSecrets(items []corev1.Secret) {
-	slices.SortFunc(items, func(a, b corev1.Secret) int {
-		return cmp.Or(
-			cmp.Compare(a.Namespace, b.Namespace),
-			cmp.Compare(a.Name, b.Name),
-		)
-	})
+	slices.SortFunc(items, func(a, b corev1.Secret) int { return byNsName(&a.ObjectMeta, &b.ObjectMeta) })
 }
 
 func sortedKeys(m map[string][]byte) []string {

@@ -1,6 +1,7 @@
 package view
 
 import (
+	"cmp"
 	"context"
 	"crypto/x509"
 	"encoding/pem"
@@ -8,7 +9,6 @@ import (
 	"io"
 	"math"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -49,22 +49,14 @@ func Certs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out
 		certs   []unstructured.Unstructured
 	)
 	scope := f.Scope()
-	err := allLists(
+	err := kube.Concurrent(
 		func() (err error) {
 			secrets, err = kube.ListSecrets(ctx, c, scope, metav1.ListOptions{FieldSelector: tlsSecretSelector})
 			return err
 		},
-		func() error {
-			list, err := kube.ListCustom(ctx, c.Dynamic, certificateGVR, scope, metav1.ListOptions{})
-			// A cluster without cert-manager, or a user without access to its
-			// CRD, is the normal case rather than a failure: the secrets alone
-			// still say when each certificate stops working.
-			if absentCRD(err) {
-				return nil
-			}
-			certs = list
-			return err
-		},
+		// Without cert-manager the secrets alone still say when each
+		// certificate stops working.
+		optionalCRD(ctx, c, certificateGVR, scope, &certs),
 	)
 	if err != nil {
 		return err
@@ -146,10 +138,7 @@ func Certs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out
 	// Deterministic tiebreak for rows sharing a verdict; the VERDICT sort applied
 	// at Flush is stable, so this order survives within each verdict.
 	slices.SortStableFunc(list, func(a, b entry) int {
-		if a.ns != b.ns {
-			return strings.Compare(a.ns, b.ns)
-		}
-		return strings.Compare(a.name, b.name)
+		return cmp.Or(cmp.Compare(a.ns, b.ns), cmp.Compare(a.name, b.name))
 	})
 
 	t := kube.NewTable(out, paint, "NS", "SECRET", "NAMES", "ISSUER", "NOT_AFTER", "IN", "VERDICT")
@@ -163,13 +152,11 @@ func Certs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out
 			sevPaint(paint, sev)(e.verdict),
 		)
 	}
-	t.SortRank("VERDICT", verdictRank(certVerdictsWorstFirst...))
 	// "64d" does not parse as a number, so without this the column sorts
 	// lexically and reads 1090d, 296d, 33d, 3438d. Plain ascending by days, so
 	// --sort in puts the soonest first, as every non-verdict column does.
 	t.SortRank("IN", daysRank)
-	t.SortBy(orDefault(f.Sort, "verdict"))
-	return t.Flush()
+	return flushVerdicts(t, f.Sort, certVerdictsWorstFirst...)
 }
 
 // Thresholds for the expiry verdict. cert-manager renews at a third of the
@@ -314,13 +301,7 @@ func parseCertChain(raw []byte) ([]*x509.Certificate, error) {
 // intermediate that expires before the leaf breaks the handshake just as
 // thoroughly, and it is the one nobody is watching.
 func earliestExpiry(chain []*x509.Certificate) time.Time {
-	earliest := chain[0].NotAfter
-	for _, c := range chain[1:] {
-		if c.NotAfter.Before(earliest) {
-			earliest = c.NotAfter
-		}
-	}
-	return earliest
+	return slices.MinFunc(chain, func(a, b *x509.Certificate) int { return a.NotAfter.Compare(b.NotAfter) }).NotAfter
 }
 
 // certNames returns what the certificate is valid for: its subject alternative
@@ -336,7 +317,7 @@ func certNames(leaf *x509.Certificate) []string {
 	if len(names) == 0 && leaf.Subject.CommonName != "" {
 		names = append(names, leaf.Subject.CommonName)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return names
 }
 
@@ -370,7 +351,7 @@ func summarizeNames(names []string) string {
 		counts[d]++
 	}
 	// Biggest group first: it is the one that identifies the certificate.
-	sort.SliceStable(order, func(i, j int) bool { return counts[order[i]] > counts[order[j]] })
+	slices.SortStableFunc(order, func(a, b string) int { return cmp.Compare(counts[b], counts[a]) })
 
 	parts := make([]string, 0, maxNameGroups+1)
 	for _, d := range order[:min(len(order), maxNameGroups)] {
@@ -455,5 +436,5 @@ func remainingCell(paint kube.Painter, t time.Time, sev string) string {
 		return paint.Muted("-")
 	}
 	days := int(time.Until(t).Hours() / 24)
-	return sevPaint(paint, sev)(fmt.Sprintf("%dd", days))
+	return sevPaint(paint, sev)(strconv.Itoa(days) + "d")
 }

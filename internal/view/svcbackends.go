@@ -1,7 +1,6 @@
 package view
 
 import (
-	"cmp"
 	"context"
 	"io"
 	"slices"
@@ -11,6 +10,7 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -42,18 +42,11 @@ func SvcBackends(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 	list := make([]entry, 0, len(svcs))
 	for i := range svcs {
 		s := &svcs[i]
-		eps := counts[s.Namespace+"/"+s.Name]
+		eps := counts[objKey(&s.ObjectMeta)]
 		v, sev := svcVerdict(s, eps)
 		list = append(list, entry{s, eps, v, sev})
 	}
-	// Deterministic tiebreak for rows sharing a verdict; the VERDICT sort applied
-	// at Flush is stable, so this order survives within each verdict.
-	slices.SortStableFunc(list, func(a, b entry) int {
-		return cmp.Or(
-			cmp.Compare(a.svc.Namespace, b.svc.Namespace),
-			cmp.Compare(a.svc.Name, b.svc.Name),
-		)
-	})
+	slices.SortStableFunc(list, func(a, b entry) int { return byNsName(&a.svc.ObjectMeta, &b.svc.ObjectMeta) })
 
 	t := kube.NewTable(out, paint, "NS", "SERVICE", "TYPE", "SELECTOR", "READY", "NOTREADY", "VERDICT")
 	for i := range list {
@@ -68,9 +61,7 @@ func SvcBackends(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
-	t.SortRank("VERDICT", verdictRank("UNWIRED", "NO-PODS", "NO-READY", "DEGRADED", "MANUAL", "EXTERNAL", "OK"))
-	t.SortBy(orDefault(f.Sort, "verdict"))
-	return t.Flush()
+	return flushVerdicts(t, f.Sort, "UNWIRED", "NO-PODS", "NO-READY", "DEGRADED", "MANUAL", "EXTERNAL", "OK")
 }
 
 // endpointCount is a service's backing endpoints split by readiness.
@@ -106,19 +97,23 @@ func svcVerdict(s *corev1.Service, eps endpointCount) (verdict, sev string) {
 // Endpoints are deduplicated by pod, not counted per slice entry: a dual-stack
 // service gets one slice per address family, so the same pod appears twice and a
 // naive count would report double the backends.
-func countEndpoints(epSlices []discoveryv1.EndpointSlice) map[string]endpointCount {
-	counts := map[string]endpointCount{}
-	seen := map[string]bool{}
+func countEndpoints(epSlices []discoveryv1.EndpointSlice) map[types.NamespacedName]endpointCount {
+	type endpointKey struct {
+		svc types.NamespacedName
+		id  string
+	}
+	counts := map[types.NamespacedName]endpointCount{}
+	seen := map[endpointKey]bool{}
 	for i := range epSlices {
 		es := &epSlices[i]
 		svc := es.Labels[discoveryv1.LabelServiceName]
 		if svc == "" {
 			continue // an orphan slice belongs to no service
 		}
-		key := es.Namespace + "/" + svc
+		key := types.NamespacedName{Namespace: es.Namespace, Name: svc}
 		for j := range es.Endpoints {
 			ep := &es.Endpoints[j]
-			id := key + "|" + endpointID(ep)
+			id := endpointKey{key, endpointID(ep)}
 			if seen[id] {
 				continue
 			}

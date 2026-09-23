@@ -89,11 +89,7 @@ func clusterWideSummary(cw caClusterWide, paint kube.Painter) string {
 		b.WriteString("  scaleDown=" + scaleState(paint, cw.scaleDown))
 	}
 	if cw.ready != "" {
-		registered := cw.registered
-		if registered == "" {
-			registered = cw.ready
-		}
-		fmt.Fprintf(&b, "  (ready %s/%s)", cw.ready, registered)
+		fmt.Fprintf(&b, "  (ready %s/%s)", cw.ready, cmp.Or(cw.registered, cw.ready))
 	}
 	if cw.timestamp != "" {
 		b.WriteString("  @ " + cw.timestamp)
@@ -133,6 +129,14 @@ type caYAMLGroup struct {
 	ScaleDown *caYAMLCondition `json:"scaleDown"`
 }
 
+// status is the condition's status, "" when the section is absent.
+func (c *caYAMLCondition) status() string {
+	if c == nil {
+		return ""
+	}
+	return c.Status
+}
+
 type caYAMLCondition struct {
 	Status              string `json:"status"`
 	LastTransitionTime  string `json:"lastTransitionTime"`
@@ -161,12 +165,7 @@ func parseYAMLStatus(status string) (caClusterWide, []caGroup, bool) {
 		cw.ready = strconv.Itoa(h.NodeCounts.Registered.Ready)
 		cw.registered = strconv.Itoa(h.NodeCounts.Registered.Total)
 	}
-	if su := s.ClusterWide.ScaleUp; su != nil {
-		cw.scaleUp = su.Status
-	}
-	if sd := s.ClusterWide.ScaleDown; sd != nil {
-		cw.scaleDown = sd.Status
-	}
+	cw.scaleUp, cw.scaleDown = s.ClusterWide.ScaleUp.status(), s.ClusterWide.ScaleDown.status()
 	var groups []caGroup
 	for _, ng := range s.NodeGroups {
 		g := caGroup{name: shortName(ng.Name)}
@@ -177,12 +176,7 @@ func parseYAMLStatus(status string) (caClusterWide, []caGroup, bool) {
 			g.min = strconv.Itoa(h.MinSize)
 			g.max = strconv.Itoa(h.MaxSize)
 		}
-		if su := ng.ScaleUp; su != nil {
-			g.scaleUp = su.Status
-		}
-		if sd := ng.ScaleDown; sd != nil {
-			g.scaleDown = sd.Status
-		}
+		g.scaleUp, g.scaleDown = ng.ScaleUp.status(), ng.ScaleDown.status()
 		g.lastChange = latestTransition(ng.Health, ng.ScaleUp, ng.ScaleDown)
 		groups = append(groups, g)
 	}

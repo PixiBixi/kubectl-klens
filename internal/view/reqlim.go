@@ -5,8 +5,6 @@ import (
 	"io"
 	"slices"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
@@ -42,14 +40,9 @@ func Reqlim(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 		for _, pc := range podContainers(p) {
 			req, lim := pc.Spec.Resources.Requests, pc.Spec.Resources.Limits
 			row = append(row[:0], p.Namespace, p.Name)
-			row = appendOwnerCells(row, paint, f, p)
-			row = append(row,
-				pc.Spec.Name, pc.Kind,
-				qtyOrNone(paint, req, corev1.ResourceCPU),
-				qtyOrNone(paint, lim, corev1.ResourceCPU),
-				qtyOrNone(paint, req, corev1.ResourceMemory),
-				qtyOrNone(paint, lim, corev1.ResourceMemory),
-			)
+			row = appendOwnerCells(row, paint, f.ByOwner, p)
+			row = append(row, pc.Spec.Name, pc.Kind)
+			row = appendCPUMem(row, paint, req, lim)
 			t.Row(row...)
 		}
 	}

@@ -10,6 +10,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -30,7 +31,7 @@ func Spread(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 	zoneOf := make(map[string]string, len(nodes))
 	for i := range nodes {
 		n := &nodes[i]
-		zoneOf[n.Name] = n.Labels["topology.kubernetes.io/zone"]
+		zoneOf[n.Name] = n.Labels[corev1.LabelTopologyZone]
 	}
 	paint := kube.NewPainter(f)
 
@@ -39,8 +40,7 @@ func Spread(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 		nodes, zones map[string]bool
 		replicas     int
 	}
-	groups := map[string]*agg{}
-	var order []string
+	groups := map[types.NamespacedName]*agg{}
 	for i := range pods {
 		p := &pods[i]
 		if p.Spec.NodeName == "" {
@@ -50,12 +50,11 @@ func Spread(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 		if !ok {
 			continue
 		}
-		key := p.Namespace + "/" + wl
+		key := types.NamespacedName{Namespace: p.Namespace, Name: wl}
 		g := groups[key]
 		if g == nil {
 			g = &agg{ns: p.Namespace, workload: wl, nodes: map[string]bool{}, zones: map[string]bool{}}
 			groups[key] = g
-			order = append(order, key)
 		}
 		g.replicas++
 		g.nodes[p.Spec.NodeName] = true
@@ -68,9 +67,9 @@ func Spread(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 		g            *agg
 		verdict, sev string
 	}
-	list := make([]entry, 0, len(order))
-	for _, k := range order {
-		g := groups[k]
+	// Map order is fine: (ns, workload) is unique, so the sort below is total.
+	list := make([]entry, 0, len(groups))
+	for _, g := range groups {
 		v, sev := spreadVerdict(g.replicas, len(g.nodes), len(g.zones))
 		list = append(list, entry{g, v, sev})
 	}
@@ -93,9 +92,7 @@ func Spread(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
-	t.SortRank("VERDICT", verdictRank("SPOF-NODE", "SPOF-ZONE", "MULTI-NODE", "SINGLE", "SPREAD"))
-	t.SortBy(orDefault(f.Sort, "verdict"))
-	return t.Flush()
+	return flushVerdicts(t, f.Sort, "SPOF-NODE", "SPOF-ZONE", "MULTI-NODE", "SINGLE", "SPREAD")
 }
 
 // spreadVerdict classifies replica placement from the distinct node and zone

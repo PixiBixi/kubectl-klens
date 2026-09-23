@@ -36,11 +36,8 @@ func NodeIPs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 	if node != "" && len(nodes) == 0 {
 		return fmt.Errorf("node %q not found", node)
 	}
-	paint := kube.NewPainter(f)
-	t := kube.NewTable(out, paint, "NAME", "CLASS", "INTERNAL-IP", "EXTERNAL-IP")
-	for i := range nodes {
-		n := &nodes[i]
-		t.Row(
+	return renderNodes(out, f, nodes, []string{"NAME", "CLASS", "INTERNAL-IP", "EXTERNAL-IP"}, func(paint kube.Painter, n *corev1.Node) []string {
+		return []string{
 			n.Name,
 			nodeClass(paint, n.Labels),
 			// A node with no InternalIP is broken, not merely unexposed: that
@@ -50,10 +47,8 @@ func NodeIPs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 			// is muted rather than flagged; a public address is warned on
 			// instead, being reachable from the internet.
 			addressCell(paint.Warn, paint.Muted, nodeAddresses(n, corev1.NodeExternalIP)),
-		)
-	}
-	t.SortBy(f.Sort)
-	return t.Flush()
+		}
+	})
 }
 
 // nodeAddresses joins every address of the given type with a comma. Dual-stack

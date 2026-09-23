@@ -1,7 +1,6 @@
 package view
 
 import (
-	"cmp"
 	"context"
 	"io"
 	"slices"
@@ -46,14 +45,7 @@ func Qos(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 		v, sev := qosVerdict(class, req[corev1.ResourceMemory])
 		list = append(list, entry{p, class, req, lim, v, sev})
 	}
-	// Deterministic tiebreak for rows sharing a verdict; the VERDICT sort applied
-	// at Flush is stable, so this order survives within each verdict.
-	slices.SortStableFunc(list, func(a, b entry) int {
-		return cmp.Or(
-			cmp.Compare(a.pod.Namespace, b.pod.Namespace),
-			cmp.Compare(a.pod.Name, b.pod.Name),
-		)
-	})
+	slices.SortStableFunc(list, func(a, b entry) int { return byNsName(&a.pod.ObjectMeta, &b.pod.ObjectMeta) })
 
 	t := kube.NewTable(out, paint, slices.Concat(
 		[]string{"NS", podColumn(f, "POD")}, ownerHeaders(f),
@@ -64,20 +56,13 @@ func Qos(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 	for i := range list {
 		e := &list[i]
 		row = append(row[:0], e.pod.Namespace, e.pod.Name)
-		row = appendOwnerCells(row, paint, f, e.pod)
-		row = append(row,
-			string(e.class),
-			qtyOrNone(paint, e.req, corev1.ResourceCPU),
-			qtyOrNone(paint, e.lim, corev1.ResourceCPU),
-			qtyOrNone(paint, e.req, corev1.ResourceMemory),
-			qtyOrNone(paint, e.lim, corev1.ResourceMemory),
-			sevPaint(paint, e.sev)(e.verdict),
-		)
+		row = appendOwnerCells(row, paint, f.ByOwner, e.pod)
+		row = append(row, string(e.class))
+		row = appendCPUMem(row, paint, e.req, e.lim)
+		row = append(row, sevPaint(paint, e.sev)(e.verdict))
 		t.Row(row...)
 	}
-	t.SortRank("VERDICT", verdictRank("EVICT-FIRST", "NO-MEM-FLOOR", "BURSTABLE", "GUARANTEED"))
-	t.SortBy(podSort(f, orDefault(f.Sort, "verdict"), "POD"))
-	return t.Flush()
+	return flushVerdicts(t, podSort(f, f.Sort, "POD"), "EVICT-FIRST", "NO-MEM-FLOOR", "BURSTABLE", "GUARANTEED")
 }
 
 // qosVerdict classifies eviction risk. NO-MEM-FLOOR is the one that is not
@@ -109,7 +94,7 @@ func qosClass(p *corev1.Pod) corev1.PodQOSClass {
 	for _, containers := range [][]corev1.Container{p.Spec.InitContainers, p.Spec.Containers} {
 		for i := range containers {
 			r := containers[i].Resources
-			for _, name := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
+			for _, name := range cpuMem {
 				rq, hasReq := r.Requests[name]
 				lq, hasLim := r.Limits[name]
 				anySet = anySet || hasReq || hasLim
@@ -158,7 +143,7 @@ func podResources(p *corev1.Pod) (req, lim corev1.ResourceList) {
 // addQuantities accumulates src into dst for cpu and memory only: those are the
 // two the QoS class and the eviction ranking are computed from.
 func addQuantities(dst, src corev1.ResourceList) {
-	for _, name := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
+	for _, name := range cpuMem {
 		q, ok := src[name]
 		if !ok {
 			continue
@@ -171,3 +156,6 @@ func addQuantities(dst, src corev1.ResourceList) {
 		dst[name] = q.DeepCopy()
 	}
 }
+
+// cpuMem are the two resources QoS classification reads.
+var cpuMem = [...]corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory}

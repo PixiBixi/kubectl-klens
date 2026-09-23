@@ -26,11 +26,11 @@ func Probes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 	}
 	paint := kube.NewPainter(f)
 
+	// Pointers into pods, which is not appended to past this point.
 	type entry struct {
-		ns, pod, container           string
-		replicas                     *corev1.Pod
-		readiness, liveness, startup string
-		verdict, sev                 string
+		pod          *corev1.Pod
+		ctr          *corev1.Container
+		verdict, sev string
 	}
 	var list []entry
 	for i := range pods {
@@ -49,29 +49,16 @@ func Probes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 		}
 		for i := range p.Spec.Containers {
 			ctr := &p.Spec.Containers[i]
-			hasR := ctr.ReadinessProbe != nil
-			hasL := ctr.LivenessProbe != nil
-			v, sev := probesVerdict(hasR, hasL)
-			list = append(list, entry{
-				ns:        p.Namespace,
-				pod:       p.Name,
-				replicas:  p,
-				container: ctr.Name,
-				readiness: probeHandler(ctr.ReadinessProbe),
-				liveness:  probeHandler(ctr.LivenessProbe),
-				startup:   probeHandler(ctr.StartupProbe),
-				verdict:   v,
-				sev:       sev,
-			})
+			v, sev := probesVerdict(ctr.ReadinessProbe != nil, ctr.LivenessProbe != nil)
+			list = append(list, entry{p, ctr, v, sev})
 		}
 	}
 	// Deterministic tiebreak for rows with equal sort keys; the VERDICT sort
 	// applied at Flush is stable, so this order survives within each verdict.
 	slices.SortStableFunc(list, func(a, b entry) int {
 		return cmp.Or(
-			cmp.Compare(a.ns, b.ns),
-			cmp.Compare(a.pod, b.pod),
-			cmp.Compare(a.container, b.container),
+			byNsName(&a.pod.ObjectMeta, &b.pod.ObjectMeta),
+			cmp.Compare(a.ctr.Name, b.ctr.Name),
 		)
 	})
 
@@ -83,20 +70,18 @@ func Probes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 	row := make([]string, 0, 8)
 	for i := range list {
 		e := &list[i]
-		row = append(row[:0], e.ns, e.pod)
-		row = appendOwnerCells(row, paint, f, e.replicas)
+		row = append(row[:0], e.pod.Namespace, e.pod.Name)
+		row = appendOwnerCells(row, paint, f.ByOwner, e.pod)
 		row = append(row,
-			e.container,
-			probeCell(paint, e.readiness),
-			probeCell(paint, e.liveness),
-			probeCell(paint, e.startup),
+			e.ctr.Name,
+			probeCell(paint, probeHandler(e.ctr.ReadinessProbe)),
+			probeCell(paint, probeHandler(e.ctr.LivenessProbe)),
+			probeCell(paint, probeHandler(e.ctr.StartupProbe)),
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 		t.Row(row...)
 	}
-	t.SortRank("VERDICT", verdictRank("NO-PROBES", "NO-READINESS", "NO-LIVENESS", "OK"))
-	t.SortBy(podSort(f, orDefault(f.Sort, "verdict"), "POD"))
-	return t.Flush()
+	return flushVerdicts(t, podSort(f, f.Sort, "POD"), "NO-PROBES", "NO-READINESS", "NO-LIVENESS", "OK")
 }
 
 // probesVerdict classifies a container's reliability posture from whether its

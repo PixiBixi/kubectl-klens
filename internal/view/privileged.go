@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"io"
+	"slices"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -49,12 +50,7 @@ const privEscDefault = "privesc-default"
 // hasHardFinding reports whether flags hold anything beyond the ambient
 // privesc-default note, i.e. whether the row is worth printing at all.
 func hasHardFinding(flags []string) bool {
-	for _, f := range flags {
-		if f != privEscDefault {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(flags, func(f string) bool { return f != privEscDefault })
 }
 
 // dangerousCaps are Linux capabilities that grant host-level power when added -
@@ -114,11 +110,8 @@ func containerSecurityFlags(ctr *corev1.Container, p *corev1.Pod) []string {
 		// No securityContext at all: allowPrivilegeEscalation defaults to true.
 		flags = append(flags, privEscDefault)
 	}
-	for _, port := range ctr.Ports {
-		if port.HostPort != 0 {
-			flags = append(flags, "hostPort")
-			break
-		}
+	if slices.ContainsFunc(ctr.Ports, func(port corev1.ContainerPort) bool { return port.HostPort != 0 }) {
+		flags = append(flags, "hostPort")
 	}
 	if runsAsRoot(ctr, p) {
 		flags = append(flags, "root")

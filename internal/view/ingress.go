@@ -42,7 +42,7 @@ func Ingress(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 	// users are least likely to be allowed to read - not a list to issue for a
 	// table that is already known to be empty.
 	if len(ings) > 0 {
-		err = allLists(
+		err = kube.Concurrent(
 			func() (err error) {
 				svcs, err = kube.ListServices(ctx, c, scope, metav1.ListOptions{})
 				return err
@@ -103,9 +103,7 @@ func Ingress(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 		r := &rows[i]
 		t.Row(r.ns, r.name, r.class, r.host, r.path, r.backend, r.tls, sevPaint(paint, r.sev)(r.verdict))
 	}
-	t.SortRank("VERDICT", verdictRank("NO-SERVICE", "NO-PORT", "NO-SECRET", "NO-TLS", "RESOURCE", "OK"))
-	t.SortBy(orDefault(f.Sort, "verdict"))
-	return t.Flush()
+	return flushVerdicts(t, f.Sort, "NO-SERVICE", "NO-PORT", "NO-SECRET", "NO-TLS", "RESOURCE", "OK")
 }
 
 // ingressRule is one flattened routing rule: where traffic arrives and what it

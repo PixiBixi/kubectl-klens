@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -35,31 +34,26 @@ import (
 // later. Rows are biggest first.
 func UnusedConfig(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	var (
-		cms      []corev1.ConfigMap
-		secrets  []corev1.Secret
-		pods     []corev1.Pod
-		deploys  []appsv1.Deployment
-		stateful []appsv1.StatefulSet
-		daemons  []appsv1.DaemonSet
-		jobs     []batchv1.Job
-		crons    []batchv1.CronJob
-		sas      []corev1.ServiceAccount
-		ings     []networkingv1.Ingress
+		cms     []corev1.ConfigMap
+		secrets []corev1.Secret
+		pods    []corev1.Pod
+		w       builtinWorkloads
+		jobs    []batchv1.Job
+		crons   []batchv1.CronJob
+		sas     []corev1.ServiceAccount
+		ings    []networkingv1.Ingress
 	)
 	scope := f.Scope()
 	opts := metav1.ListOptions{}
-	err := allLists(
+	err := kube.Concurrent(append(w.listers(ctx, c, scope),
 		func() (err error) { cms, err = kube.ListConfigMaps(ctx, c, scope, opts); return err },
 		func() (err error) { secrets, err = kube.ListSecrets(ctx, c, scope, opts); return err },
 		func() (err error) { pods, err = kube.ListPods(ctx, c, scope, opts); return err },
-		func() (err error) { deploys, err = kube.ListDeployments(ctx, c, scope, opts); return err },
-		func() (err error) { stateful, err = kube.ListStatefulSets(ctx, c, scope, opts); return err },
-		func() (err error) { daemons, err = kube.ListDaemonSets(ctx, c, scope, opts); return err },
 		func() (err error) { jobs, err = kube.ListJobs(ctx, c, scope, opts); return err },
 		func() (err error) { crons, err = kube.ListCronJobs(ctx, c, scope, opts); return err },
 		func() (err error) { sas, err = kube.ListServiceAccounts(ctx, c, scope, opts); return err },
 		func() (err error) { ings, err = kube.ListIngresses(ctx, c, scope, opts); return err },
-	)
+	)...)
 	if err != nil {
 		return err
 	}
@@ -68,14 +62,14 @@ func UnusedConfig(ctx context.Context, c kube.Clients, f kube.Flags, args []stri
 	for i := range pods {
 		used.addPodSpec(pods[i].Namespace, &pods[i].Spec)
 	}
-	for i := range deploys {
-		used.addPodSpec(deploys[i].Namespace, &deploys[i].Spec.Template.Spec)
+	for i := range w.deploys {
+		used.addPodSpec(w.deploys[i].Namespace, &w.deploys[i].Spec.Template.Spec)
 	}
-	for i := range stateful {
-		used.addPodSpec(stateful[i].Namespace, &stateful[i].Spec.Template.Spec)
+	for i := range w.stateful {
+		used.addPodSpec(w.stateful[i].Namespace, &w.stateful[i].Spec.Template.Spec)
 	}
-	for i := range daemons {
-		used.addPodSpec(daemons[i].Namespace, &daemons[i].Spec.Template.Spec)
+	for i := range w.daemons {
+		used.addPodSpec(w.daemons[i].Namespace, &w.daemons[i].Spec.Template.Spec)
 	}
 	for i := range jobs {
 		used.addPodSpec(jobs[i].Namespace, &jobs[i].Spec.Template.Spec)
@@ -180,9 +174,9 @@ func (r refSet) addPodSpec(ns string, spec *corev1.PodSpec) {
 	for i := range spec.ImagePullSecrets {
 		r.add(refSecret, ns, spec.ImagePullSecrets[i].Name)
 	}
-	for _, c := range podSpecContainers(spec) {
-		r.addContainer(ns, c)
-		r.addArgs(ns, c)
+	for _, pc := range specContainers(spec) {
+		r.addContainer(ns, pc.Spec)
+		r.addArgs(ns, pc.Spec)
 	}
 }
 
@@ -194,6 +188,8 @@ func nameRune(c rune) bool {
 	return c == '-' || c == '.' || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
 }
 
+func notNameRune(c rune) bool { return !nameRune(c) }
+
 // addArgs indexes the whole tokens of a container's command line. Whole tokens,
 // not substrings: an object named "operator" would otherwise be considered
 // referenced by any argument that merely contains the word, hiding a real
@@ -204,7 +200,7 @@ func nameRune(c rune) bool {
 func (r refSet) addArgs(ns string, c *corev1.Container) {
 	for _, list := range [][]string{c.Command, c.Args} {
 		for _, arg := range list {
-			for _, token := range strings.FieldsFunc(arg, func(c rune) bool { return !nameRune(c) }) {
+			for token := range strings.FieldsFuncSeq(arg, notNameRune) {
 				r.args[ns+"|"+token] = true
 			}
 		}
@@ -279,22 +275,6 @@ func (r refSet) addIngress(ing *networkingv1.Ingress) {
 	}
 }
 
-// podSpecContainers enumerates a spec's containers in startup order, the same
-// init/app/ephemeral coverage podContainers gives for a live pod.
-func podSpecContainers(spec *corev1.PodSpec) []*corev1.Container {
-	out := make([]*corev1.Container, 0, len(spec.InitContainers)+len(spec.Containers)+len(spec.EphemeralContainers))
-	for i := range spec.InitContainers {
-		out = append(out, &spec.InitContainers[i])
-	}
-	for i := range spec.Containers {
-		out = append(out, &spec.Containers[i])
-	}
-	for i := range spec.EphemeralContainers {
-		out = append(out, (*corev1.Container)(&spec.EphemeralContainers[i].EphemeralContainerCommon))
-	}
-	return out
-}
-
 // rootCAConfigMap is created by the apiserver in every namespace for pods to
 // verify it. Reporting it would be one guaranteed false positive per namespace.
 const rootCAConfigMap = "kube-root-ca.crt"
@@ -315,12 +295,7 @@ var sidecarLabels = []string{
 }
 
 func sidecarSelected(labels map[string]string) bool {
-	for _, k := range sidecarLabels {
-		if _, ok := labels[k]; ok {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(sidecarLabels, func(k string) bool { _, ok := labels[k]; return ok })
 }
 
 // ownerCell names the controller that created the object, which is what has to
@@ -339,10 +314,7 @@ func ownerCell(paint kube.Painter, name string, refs []metav1.OwnerReference) st
 // secretTypeCell drops the kubernetes.io/ prefix every built-in secret type
 // carries: 14 columns that say nothing, on a table already wide enough to wrap.
 func secretTypeCell(t corev1.SecretType) string {
-	if short, ok := strings.CutPrefix(string(t), "kubernetes.io/"); ok {
-		return short
-	}
-	return string(t)
+	return strings.TrimPrefix(string(t), "kubernetes.io/")
 }
 
 // platformSecret reports the secrets the platform owns: a service-account token
@@ -369,10 +341,8 @@ func configMapSize(cm *corev1.ConfigMap) int {
 
 func secretSize(s *corev1.Secret) int {
 	n := 0
+	// StringData is write-only: the apiserver folds it into Data.
 	for _, v := range s.Data {
-		n += len(v)
-	}
-	for _, v := range s.StringData {
 		n += len(v)
 	}
 	return n

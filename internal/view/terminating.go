@@ -36,7 +36,7 @@ func Terminating(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 		nsList []corev1.Namespace
 	)
 	scope := f.Scope()
-	err := allLists(
+	err := kube.Concurrent(
 		func() (err error) {
 			pods, err = kube.ListPods(ctx, c, scope, metav1.ListOptions{})
 			return err
@@ -55,7 +55,7 @@ func Terminating(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 	}
 	unreachable := make(map[string]bool, len(nodes))
 	for i := range nodes {
-		if s := nodeStatus(&nodes[i]); s != "Ready" {
+		if nodeStatus(&nodes[i]) != "Ready" {
 			unreachable[nodes[i].Name] = true
 		}
 	}
@@ -90,10 +90,11 @@ func Terminating(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 		}
 		// A namespace has no grace period: it is deleted as soon as its content
 		// is gone, so any elapsed time is time spent blocked on something.
-		v, sev := terminatingVerdict(deletionTime(n), nil)
+		deleted := deletionTime(n)
+		v, sev := terminatingVerdict(deleted, nil)
 		rows = append(rows, row{
 			kind: "Namespace", ns: paint.Muted("-"), name: n.Name,
-			stuck:      age(deletionTime(n)),
+			stuck:      age(deleted),
 			blocker:    namespaceBlocker(paint, n),
 			finalizers: finalizerCell(paint, namespaceFinalizers(n)),
 			verdict:    v, sev: sev,
@@ -114,9 +115,7 @@ func Terminating(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 		r := &rows[i]
 		t.Row(r.kind, r.ns, r.name, r.stuck, r.blocker, r.finalizers, sevPaint(paint, r.sev)(r.verdict))
 	}
-	t.SortRank("VERDICT", verdictRank("STUCK", "DELETING", "GRACE"))
-	t.SortBy(orDefault(f.Sort, "verdict"))
-	return t.Flush()
+	return flushVerdicts(t, f.Sort, "STUCK", "DELETING", "GRACE")
 }
 
 // terminatingVerdict grades how long a deletion has been pending. grace is the
