@@ -219,8 +219,8 @@ All columnar output goes through `kube.NewTable(out, painter, headers...)`.
   registers a custom key for a column whose alphabetical order is meaningless -
   used by verdict commands to order a `VERDICT` column worst-first.
 
-Headers are bolded via the `Painter`. `kube.Label(painter, labels, key)` renders
-a label value or a muted `<none>`.
+Headers are bolded via the `Painter`. `kube.Label(painter, labels, keys...)` renders
+the value of the first key present or a muted `<none>`.
 
 ### `Painter` (`internal/kube/color.go`)
 
