@@ -79,11 +79,9 @@ func (t *Table) Flush() error {
 		bytes += len(h)
 	}
 	for _, r := range t.rows {
-		for i := 0; i < len(widths) && i < len(r); i++ {
+		for i := range min(len(widths), len(r)) {
 			bytes += len(r[i])
-			if w := visibleWidth(r[i]); w > widths[i] {
-				widths[i] = w
-			}
+			widths[i] = max(widths[i], visibleWidth(r[i]))
 		}
 	}
 	var b strings.Builder
@@ -113,7 +111,7 @@ func maxPadding(widths []int) int {
 // based on visible content, so embedded ANSI codes don't shift columns.
 func (t *Table) writeLine(b *strings.Builder, widths []int, cells []string, header bool) {
 	last := len(t.headers) - 1
-	for i := 0; i < len(t.headers); i++ {
+	for i := range t.headers {
 		c := cell(cells, i)
 		if header {
 			c = t.painter.Header(c)
@@ -138,16 +136,16 @@ func (t *Table) sortRows(idx int) {
 	for i, r := range t.rows {
 		keys[i] = sortKey{row: r, text: stripANSI(cell(r, idx))}
 	}
+	byKey := func(a, b sortKey) int { return cmp.Compare(a.text, b.text) }
 	if rank := t.sortRanks[strings.ToLower(t.sortCol)]; rank != nil {
 		for i := range keys {
 			keys[i].num = float64(rank(keys[i].text))
 		}
-		slices.SortStableFunc(keys, byNum)
-	} else if t.parseNumeric(keys) {
-		slices.SortStableFunc(keys, byNum)
-	} else {
-		slices.SortStableFunc(keys, func(a, b sortKey) int { return cmp.Compare(a.text, b.text) })
+		byKey = byNum
+	} else if parseNumeric(keys) {
+		byKey = byNum
 	}
+	slices.SortStableFunc(keys, byKey)
 	for i := range keys {
 		t.rows[i] = keys[i].row
 	}
@@ -164,7 +162,7 @@ func byNum(a, b sortKey) int { return cmp.Compare(a.num, b.num) }
 
 // parseNumeric fills in each key's num and reports whether every cell parsed, so
 // counts order by value rather than as text. An empty table is not numeric.
-func (t *Table) parseNumeric(keys []sortKey) bool {
+func parseNumeric(keys []sortKey) bool {
 	if len(keys) == 0 {
 		return false
 	}
@@ -182,12 +180,7 @@ func (t *Table) columnIndex(column string) int {
 	if column == "" {
 		return -1
 	}
-	for i, h := range t.headers {
-		if strings.EqualFold(h, column) {
-			return i
-		}
-	}
-	return -1
+	return slices.IndexFunc(t.headers, func(h string) bool { return strings.EqualFold(h, column) })
 }
 
 func cell(row []string, idx int) string {
@@ -197,11 +190,13 @@ func cell(row []string, idx int) string {
 	return ""
 }
 
-// Label returns the value of key in labels, or a muted "<none>" when
-// absent/empty.
-func Label(p Painter, labels map[string]string, key string) string {
-	if v, ok := labels[key]; ok && v != "" {
-		return v
+// Label returns the value of the first of keys set and non-empty in labels, or
+// a muted "<none>" when none is.
+func Label(p Painter, labels map[string]string, keys ...string) string {
+	for _, k := range keys {
+		if v := labels[k]; v != "" {
+			return v
+		}
 	}
 	return p.Muted("<none>")
 }

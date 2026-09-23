@@ -34,8 +34,8 @@ func TestIsPattern(t *testing.T) {
 		{"be-?nof", true},
 		{"be-[ab]", true},
 	} {
-		if got := IsPattern(tc.in); got != tc.want {
-			t.Errorf("IsPattern(%q) = %v, want %v", tc.in, got, tc.want)
+		if got := isPattern(tc.in); got != tc.want {
+			t.Errorf("isPattern(%q) = %v, want %v", tc.in, got, tc.want)
 		}
 	}
 }
