@@ -69,10 +69,11 @@ Global flags (`--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespace
 That table drives **both** FlagSet registration and the `--help` listing, so the
 two can't diverge. Add a global flag there, not in two places.
 
-One list does sit outside it: `completionFlags` in `complete.go`, the tokens
-offered during shell completion. `TestCompletionOffersEveryGlobalFlag` pins it to
-`globalFlags`, because a new global flag would otherwise be registered and
-documented but silently uncompletable.
+`completionFlags` in `complete.go`, the tokens offered during shell completion,
+is derived from the `globalFlags` usage strings. Per-command flags (`--sort`,
+`-w/--watch/--interval`, `--by-owner`) follow the same rule through the
+`commandFlags` table, which drives both their registration and their
+completion.
 
 ### The watch loop (`watch.go`)
 
@@ -171,10 +172,12 @@ runs once per object.
 **Views never call the clientset's `List` directly.** They go through one
 `kube.List<Kind>` wrapper per resource kind (`ListPods`, `ListNodes`,
 `ListServices`, `ListIngresses`, `ListConfigMaps`, ... - `list.go` is the
-inventory, plus `ListCustom` for a dynamic-client GVR), thin wrappers over
-a generic `listAll` that sets `Limit = ChunkSize` (2000; see its doc comment
-for why not kubectl's 500) and follows the server's `continue` token until it
-stops handing one out.
+inventory, plus `ListCustom` for a dynamic-client GVR). Each is one line over the
+generic `scoped` (namespaced) or `cluster` pager, which read the paging fields
+through the `GetContinue`/`GetRemainingItemCount` accessors every list type
+exposes, and feed a generic `listAll` that sets `Limit = ChunkSize` (2000;
+see its doc comment for why not kubectl's 500) and follows the server's
+`continue` token until it stops handing one out.
 An unlimited `List` makes the apiserver materialize the whole collection in one
 response, which spikes memory on both ends on a cluster with tens of thousands
 of pods. Paging stays an implementation detail: callers get the full slice, and
@@ -274,17 +277,17 @@ share a shape (see
    wins, a default catch-all), so a verdict is always produced.
 2. Severity is one of `ok`/`warn`/`bad`/`muted`, mapped to a `Painter` method by
    `sevPaint`.
-3. The `VERDICT` cell is colored by severity; the table gets a `SortRank` on
-   `VERDICT` via `verdictRank(worstFirst...)`, and `SortBy(orDefault(f.Sort,
-"verdict"))` defaults to risk order so the riskiest rows sit nearest the
-   prompt.
+3. The `VERDICT` cell is colored by severity. Rows are pre-sorted with
+   `byNsName` as a tiebreak, then `flushVerdicts(t, f.Sort, worstFirst...)`
+   ranks `VERDICT` and defaults to risk order so the riskiest rows sit nearest
+   the prompt.
 
 A design principle to preserve: **a control that exists but gives zero
 protection must read as bad, not OK** - e.g. a PDB with `DesiredHealthy == 0` on
 a multi-replica workload is `NO-GUARD` (red), because a drain can evict every
 replica at once. See `pdbVerdict` for the canonical example.
 
-Shared helpers (`orDefault`, `sevPaint`, `verdictRank`) live in
+Shared helpers (`flushVerdicts`, `byNsName`, `sevPaint`, `verdictRank`) live in
 [`internal/view/verdict.go`](../internal/view/verdict.go); `pdb`, `hpa`,
 `spread`, `probes`, `qos`, `svc-backends`, `rollouts`, `ingress`, and
 `terminating`, `pvc-unused`, `pvc-resize`, `pv-orphan` and `certs` reuse them
@@ -312,9 +315,15 @@ column and only needs `SortBy`).
   returns the first error. `max-pods` and `spread` each need nodes _and_ pods with
   no dependency between them; issued in sequence, the smaller list's latency is
   pure addition (measured ~14% and ~10% of total on a 6300-pod cluster).
-  `allLists(fns...)` is the n-way form, used by `--by-owner` for its six
-  controller lists.
-- `qtyOrNone(paint, rl, name)` renders a resource quantity or a muted `none`.
+  `kube.Concurrent(fns...)` is the n-way form. `builtinWorkloads.listers` and
+  `optionalCRD` supply the calls shared by `--by-owner`, `rollouts`,
+  `unused-config` and `certs`.
+- `nodeTable(ctx, c, f, out, headers, row)` renders one row per node for the
+  node inventory views; `renderNodes` is the same for a caller that lists the
+  nodes itself (`node-ips`).
+- `qtyOrNone(paint, rl, name)` renders a resource quantity or a muted `none`;
+  `appendCPUMem` appends the cpu/memory pair of two lists, `orMutedDash` mutes
+  an empty cell, `objKey` and `claimRefs` give allocation-free map keys.
 
 ## The `--by-owner` source switch (`internal/view/byowner.go`)
 
@@ -322,7 +331,7 @@ Six views (`reqlim`, `no-limits`, `no-requests`, `images`, `probes`, `qos`) set
 `ByOwner: true` in the registry and fetch through `podsForView` instead of
 `kube.ListPods`. Without the flag it _is_ `ListPods`; with it, `workloadPods`
 lists Deployments, StatefulSets, DaemonSets, Argo Rollouts, Strimzi PodSets and
-CloudNativePG Clusters concurrently (`allLists`) and turns each into a
+CloudNativePG Clusters concurrently (`kube.Concurrent`) and turns each into a
 **synthetic pod**: Namespace/Name from the controller, `Spec` its pod template,
 `Status` left zero. The row then flows through the view's normal per-container
 loop unmodified - which is why a view qualifies only if it reads nothing but the
@@ -358,9 +367,9 @@ workload owned by any other custom resource simply has no row under the flag.
 The `nodes` view answers "which pool, which class, spot or on-demand?" from node
 labels, and every cloud spells those differently. `nodelabels.go` holds that
 mapping in three ordered tables - `nodePoolLabels`, `computeClassLabels`,
-`provisioningLabels` - read by `firstLabel` (first key present wins) and
+`provisioningLabels` - read by `kube.Label` (first key present wins) and
 `nodeProvisioning` (first key whose _value_ is recognised wins). The `CLASS`
-cell goes through `nodeClass(paint, labels)` rather than `firstLabel` directly,
+cell goes through `nodeClass(paint, labels)` rather than `kube.Label` directly,
 because two views print it (`nodes`, `node-ips`): adding a class label key to
 `computeClassLabels` must reach both, not just the one being edited. Order is the
 whole design, so append rather than reorder: GKE's boolean `gke-spot` /
