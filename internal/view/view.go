@@ -142,6 +142,14 @@ func skipNamespace(f kube.Flags, namespace string) bool {
 	return f.ScopeIsAll() && namespace == "kube-system"
 }
 
+// orMutedDash returns s, or a muted "-" placeholder when it is empty.
+func orMutedDash[S ~string](paint kube.Painter, s S) string {
+	if s == "" {
+		return paint.Muted("-")
+	}
+	return string(s)
+}
+
 // qtyOrNone returns the string form of a resource quantity, or a muted "none"
 // if unset.
 func qtyOrNone(paint kube.Painter, rl corev1.ResourceList, name corev1.ResourceName) string {

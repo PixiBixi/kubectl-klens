@@ -54,11 +54,7 @@ func Pending(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 	t := kube.NewTable(out, paint, "NS", "POD", "AGE", "REASON", "DETAIL")
 	for i := range list {
 		e := &list[i]
-		detail := e.detail
-		if detail == "" || detail == "-" {
-			detail = paint.Muted("-")
-		}
-		t.Row(e.pod.Namespace, e.pod.Name, age(e.pod.CreationTimestamp), paint.Status(e.reason), detail)
+		t.Row(e.pod.Namespace, e.pod.Name, age(e.pod.CreationTimestamp), paint.Status(e.reason), orMutedDash(paint, e.detail))
 	}
 	t.SortBy(f.Sort)
 	return t.Flush()
@@ -77,34 +73,30 @@ func pendingReason(p *corev1.Pod) (reason, detail string) {
 			return r, schedulerCause(cond.Message)
 		}
 	}
-	for _, css := range [][]corev1.ContainerStatus{p.Status.ContainerStatuses, p.Status.InitContainerStatuses} {
-		for j := range css {
-			cs := &css[j]
-			if cs.State.Waiting != nil && cs.State.Waiting.Reason != "" {
-				reason = cs.State.Waiting.Reason
-				switch reason {
-				case "ImagePullBackOff", "ErrImagePull", "InvalidImageName":
-					return reason, containerImage(p, cs.Name)
-				default:
-					return reason, "-"
-				}
+	// Init first: while one is stuck, every app container reads PodInitializing,
+	// which hides the init container's own reason.
+	for _, cs := range podContainerStatuses(p) {
+		if w := cs.Status.State.Waiting; w != nil && w.Reason != "" {
+			switch w.Reason {
+			case "ImagePullBackOff", "ErrImagePull", "InvalidImageName":
+				return w.Reason, containerImage(p, cs.Status.Name)
+			default:
+				return w.Reason, ""
 			}
 		}
 	}
-	return "Pending", "-"
+	return "Pending", ""
 }
 
-// containerImage returns the configured image for the named (init) container.
+// containerImage returns the configured image for the named container.
+// Container names are unique across init, app and ephemeral containers.
 func containerImage(p *corev1.Pod, name string) string {
-	for _, css := range [][]corev1.Container{p.Spec.Containers, p.Spec.InitContainers} {
-		for j := range css {
-			c := &css[j]
-			if c.Name == name {
-				return c.Image
-			}
+	for _, pc := range podContainers(p) {
+		if pc.Spec.Name == name {
+			return pc.Spec.Image
 		}
 	}
-	return "-"
+	return ""
 }
 
 // schedulerCause condenses a verbose scheduler message into one clause, e.g.
