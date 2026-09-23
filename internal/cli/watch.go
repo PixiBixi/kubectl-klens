@@ -62,12 +62,12 @@ func watchHeader(interval time.Duration, args []string, now time.Time) string {
 // not offer it, with a message that names the command.
 func wantsWatch(args []string) bool {
 	for _, a := range args {
-		switch a {
-		case "-w", "--w", "-watch", "--watch":
-			return true
+		name, ok := strings.CutPrefix(a, "-")
+		if !ok {
+			continue
 		}
-		if strings.HasPrefix(a, "-watch=") || strings.HasPrefix(a, "--watch=") ||
-			strings.HasPrefix(a, "-w=") || strings.HasPrefix(a, "--w=") {
+		name, _, _ = strings.Cut(strings.TrimPrefix(name, "-"), "=")
+		if name == "w" || name == "watch" {
 			return true
 		}
 	}

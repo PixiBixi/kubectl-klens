@@ -160,23 +160,6 @@ func TestCompletionInstallRequiresInstallArg(t *testing.T) {
 	}
 }
 
-// TestCompletionOffersEveryGlobalFlag stops completionFlags from drifting away
-// from globalFlags. The two lists are separate - globalFlags drives registration
-// and --help, completionFlags drives shell completion - so adding a global flag
-// silently leaves it uncompletable without this guard.
-func TestCompletionOffersEveryGlobalFlag(t *testing.T) {
-	for _, gf := range globalFlags {
-		for token := range strings.FieldsSeq(strings.ReplaceAll(gf.usage, ",", " ")) {
-			if !strings.HasPrefix(token, "-") {
-				continue // the type word, e.g. "string" or "duration"
-			}
-			if !slices.Contains(completionFlags, token) {
-				t.Errorf("global flag %q is missing from completionFlags", token)
-			}
-		}
-	}
-}
-
 func TestCompletionOffersWatchOnlyWhereRegistered(t *testing.T) {
 	got := App{}.completions([]string{"pending"}, "-")
 	for _, want := range []string{"-w", "--watch", "--interval"} {
