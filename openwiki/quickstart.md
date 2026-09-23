@@ -213,7 +213,7 @@ kubens/kubectx); the rest default to **all namespaces**.
   `pvc-unused`, `pvc-resize`, `certs`, `unused-config`.
 - `-A` / `--all-namespaces` widens to all; `-n <ns>` targets one.
 - `nodes`, `taints`, `capacity`, `zones`, `node-ips`, `max-pods`,
-  `node-conditions` and `autoscaler` read only cluster-scoped objects and ignore
+  `node-conditions`, `pv-orphan` and `autoscaler` read only cluster-scoped objects and ignore
   namespace flags entirely.
 
 This is driven by `Command.CurrentNSDefault` and `Command.IgnoresNamespace`, both
