@@ -70,14 +70,17 @@ Three packages under `internal/`, layered cli → view → kube:
   `func(ctx, kube.Clients, kube.Flags, args []string, out io.Writer) error`.
   Shared node helpers live in `view.go`. `byowner.go` holds `podsForView`, the
   shared source for the six `--by-owner` commands (`reqlim`, `no-limits`,
-  `no-requests`, `images`, `probes`, `qos`): it lists Deployments/StatefulSets/
-  DaemonSets/Argo Rollouts instead of pods and turns each into a synthetic pod
-  (Namespace/Name from the controller, Spec its template, Status zero), which
-  then flows through the view's normal per-container loop unmodified - a view
-  qualifies only if it reads nothing but the container spec, `qos` included
-  (its `qosClass` has a from-spec fallback for exactly this). `secret.go` is the
-  only interactive command: `kube.IsTTY(out)` gates promptui pickers vs. plain
-  piped listings.
+  `no-requests`, `images`, `probes`, `qos`): it lists Deployments, StatefulSets,
+  DaemonSets, Argo Rollouts, Strimzi PodSets and CloudNativePG Clusters instead
+  of pods and turns each into a synthetic pod (Namespace/Name from the
+  controller, Spec its template, Status zero), which then flows through the
+  view's normal per-container loop unmodified - a view qualifies only if it
+  reads nothing but the container spec, `qos` included (its `qosClass` has a
+  from-spec fallback for exactly this). A CNPG Cluster has no pod template at
+  all - its synthetic pod is reconstructed from `spec.resources` alone, and the
+  row is marked unknown for `probes`/`images` instead of guessing them.
+  `secret.go` is the only interactive command: `kube.IsTTY(out)` gates promptui
+  pickers vs. plain piped listings.
   Sortable views call `t.SortBy(f.Sort)` before `Flush`; `image-count` and
   `restarts` keep a bespoke count-descending default (overridden by `--sort`).
   Views colorize status cells by building `paint := kube.NewPainter(f)` and
@@ -106,8 +109,7 @@ neither `-n` nor `-A`, the dispatcher resolves the current kubeconfig namespace
 by default. The current `CurrentNSDefault` set (`reqlim`, `no-limits`,
 `no-requests`, `images`, `restarts`, `pvc`, `pvc-unused`, `pvc-resize`,
 `svc-fqdn`, `svc-backends`, `ingress`, `secret`, `privileged`, `certs`, `pdb`,
-`pending`,
-`hpa`, `spread`, `probes`, `qos`, `rollouts`, `unused-config`) is locked in by
+`pending`, `hpa`, `spread`, `probes`, `qos`, `rollouts`, `unused-config`) is locked in by
 `TestCurrentNSDefaultFlags` in `cli_test.go`, which is the authoritative list -
 update that map whenever you change a command's scoping.
 
