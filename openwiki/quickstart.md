@@ -120,9 +120,11 @@ The authoritative list is the `commands` slice in
   `INGRESS`/`EGRESS` read `OPEN` (no policy selects the pod), `ALLOW-ALL`
   (selected, but a `{}` rule or unrestricted `0.0.0.0/0` admits everyone),
   `RESTRICTED`, `DENY` (rule-less policies only), rolled up per namespace as
-  `PARTIAL N/M` or `DEFAULT-DENY`. `policyTypes` follows the apiserver default
-  (Egress only when egress rules exist); hostNetwork and finished pods are not
-  counted, and `kube-*`/`gke-*`/`gmp-*` rows are muted rather than hidden
+  `PARTIAL N/M`, `DEFAULT-DENY` or `NO-PODS` (policies but no eligible pod).
+  `policyTypes` follows the apiserver default (Egress only when egress rules
+  exist); finished pods are never counted, hostNetwork pods are left out of the
+  namespace rollup but shown as `HOST-NETWORK` rows under `-n`, and
+  `kube-*`/`gke-*`/`gmp-*` rows are muted rather than hidden
 - `certs` - TLS secrets with their certificate expiry and a renewal verdict
   (`EXPIRED`, `EXPIRING` under 7 days, `RENEW-DUE` under 14). The date is the
   earliest in the chain, not the leaf's, since an intermediate expiring first

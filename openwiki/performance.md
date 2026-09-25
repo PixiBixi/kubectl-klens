@@ -160,7 +160,7 @@ properties that matter: the limit is set, and it reaches the request.
 
 ## The shared render path
 
-`Table` is on the hot path of all 36 commands, so it is worth keeping tight:
+`Table` is on the hot path of all 37 commands, so it is worth keeping tight:
 
 - `Flush` measures the exact cell bytes during the width pass and does a single
   `Grow`. Letting the builder double its way up was 62% of the bytes in
