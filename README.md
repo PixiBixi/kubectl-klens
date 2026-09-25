@@ -2,7 +2,7 @@
 
 <p align="center">
   Read-only cluster inspection for kubectl.<br>
-  One binary, one dispatcher, 36 commands.
+  One binary, one dispatcher, 37 commands.
 </p>
 
 <p align="center">
@@ -177,13 +177,14 @@ app-a-training-prod   app-a-training   1         Burstable   4        none     1
 ### Security
 
 <details>
-<summary>3 commands</summary>
+<summary>4 commands</summary>
 
 | Command | Shows |
 | --- | --- |
 | `default-sa` | pods still using the default service account |
 | `privileged` † | containers with privileged/host security flags |
 | `certs` † | TLS secrets + certificate expiry + cert-manager readiness |
+| `netpol` | NetworkPolicy ingress/egress coverage per namespace, per pod with `-n <ns>` |
 
 </details>
 
@@ -390,6 +391,7 @@ prod   api-7f9c-x2k    Insufficient cpu
 | `pvc-unused` | - | `STS-RESERVED`/`SCALED-DOWN` | `ORPHAN`/`LOST` | `UNBOUND` |
 | `pvc-resize` | - | `PENDING`/`RESIZING`/`FS-PENDING`/`SHRINK` | `FAILED`/`INFEASIBLE`/`SC-NO-EXPAND` | - |
 | `pv-orphan` | - | `RECLAIMING`/`UNCLAIMED` | `RETAINED`/`FAILED` | - |
+| `netpol` | `DEFAULT-DENY`/`DENY`/`RESTRICTED` | `ALLOW-ALL`/`PARTIAL` | `OPEN` | `NO-PODS`/`HOST-NETWORK`, `kube-*`/`gke-*`/`gmp-*` rows |
 
 </details>
 

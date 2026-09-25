@@ -190,7 +190,7 @@ concurrent `List` per namespace and concatenates. Past `MaxNamespaceFanout` (16)
 it falls back to a single cluster-wide List filtered locally - the constant's
 doc comment carries the measurement that picked 16.
 
-On top of paging, five views push their filter **down to the apiserver** with a
+On top of paging, six views push their filter **down to the apiserver** with a
 field selector instead of listing everything and filtering in the loop:
 
 | View              | Field selector                                     |
@@ -200,6 +200,7 @@ field selector instead of listing everything and filtering in the loop:
 | `default-sa`      | `spec.serviceAccountName=default`                  |
 | `node-ips <node>` | `metadata.name=<node>` (only when a node is named) |
 | `certs`           | `type=kubernetes.io/tls` on secrets                |
+| `netpol`          | `status.phase!=Failed,status.phase!=Succeeded`, plus `spec.hostNetwork=false` without `-n` |
 
 Pushdown only works for the [field selectors the apiserver actually
 supports](../internal/view/fake_test.go) - `podFields` mirrors the pod set, and
