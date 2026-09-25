@@ -1,7 +1,7 @@
 # kubectl-klens - Quickstart
 
 `kubectl-klens` is a single-binary **kubectl plugin** (`kubectl klens`) bundling
-36 read-only cluster-inspection shortcuts behind one dispatcher. It is the
+37 read-only cluster-inspection shortcuts behind one dispatcher. It is the
 codified form of a pile of "quick look at the cluster" one-liners: nodes,
 capacity, requests/limits, images, restarts, PVCs, and a set of _verdict_
 commands (`pdb`, `hpa`, `spread`, `probes`, `qos`, `svc-backends`, `rollouts`,
@@ -115,6 +115,14 @@ The authoritative list is the `commands` slice in
   (`allowPrivilegeEscalation` left unset, which resolves to true) is only ever
   reported alongside another finding: nearly every container leaves the field
   unset, so triggering a row on it alone would bury the real findings
+- `netpol` - NetworkPolicy coverage, one row per namespace (cluster-wide by
+  default), one row per pod with the selecting policies under `-n <ns>`.
+  `INGRESS`/`EGRESS` read `OPEN` (no policy selects the pod), `ALLOW-ALL`
+  (selected, but a `{}` rule or unrestricted `0.0.0.0/0` admits everyone),
+  `RESTRICTED`, `DENY` (rule-less policies only), rolled up per namespace as
+  `PARTIAL N/M` or `DEFAULT-DENY`. `policyTypes` follows the apiserver default
+  (Egress only when egress rules exist); hostNetwork and finished pods are not
+  counted, and `kube-*`/`gke-*`/`gmp-*` rows are muted rather than hidden
 - `certs` - TLS secrets with their certificate expiry and a renewal verdict
   (`EXPIRED`, `EXPIRING` under 7 days, `RENEW-DUE` under 14). The date is the
   earliest in the chain, not the leaf's, since an intermediate expiring first

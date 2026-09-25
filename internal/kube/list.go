@@ -375,3 +375,8 @@ func ListPersistentVolumes(ctx context.Context, c kubernetes.Interface, opts met
 func ListStorageClasses(ctx context.Context, c kubernetes.Interface, opts metav1.ListOptions) ([]storagev1.StorageClass, error) {
 	return cluster(ctx, c.StorageV1().StorageClasses(), opts, func(l *storagev1.StorageClassList) []storagev1.StorageClass { return l.Items })
 }
+
+// ListNetworkPolicies returns every NetworkPolicy in scope matching opts.
+func ListNetworkPolicies(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]networkingv1.NetworkPolicy, error) {
+	return scoped(ctx, s, opts, c.NetworkingV1().NetworkPolicies, func(l *networkingv1.NetworkPolicyList) []networkingv1.NetworkPolicy { return l.Items })
+}

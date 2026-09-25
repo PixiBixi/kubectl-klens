@@ -2,6 +2,7 @@ package view
 
 import (
 	"errors"
+	"strconv"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -99,6 +100,7 @@ func podFields(p *corev1.Pod) fields.Set {
 		"spec.restartPolicy":       string(p.Spec.RestartPolicy),
 		"spec.schedulerName":       p.Spec.SchedulerName,
 		"spec.serviceAccountName":  p.Spec.ServiceAccountName,
+		"spec.hostNetwork":         strconv.FormatBool(p.Spec.HostNetwork),
 		"status.phase":             string(p.Status.Phase),
 		"status.podIP":             p.Status.PodIP,
 		"status.nominatedNodeName": p.Status.NominatedNodeName,

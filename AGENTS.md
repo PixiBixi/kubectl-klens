@@ -15,7 +15,7 @@ When working in this repository, read the OpenWiki quickstart first, then follow
 
 ## What this is
 
-`kubectl-klens` is a single-binary kubectl plugin (`kubectl klens`) bundling 36
+`kubectl-klens` is a single-binary kubectl plugin (`kubectl klens`) bundling 37
 read-only cluster-inspection shortcuts. Go 1.27, depends on `client-go` (typed
 and dynamic clients), `promptui` (interactive pickers), and `golang.org/x/term`
 (TTY detection). No cobra - dispatch is a hand-rolled flag-based switch.
