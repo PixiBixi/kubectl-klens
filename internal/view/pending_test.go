@@ -152,3 +152,43 @@ func TestPendingReasonInitFirst(t *testing.T) {
 		t.Fatalf("got (%q, %q), want (ErrImagePull, myreg/migrate:bad)", reason, detail)
 	}
 }
+
+// TestPendingPinnedNode: a DaemonSet pod is pinned to one node by name, so the
+// NodeAffinity clause counts every other node and hides the real blocker.
+func TestPendingPinnedNode(t *testing.T) {
+	ds := &corev1.Pod{
+		Name: "node-exporter-7ltlc", Namespace: "mon",
+		Spec: corev1.PodSpec{Affinity: &corev1.Affinity{NodeAffinity: &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+				MatchFields: []corev1.NodeSelectorRequirement{{Key: "metadata.name", Operator: corev1.NodeSelectorOpIn, Values: []string{"gke-pool-lhfs"}}},
+			}}},
+		}}},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodPending,
+			Conditions: []corev1.PodCondition{{
+				Type: corev1.PodScheduled, Status: corev1.ConditionFalse, Reason: "Unschedulable",
+				Message: "0/39 nodes are available: 1 Insufficient memory, 1 Too many pods, 38 node(s) didn't satisfy plugin(s) [NodeAffinity]. no new claims to deallocate, preemption: 0/39 nodes are available: 1 No preemption victims found for incoming pod, 38 Preemption is not helpful for scheduling.",
+			}},
+		},
+	}
+	bound := &corev1.Pod{
+		Name: "worker", Namespace: "mon",
+		Spec:   corev1.PodSpec{NodeName: "gke-pool-9b2n"},
+		Status: corev1.PodStatus{Phase: corev1.PodPending},
+	}
+	c := fake.NewClientset(ds, bound)
+
+	var buf bytes.Buffer
+	if err := Pending(context.Background(), clients(c), kube.Flags{Namespace: "mon"}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	for _, want := range []string{"gke-pool-lhfs", "Insufficient memory, Too many pods", "gke-pool-9b2n"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "NodeAffinity") {
+		t.Fatalf("pinned pod must not report the affinity clause:\n%s", out)
+	}
+}
