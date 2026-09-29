@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"flag"
 	"slices"
 	"strings"
 	"testing"
@@ -487,6 +488,8 @@ func TestWatchRejections(t *testing.T) {
 		{"interval floor", []string{"pending", "-w", "--interval", "500ms"}, "--interval 500ms is below the 1s minimum"},
 		// A bytes.Buffer is not a TTY, so this also covers the piped case.
 		{"needs a tty", []string{"pending", "--watch"}, "--watch needs a terminal"},
+		// A flag after a positional must still be parsed, not taken for a name.
+		{"flag after a name", []string{"rollouts", "web", "--watch"}, "--watch needs a terminal"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -498,6 +501,32 @@ func TestWatchRejections(t *testing.T) {
 				t.Fatalf("stderr %q, want it to contain %q", errw.String(), tc.want)
 			}
 		})
+	}
+}
+
+func TestParseInterspersed(t *testing.T) {
+	tests := []struct {
+		args     []string
+		wantPos  []string
+		wantSort string
+	}{
+		{[]string{"web", "--sort", "name"}, []string{"web"}, "name"},
+		{[]string{"--sort", "name", "web", "api"}, []string{"web", "api"}, "name"},
+		{[]string{"web", "--sort=name", "api"}, []string{"web", "api"}, "name"},
+		{[]string{"web", "--", "--sort", "name"}, []string{"web", "--sort", "name"}, ""},
+		{nil, nil, ""},
+	}
+	for _, tc := range tests {
+		fs := flag.NewFlagSet("t", flag.ContinueOnError)
+		var sort string
+		fs.StringVar(&sort, "sort", "", "")
+		pos, err := parseInterspersed(fs, tc.args)
+		if err != nil {
+			t.Fatalf("%q: %v", tc.args, err)
+		}
+		if !slices.Equal(pos, tc.wantPos) || sort != tc.wantSort {
+			t.Errorf("%q: pos %q sort %q, want %q %q", tc.args, pos, sort, tc.wantPos, tc.wantSort)
+		}
 	}
 }
 

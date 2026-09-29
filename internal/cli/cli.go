@@ -214,7 +214,8 @@ func (a App) Run(args []string) int {
 			cf.register(fs, &f, cmd)
 		}
 	}
-	if err := fs.Parse(args[1:]); err != nil {
+	pos, err := parseInterspersed(fs, args[1:])
+	if err != nil {
 		return 1
 	}
 	if f.Sort != "" && !slices.Contains(cmd.SortColumns, f.Sort) {
@@ -262,10 +263,10 @@ func (a App) Run(args []string) int {
 		paint := kube.NewPainter(f)
 		header := func() string { return paint.Muted(watchHeader(f.Interval, args, time.Now())) }
 		err = watch(ctx, a.Out, f.Interval, header, func(w io.Writer) error {
-			return cmd.Run(ctx, client, f, fs.Args(), w)
+			return cmd.Run(ctx, client, f, pos, w)
 		})
 	} else {
-		err = cmd.Run(ctx, client, f, fs.Args(), a.Out)
+		err = cmd.Run(ctx, client, f, pos, a.Out)
 	}
 	var timeout interface{ Timeout() bool }
 	switch {
@@ -332,4 +333,26 @@ Usage:
 	fmt.Fprintln(tw, "\nOther:")
 	fmt.Fprintf(tw, "  %s\t%s\n", "completion install", "install the shell-completion shim on your PATH")
 	tw.Flush()
+}
+
+// parseInterspersed parses flags wherever they sit among the positional args,
+// kubectl-style: the flag package alone stops at the first positional, so in
+// "rollouts web --watch" the --watch was silently taken for a name. A "--"
+// still ends flag parsing.
+func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
+	var pos []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return nil, err
+		}
+		rest := fs.Args()
+		if len(rest) == 0 {
+			return pos, nil
+		}
+		if consumed := len(args) - len(rest); consumed > 0 && args[consumed-1] == "--" {
+			return append(pos, rest...), nil
+		}
+		pos = append(pos, rest[0])
+		args = rest[1:]
+	}
 }
