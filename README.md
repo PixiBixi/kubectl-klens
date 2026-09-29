@@ -197,7 +197,7 @@ app-a-training-prod   app-a-training   1         Burstable   4        none     1
 | Command | Shows |
 | --- | --- |
 | `pdb` † | PodDisruptionBudgets + drain-safety verdict |
-| `pending` † | Pending pods + synthesized blocking reason |
+| `pending` † | Pending pods + target node + synthesized blocking reason |
 | `hpa` † | HorizontalPodAutoscalers + current/target metrics + autoscaling verdict |
 | `spread` † | replica placement across nodes/zones + SPOF verdict |
 | `probes` † | readiness/liveness/startup probes + verdict |

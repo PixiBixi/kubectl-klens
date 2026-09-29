@@ -37,23 +37,27 @@ func Pending(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 	// creation timestamp, so carrying the whole 1.2 kB object by value copied it
 	// twice over (once out of the range, once into the slice).
 	type entry struct {
-		pod            *corev1.Pod
-		reason, detail string
+		pod                  *corev1.Pod
+		node, reason, detail string
 	}
 	list := make([]entry, 0, len(pods))
 	for i := range pods {
 		p := &pods[i]
+		node := p.Spec.NodeName
+		if node == "" {
+			node = pinnedNode(p)
+		}
 		reason, detail := pendingReason(p)
-		list = append(list, entry{p, reason, detail})
+		list = append(list, entry{p, node, reason, detail})
 	}
 	slices.SortStableFunc(list, func(a, b entry) int {
 		return a.pod.CreationTimestamp.Compare(b.pod.CreationTimestamp.Time)
 	})
 
-	t := kube.NewTable(out, paint, "NS", "POD", "AGE", "REASON", "DETAIL")
+	t := kube.NewTable(out, paint, "NS", "POD", "AGE", "NODE", "REASON", "DETAIL")
 	for i := range list {
 		e := &list[i]
-		t.Row(e.pod.Namespace, e.pod.Name, age(e.pod.CreationTimestamp), paint.Status(e.reason), orMutedDash(paint, e.detail))
+		t.Row(e.pod.Namespace, e.pod.Name, age(e.pod.CreationTimestamp), orMutedDash(paint, e.node), paint.Status(e.reason), orMutedDash(paint, e.detail))
 	}
 	t.FilterBy(f.NameColumns, f.Names)
 	t.SortBy(f.Sort)
@@ -69,6 +73,11 @@ func pendingReason(p *corev1.Pod) (reason, detail string) {
 			r := cond.Reason
 			if r == "" {
 				r = "Unschedulable"
+			}
+			if pinnedNode(p) != "" {
+				if cause := pinnedCause(cond.Message); cause != "" {
+					return r, cause
+				}
 			}
 			return r, schedulerCause(cond.Message)
 		}
@@ -128,6 +137,49 @@ func schedulerCause(msg string) string {
 		return fmt.Sprintf("%s (%d nodes)", bestPhrase, bestCount)
 	}
 	return bestPhrase
+}
+
+// pinnedNode returns the node a pod's required node affinity pins it to by
+// name (how the DaemonSet controller targets each pod), or "" when unpinned.
+func pinnedNode(p *corev1.Pod) string {
+	a := p.Spec.Affinity
+	if a == nil || a.NodeAffinity == nil || a.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
+		return ""
+	}
+	terms := a.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
+	if len(terms) != 1 {
+		return ""
+	}
+	for _, r := range terms[0].MatchFields {
+		if r.Key == "metadata.name" && r.Operator == corev1.NodeSelectorOpIn && len(r.Values) == 1 {
+			return r.Values[0]
+		}
+	}
+	return ""
+}
+
+// pinnedCause lists what blocks a pinned pod on its one node. Every other node
+// fails node affinity by construction, so that clause is noise and dropped;
+// the rest all describe the target node. Returns "" when nothing is left.
+func pinnedCause(msg string) string {
+	_, after, ok := strings.Cut(msg, "available: ")
+	if !ok {
+		return ""
+	}
+	tail, _, _ := strings.Cut(after, ". ")
+	tail = strings.TrimRight(tail, ".")
+
+	var causes []string
+	for clause := range strings.SplitSeq(tail, ", ") {
+		_, phrase := splitLeadingCount(strings.TrimSpace(clause))
+		phrase, _, _ = strings.Cut(phrase, " {")
+		phrase = strings.TrimSpace(phrase)
+		if phrase == "" || strings.Contains(phrase, "NodeAffinity") || strings.Contains(phrase, "node affinity") {
+			continue
+		}
+		causes = append(causes, phrase)
+	}
+	return strings.Join(causes, ", ")
 }
 
 // splitLeadingCount splits a leading integer off "3 Insufficient cpu" → (3,

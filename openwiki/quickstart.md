@@ -158,7 +158,7 @@ the `KIND` and `FLAGS` values.
 **Verdict commands** (compute a health classification, default-sorted worst-last)
 
 - `pdb` - PodDisruptionBudget drain-safety verdict
-- `pending` - Pending pods with a synthesized blocking reason
+- `pending` - Pending pods with their target node (bound, or pinned by a DaemonSet) and a synthesized blocking reason
 - `hpa` - HorizontalPodAutoscaler current/target metrics + autoscaling verdict.
   `TARGETS` mirrors `kubectl get hpa` (`cpu: 67%/70%`, one cell per metric
   source, utilization as a percentage and value targets as quantities) so the
