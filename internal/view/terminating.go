@@ -115,6 +115,7 @@ func Terminating(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 		r := &rows[i]
 		t.Row(r.kind, r.ns, r.name, r.stuck, r.blocker, r.finalizers, sevPaint(paint, r.sev)(r.verdict))
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	return flushVerdicts(t, f.Sort, "STUCK", "DELETING", "GRACE")
 }
 

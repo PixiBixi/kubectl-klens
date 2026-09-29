@@ -31,7 +31,7 @@ func Autoscaler(ctx context.Context, c kube.Clients, f kube.Flags, args []string
 	if !ok {
 		return errors.New("configmap cluster-autoscaler-status has no \"status\" field")
 	}
-	return renderAutoscalerStatus(status, f.Sort, kube.NewPainter(f), out)
+	return renderAutoscalerStatus(status, f, out)
 }
 
 type caClusterWide struct {
@@ -45,7 +45,8 @@ type caGroup struct {
 // renderAutoscalerStatus parses the status into a normalized model and writes a
 // summary line and nodegroup table, or echoes the input verbatim when neither
 // the YAML nor the legacy text format is recognized.
-func renderAutoscalerStatus(status, sortCol string, paint kube.Painter, out io.Writer) error {
+func renderAutoscalerStatus(status string, f kube.Flags, out io.Writer) error {
+	paint := kube.NewPainter(f)
 	cw, groups, ok := parseAutoscalerStatus(status)
 	if !ok {
 		fmt.Fprintln(out, status)
@@ -70,7 +71,8 @@ func renderAutoscalerStatus(status, sortCol string, paint kube.Painter, out io.W
 		t.Row(g.name, health(paint, dash(g.health)), dash(g.ready), dash(g.target), dash(g.min), dash(g.max),
 			scaleState(paint, dash(g.scaleUp)), scaleState(paint, dash(g.scaleDown)), paint.Muted(dash(g.lastChange)))
 	}
-	t.SortBy(sortCol)
+	t.FilterBy(f.NameColumns, f.Names)
+	t.SortBy(f.Sort)
 	return t.Flush()
 }
 

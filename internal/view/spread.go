@@ -92,6 +92,7 @@ func Spread(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	return flushVerdicts(t, f.Sort, "SPOF-NODE", "SPOF-ZONE", "MULTI-NODE", "SINGLE", "SPREAD")
 }
 

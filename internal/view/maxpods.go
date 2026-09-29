@@ -48,6 +48,7 @@ func MaxPods(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 		}
 		t.Row(n.Name, maxCell, strconv.Itoa(u), freeCell)
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	t.SortBy(f.Sort)
 	return t.Flush()
 }

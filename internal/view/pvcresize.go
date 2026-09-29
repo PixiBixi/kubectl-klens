@@ -100,6 +100,7 @@ func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	return flushVerdicts(t, f.Sort,
 		"SC-NO-EXPAND", "INFEASIBLE", "FAILED", "SHRINK", "FS-PENDING", "RESIZING", "PENDING",
 	)

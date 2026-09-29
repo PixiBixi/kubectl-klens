@@ -10,6 +10,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -220,6 +221,105 @@ func TestSortColumnsMatchHeaders(t *testing.T) {
 	}
 }
 
+// TestNameColumnsMatchHeaders guards the positional name filter: a declared
+// column absent from the header would make the filter a silent no-op. Every
+// mode has to carry at least one of them, and each one some mode.
+func TestNameColumnsMatchHeaders(t *testing.T) {
+	for _, c := range commands {
+		if len(c.NameColumns) == 0 || c.Name == "autoscaler" {
+			continue // autoscaler: see TestAutoscalerSortColumnsMatchHeaders
+		}
+		if c.OwnArgs {
+			t.Errorf("%s: sets both NameColumns and OwnArgs", c.Name)
+		}
+		seen := map[string]bool{}
+		for _, byOwner := range []bool{false, true} {
+			if byOwner && !c.ByOwner {
+				continue
+			}
+			var buf bytes.Buffer
+			if err := c.Run(context.Background(), kube.Clients{Interface: fake.NewClientset()}, kube.Flags{ByOwner: byOwner}, nil, &buf); err != nil {
+				t.Fatalf("%s: run failed: %v", c.Name, err)
+			}
+			header, _, _ := strings.Cut(buf.String(), "\n")
+			got := map[string]bool{}
+			for h := range strings.FieldsSeq(strings.ToLower(header)) {
+				got[h], seen[h] = true, true
+			}
+			if !slices.ContainsFunc(c.NameColumns, func(col string) bool { return got[col] }) {
+				t.Errorf("%s (by-owner=%v): none of %q is a header (%q)", c.Name, byOwner, c.NameColumns, header)
+			}
+		}
+		for _, col := range c.NameColumns {
+			if !seen[col] {
+				t.Errorf("%s: name column %q is not a header in any mode", c.Name, col)
+			}
+		}
+	}
+}
+
+func TestNameFilter(t *testing.T) {
+	pdb := func(name string) runtime.Object {
+		return &policyv1.PodDisruptionBudget{Name: name, Namespace: "current-ns"}
+	}
+	tests := []struct {
+		name    string
+		args    []string
+		want    []string
+		notWant []string
+	}{
+		{"exact", []string{"pdb", "kafka"}, []string{"kafka "}, []string{"kafka-exporter", "api"}},
+		{"glob", []string{"pdb", "kafka*"}, []string{"kafka ", "kafka-exporter"}, []string{"api"}},
+		{"flag after the name", []string{"pdb", "api", "--sort", "name"}, []string{"api"}, []string{"kafka"}},
+		{"no name lists all", []string{"pdb"}, []string{"kafka ", "kafka-exporter", "api"}, nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errw bytes.Buffer
+			app := testApp(&out, &errw)
+			app.NewClient = func(kube.Flags) (kube.Clients, error) {
+				objs := append(namespaceObjs("current-ns"), pdb("kafka"), pdb("kafka-exporter"), pdb("api"))
+				return kube.Clients{Interface: fake.NewClientset(objs...)}, nil
+			}
+			if code := app.Run(tc.args); code != 0 {
+				t.Fatalf("exit %d: %s", code, errw.String())
+			}
+			for _, w := range tc.want {
+				if !strings.Contains(out.String(), w) {
+					t.Errorf("missing %q:\n%s", w, out.String())
+				}
+			}
+			for _, w := range tc.notWant {
+				if strings.Contains(out.String(), w) {
+					t.Errorf("unexpected %q:\n%s", w, out.String())
+				}
+			}
+		})
+	}
+}
+
+func TestNameRejections(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"command without a name column", []string{"netpol", "web"}, `netpol does not take a name (got "web")`},
+		{"malformed glob", []string{"pdb", "kafka["}, `invalid name pattern "kafka["`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errw bytes.Buffer
+			if code := testApp(&out, &errw).Run(tc.args); code != 1 {
+				t.Fatalf("want exit 1, got %d (stderr %q)", code, errw.String())
+			}
+			if !strings.Contains(errw.String(), tc.want) {
+				t.Fatalf("stderr %q, want it to contain %q", errw.String(), tc.want)
+			}
+		})
+	}
+}
+
 // assertSortColumnsInHeader checks every declared sort column appears as a
 // whitespace-separated token in the (case-insensitive) header line.
 func assertSortColumnsInHeader(t *testing.T, name string, cols []string, header string) {
@@ -274,6 +374,7 @@ nodeGroups:
 		t.Fatalf("no nodegroup table header in output:\n%s", buf.String())
 	}
 	assertSortColumnsInHeader(t, "autoscaler", cmd.SortColumns, header)
+	assertSortColumnsInHeader(t, "autoscaler names", cmd.NameColumns, header)
 }
 
 func TestRunRejectsInvalidSort(t *testing.T) {

@@ -36,6 +36,8 @@ type Flags struct {
 	Watch          bool          // re-run the command until interrupted
 	Interval       time.Duration // --watch poll period
 	ByOwner        bool          // collapse per-pod rows onto their owning workload
+	Names          []string      // positional names or globs narrowing the rows
+	NameColumns    []string      // columns Names are matched against; see Table.FilterBy
 }
 
 // Scope returns the resolved set of namespaces to list in. Default (no -n, no

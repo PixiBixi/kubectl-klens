@@ -3,6 +3,7 @@ package kube
 import (
 	"cmp"
 	"io"
+	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,6 +19,8 @@ type Table struct {
 	rows      [][]string
 	sortCol   string
 	sortRanks map[string]func(string) int
+	filterCol []string
+	names     []string
 	arena     []string
 }
 
@@ -52,6 +55,13 @@ func (t *Table) SortBy(column string) {
 	t.sortCol = column
 }
 
+// FilterBy keeps only the rows where one of the named columns (matched like
+// SortBy) equals one of names, each a name or a path.Match glob. Applied at
+// Flush; no names, or no such column, keeps every row.
+func (t *Table) FilterBy(columns, names []string) {
+	t.filterCol, t.names = columns, names
+}
+
 // SortRank registers a custom sort key for a column, overriding the default
 // text/numeric ordering when the table is sorted by it. Rows are ordered by the
 // returned key ascending. Used for severity columns (e.g. a VERDICT column)
@@ -69,6 +79,7 @@ const tableGap = 2
 // padded to their widest visible cell plus a fixed gap; the last column is not
 // padded (no trailing whitespace).
 func (t *Table) Flush() error {
+	t.filterRows()
 	if idx := t.columnIndex(t.sortCol); idx >= 0 {
 		t.sortRows(idx)
 	}
@@ -92,6 +103,42 @@ func (t *Table) Flush() error {
 	}
 	_, err := io.WriteString(t.out, b.String())
 	return err
+}
+
+// filterRows drops the rows FilterBy excludes, in place.
+func (t *Table) filterRows() {
+	if len(t.names) == 0 {
+		return
+	}
+	var idx []int
+	for _, c := range t.filterCol {
+		if i := t.columnIndex(c); i >= 0 {
+			idx = append(idx, i)
+		}
+	}
+	if len(idx) == 0 {
+		return
+	}
+	t.rows = slices.DeleteFunc(t.rows, func(r []string) bool {
+		for _, i := range idx {
+			if MatchesAny(t.names, stripANSI(cell(r, i))) {
+				return false
+			}
+		}
+		return true
+	})
+}
+
+// MatchesAny reports whether s equals one of patterns, each a name or a
+// path.Match glob. A malformed pattern matches nothing: the dispatcher
+// rejects those before a command runs.
+func MatchesAny(patterns []string, s string) bool {
+	for _, p := range patterns {
+		if ok, _ := path.Match(p, s); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // maxPadding bounds the whitespace one line can need: a cell contributes at most

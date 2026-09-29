@@ -103,6 +103,7 @@ func Ingress(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 		r := &rows[i]
 		t.Row(r.ns, r.name, r.class, r.host, r.path, r.backend, r.tls, sevPaint(paint, r.sev)(r.verdict))
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	return flushVerdicts(t, f.Sort, "NO-SERVICE", "NO-PORT", "NO-SECRET", "NO-TLS", "RESOURCE", "OK")
 }
 

@@ -47,6 +47,7 @@ func renderNodes(out io.Writer, f kube.Flags, nodes []corev1.Node, headers []str
 	for i := range nodes {
 		t.Row(row(paint, &nodes[i])...)
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	t.SortBy(f.Sort)
 	return t.Flush()
 }

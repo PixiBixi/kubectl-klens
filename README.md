@@ -51,6 +51,7 @@ Why each verdict says what it says is documented in
 [Security flags](#security-flags) -
 [Certificate expiry](#certificate-expiry) -
 [Sorting](#sorting) -
+[Name filter](#name-filter) -
 [Watch](#watch) -
 [Color](#color) -
 [Shell completion](#shell-completion) -
@@ -342,6 +343,36 @@ Defaults that differ: `image-count` and `restarts` sort count-descending,
 `spread`, `probes`, `qos`, `svc-backends`, `rollouts`, `ingress`, `terminating`,
 `pvc-unused`, `pvc-resize`, `pv-orphan`) by `VERDICT` severity least-risky
 first, so the riskiest rows land nearest the prompt.
+
+## Name filter
+
+Positional args narrow a table to the named rows: a name or a glob, several
+allowed. Flags can go before or after them.
+
+```bash
+kubectl klens pdb delivery-prod-kafka
+kubectl klens rollouts 'prometheus-*' --watch
+kubectl klens reqlim 'api-*' --by-owner
+```
+
+| Command | Matched column |
+| --- | --- |
+| `nodes`, `taints`, `capacity`, `zones`, `node-conditions`, `pdb`, `hpa`, `rollouts`, `terminating`, `unused-config` | `NAME` |
+| `pods-per-node`, `max-pods` | `NODE` |
+| `reqlim`, `no-limits`, `no-requests`, `qos`, `probes` | `POD`, or `WORKLOAD` with `--by-owner` |
+| `images` | `PODNAME`, or `WORKLOAD` with `--by-owner` |
+| `restarts`, `pending`, `default-sa`, `privileged` | `POD` |
+| `pvc` | `PVC` or `POD` |
+| `pvc-unused`, `pvc-resize` | `PVC` |
+| `pv-orphan` | `PV` |
+| `svc-fqdn`, `svc-backends` | `SERVICE` |
+| `ingress` | `INGRESS` |
+| `spread` | `WORKLOAD` |
+| `image-count` | `IMAGE` |
+| `autoscaler` | `NODEGROUP` |
+
+`on-node`, `node-ips`, `certs` and `secret` keep their own argument (see
+above); `netpol` takes none and rejects one.
 
 ## Watch
 

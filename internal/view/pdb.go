@@ -51,6 +51,7 @@ func Pdb(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	return flushVerdicts(t, f.Sort, "NO-GUARD", "PERMABLOCK", "BLOCKED", "AT-FLOOR", "ORPHAN", "OK")
 }
 

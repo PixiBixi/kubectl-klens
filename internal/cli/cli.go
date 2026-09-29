@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path"
 	"slices"
 	"strings"
 	"syscall"
@@ -53,48 +54,56 @@ type Command struct {
 	// identical across replicas; a view of runtime state (restarts, pending)
 	// would hide the one pod that differs.
 	ByOwner bool
+	// NameColumns opts the command into positional name filtering: each arg is
+	// a name or glob, and a row stays when one of these columns (lowercased
+	// headers) matches one. Guarded by TestNameColumnsMatchHeaders.
+	NameColumns []string
+	// OwnArgs marks a command that interprets its positional args itself (a
+	// node, a secret). A command with neither this nor NameColumns rejects args
+	// instead of silently ignoring them.
+	OwnArgs bool
 }
 
 // commands is the registry of every subcommand. Built once at init; callers
 // only range over it, so sharing the slice is safe.
 var commands = []Command{
-	{Name: "nodes", Summary: "List nodes with their pool, instance-type, compute class and spot/on-demand provisioning", Run: view.Nodes, SortColumns: []string{"name", "status", "nodepool", "instance-type", "class", "provisioning"}, IgnoresNamespace: true},
-	{Name: "taints", Summary: "List taints of all nodes", Run: view.Taints, SortColumns: []string{"name", "taints"}, IgnoresNamespace: true},
-	{Name: "capacity", Summary: "Show CPU/memory capacity and allocatable per node", Run: view.Capacity, SortColumns: []string{"name", "cpu_cap", "cpu_alloc", "mem_cap", "mem_alloc"}, IgnoresNamespace: true},
-	{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones, SortColumns: []string{"name", "region", "zone"}, IgnoresNamespace: true},
-	{Name: "node-ips", Summary: "Show internal and external IP per node; a node name narrows it to that node", Run: view.NodeIPs, SortColumns: []string{"name", "class", "internal-ip", "external-ip"}, IgnoresNamespace: true},
-	{Name: "pods-per-node", Summary: "Count pods per node", Run: view.PodsPerNode, SortColumns: []string{"node", "pods"}},
-	{Name: "max-pods", Summary: "Show pod ceiling (allocatable), current count, and free slots per node", Run: view.MaxPods, SortColumns: []string{"node", "maxpods", "used", "free"}, Watch: true, IgnoresNamespace: true},
-	{Name: "node-conditions", Summary: "Show node readiness and memory/disk/pid pressure", Run: view.NodeConditions, SortColumns: []string{"name", "status", "memory", "disk", "pid"}, Watch: true, IgnoresNamespace: true},
-	{Name: "reqlim", Summary: "Show requests/limits per container in the current namespace (-A for all; -A excludes kube-system)", Run: view.Reqlim, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "workload", "container", "kind", "req_cpu", "lim_cpu", "req_mem", "lim_mem"}, ByOwner: true},
-	{Name: "no-limits", Summary: "List containers missing CPU/memory limits in the current namespace (-A for all; -A excludes kube-system)", Run: view.NoLimits, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "workload", "container", "kind", "missing"}, ByOwner: true},
-	{Name: "no-requests", Summary: "List containers missing CPU/memory requests in the current namespace (-A for all; -A excludes kube-system)", Run: view.NoRequests, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "workload", "container", "kind", "missing"}, ByOwner: true},
-	{Name: "images", Summary: "List images per container per pod in the current namespace (-A for all)", Run: view.Images, CurrentNSDefault: true, SortColumns: []string{"podname", "workload", "container", "kind", "pull", "image", "tag"}, ByOwner: true},
-	{Name: "image-count", Summary: "Count image occurrences split by registry/image/tag across the cluster", Run: view.ImageCount, SortColumns: []string{"count", "registry", "image", "tag"}},
-	{Name: "on-node", Summary: "List pods scheduled on a given node", Run: view.OnNode, SortColumns: []string{"ns", "pod", "status", "node"}},
-	{Name: "restarts", Summary: "List containers that have restarted, with the crash reason, in the current namespace (-A for all)", Run: view.Restarts, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "restarts", "state", "exit", "last"}, Watch: true},
-	{Name: "pvc", Summary: "List PVCs bound to a pod and node, with their storage class and size, in the current namespace (-A for all)", Run: view.Pvc, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "node", "pvc", "class", "capacity"}},
-	{Name: "pvc-unused", Summary: "List PVCs no pod mounts, with the reason they are still around, in the current namespace (-A for all)", Run: view.PvcUnused, CurrentNSDefault: true, SortColumns: []string{"ns", "pvc", "status", "capacity", "class", "volume", "verdict"}},
-	{Name: "pvc-resize", Summary: "List PVCs whose provisioned size does not match the request, with why the resize is stuck, in the current namespace (-A for all)", Run: view.PvcResize, CurrentNSDefault: true, SortColumns: []string{"ns", "pvc", "capacity", "requested", "class", "pod", "verdict"}, Watch: true},
-	{Name: "pv-orphan", Summary: "List PersistentVolumes no claim depends on any more, with the disk left behind, cluster-wide", Run: view.PvOrphan, IgnoresNamespace: true, SortColumns: []string{"pv", "status", "reclaim", "capacity", "claim", "disk", "age", "verdict"}},
-	{Name: "default-sa", Summary: "List pods still using the default service account", Run: view.DefaultSA, SortColumns: []string{"ns", "pod"}},
-	{Name: "privileged", Summary: "List containers with privileged/host security flags in the current namespace (-A for all)", Run: view.Privileged, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "flags"}},
-	{Name: "svc-fqdn", Summary: "Show in-cluster FQDN of services in the current namespace (-A for all)", Run: view.SvcFQDN, CurrentNSDefault: true, SortColumns: []string{"ns", "service", "fqdn"}},
-	{Name: "svc-backends", Summary: "List services with the pods actually behind them and a wiring verdict in the current namespace (-A for all)", Run: view.SvcBackends, CurrentNSDefault: true, SortColumns: []string{"ns", "service", "type", "selector", "ready", "notready", "verdict"}, Watch: true},
-	{Name: "ingress", Summary: "Flatten ingress rules with backend and TLS checks in the current namespace (-A for all)", Run: view.Ingress, CurrentNSDefault: true, SortColumns: []string{"ns", "ingress", "class", "host", "path", "backend", "tls", "verdict"}},
-	{Name: "pdb", Summary: "List PodDisruptionBudgets with a drain-safety verdict in the current namespace (-A for all)", Run: view.Pdb, CurrentNSDefault: true, SortColumns: []string{"ns", "name", "policy", "expected", "desired", "healthy", "allowed", "verdict"}},
+	{Name: "nodes", Summary: "List nodes with their pool, instance-type, compute class and spot/on-demand provisioning", Run: view.Nodes, SortColumns: []string{"name", "status", "nodepool", "instance-type", "class", "provisioning"}, IgnoresNamespace: true, NameColumns: []string{"name"}},
+	{Name: "taints", Summary: "List taints of all nodes", Run: view.Taints, SortColumns: []string{"name", "taints"}, IgnoresNamespace: true, NameColumns: []string{"name"}},
+	{Name: "capacity", Summary: "Show CPU/memory capacity and allocatable per node", Run: view.Capacity, SortColumns: []string{"name", "cpu_cap", "cpu_alloc", "mem_cap", "mem_alloc"}, IgnoresNamespace: true, NameColumns: []string{"name"}},
+	{Name: "zones", Summary: "Show region and zone per node", Run: view.Zones, SortColumns: []string{"name", "region", "zone"}, IgnoresNamespace: true, NameColumns: []string{"name"}},
+	{Name: "node-ips", Summary: "Show internal and external IP per node; a node name narrows it to that node", Run: view.NodeIPs, SortColumns: []string{"name", "class", "internal-ip", "external-ip"}, IgnoresNamespace: true, OwnArgs: true},
+	{Name: "pods-per-node", Summary: "Count pods per node", Run: view.PodsPerNode, SortColumns: []string{"node", "pods"}, NameColumns: []string{"node"}},
+	{Name: "max-pods", Summary: "Show pod ceiling (allocatable), current count, and free slots per node", Run: view.MaxPods, SortColumns: []string{"node", "maxpods", "used", "free"}, Watch: true, IgnoresNamespace: true, NameColumns: []string{"node"}},
+	{Name: "node-conditions", Summary: "Show node readiness and memory/disk/pid pressure", Run: view.NodeConditions, SortColumns: []string{"name", "status", "memory", "disk", "pid"}, Watch: true, IgnoresNamespace: true, NameColumns: []string{"name"}},
+	{Name: "reqlim", Summary: "Show requests/limits per container in the current namespace (-A for all; -A excludes kube-system)", Run: view.Reqlim, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "workload", "container", "kind", "req_cpu", "lim_cpu", "req_mem", "lim_mem"}, ByOwner: true, NameColumns: []string{"pod", "workload"}},
+	{Name: "no-limits", Summary: "List containers missing CPU/memory limits in the current namespace (-A for all; -A excludes kube-system)", Run: view.NoLimits, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "workload", "container", "kind", "missing"}, ByOwner: true, NameColumns: []string{"pod", "workload"}},
+	{Name: "no-requests", Summary: "List containers missing CPU/memory requests in the current namespace (-A for all; -A excludes kube-system)", Run: view.NoRequests, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "workload", "container", "kind", "missing"}, ByOwner: true, NameColumns: []string{"pod", "workload"}},
+	{Name: "images", Summary: "List images per container per pod in the current namespace (-A for all)", Run: view.Images, CurrentNSDefault: true, SortColumns: []string{"podname", "workload", "container", "kind", "pull", "image", "tag"}, ByOwner: true, NameColumns: []string{"podname", "workload"}},
+	{Name: "image-count", Summary: "Count image occurrences split by registry/image/tag across the cluster", Run: view.ImageCount, SortColumns: []string{"count", "registry", "image", "tag"}, NameColumns: []string{"image"}},
+	{Name: "on-node", Summary: "List pods scheduled on a given node", Run: view.OnNode, SortColumns: []string{"ns", "pod", "status", "node"}, OwnArgs: true},
+	{Name: "restarts", Summary: "List containers that have restarted, with the crash reason, in the current namespace (-A for all)", Run: view.Restarts, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "restarts", "state", "exit", "last"}, Watch: true, NameColumns: []string{"pod"}},
+	{Name: "pvc", Summary: "List PVCs bound to a pod and node, with their storage class and size, in the current namespace (-A for all)", Run: view.Pvc, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "node", "pvc", "class", "capacity"}, NameColumns: []string{"pvc", "pod"}},
+	{Name: "pvc-unused", Summary: "List PVCs no pod mounts, with the reason they are still around, in the current namespace (-A for all)", Run: view.PvcUnused, CurrentNSDefault: true, SortColumns: []string{"ns", "pvc", "status", "capacity", "class", "volume", "verdict"}, NameColumns: []string{"pvc"}},
+	{Name: "pvc-resize", Summary: "List PVCs whose provisioned size does not match the request, with why the resize is stuck, in the current namespace (-A for all)", Run: view.PvcResize, CurrentNSDefault: true, SortColumns: []string{"ns", "pvc", "capacity", "requested", "class", "pod", "verdict"}, Watch: true, NameColumns: []string{"pvc"}},
+	{Name: "pv-orphan", Summary: "List PersistentVolumes no claim depends on any more, with the disk left behind, cluster-wide", Run: view.PvOrphan, IgnoresNamespace: true, SortColumns: []string{"pv", "status", "reclaim", "capacity", "claim", "disk", "age", "verdict"}, NameColumns: []string{"pv"}},
+	{Name: "default-sa", Summary: "List pods still using the default service account", Run: view.DefaultSA, SortColumns: []string{"ns", "pod"}, NameColumns: []string{"pod"}},
+	{Name: "privileged", Summary: "List containers with privileged/host security flags in the current namespace (-A for all)", Run: view.Privileged, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "container", "kind", "flags"}, NameColumns: []string{"pod"}},
+	{Name: "svc-fqdn", Summary: "Show in-cluster FQDN of services in the current namespace (-A for all)", Run: view.SvcFQDN, CurrentNSDefault: true, SortColumns: []string{"ns", "service", "fqdn"}, NameColumns: []string{"service"}},
+	{Name: "svc-backends", Summary: "List services with the pods actually behind them and a wiring verdict in the current namespace (-A for all)", Run: view.SvcBackends, CurrentNSDefault: true, SortColumns: []string{"ns", "service", "type", "selector", "ready", "notready", "verdict"}, Watch: true, NameColumns: []string{"service"}},
+	{Name: "ingress", Summary: "Flatten ingress rules with backend and TLS checks in the current namespace (-A for all)", Run: view.Ingress, CurrentNSDefault: true, SortColumns: []string{"ns", "ingress", "class", "host", "path", "backend", "tls", "verdict"}, NameColumns: []string{"ingress"}},
+	{Name: "pdb", Summary: "List PodDisruptionBudgets with a drain-safety verdict in the current namespace (-A for all)", Run: view.Pdb, CurrentNSDefault: true, SortColumns: []string{"ns", "name", "policy", "expected", "desired", "healthy", "allowed", "verdict"}, NameColumns: []string{"name"}},
 	{Name: "netpol", Summary: "Show NetworkPolicy coverage per namespace, or per pod with -n, with an ingress/egress verdict (cluster-wide)", Run: view.Netpol, SortColumns: []string{"ns", "policies", "pods", "ingress", "egress"}},
-	{Name: "pending", Summary: "List Pending pods with the synthesized blocking reason in the current namespace (-A for all)", Run: view.Pending, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "reason"}, Watch: true},
-	{Name: "hpa", Summary: "List HorizontalPodAutoscalers with an autoscaling verdict in the current namespace (-A for all)", Run: view.Hpa, CurrentNSDefault: true, SortColumns: []string{"ns", "name", "ref", "targets", "min", "max", "current", "desired", "verdict"}},
-	{Name: "spread", Summary: "Show replica placement across nodes/zones with a single-point-of-failure verdict in the current namespace (-A for all)", Run: view.Spread, CurrentNSDefault: true, SortColumns: []string{"ns", "workload", "replicas", "nodes", "zones", "verdict"}},
-	{Name: "qos", Summary: "Show each pod's QoS class and effective requests/limits with an eviction-risk verdict in the current namespace (-A for all; -A excludes kube-system)", Run: view.Qos, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "workload", "qos", "req_cpu", "lim_cpu", "req_mem", "lim_mem", "verdict"}, ByOwner: true},
-	{Name: "rollouts", Summary: "List workloads that are not finished rolling out, incl. Argo Rollouts, in the current namespace (-A for all)", Run: view.Rollouts, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "desired", "ready", "updated", "available", "state", "verdict"}, Watch: true},
-	{Name: "probes", Summary: "List containers' readiness/liveness/startup probes with a reliability verdict in the current namespace (-A for all; -A excludes kube-system)", Run: view.Probes, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "workload", "container", "readiness", "liveness", "startup", "verdict"}, ByOwner: true},
-	{Name: "terminating", Summary: "List pods and namespaces stuck being deleted, with the blocker (cluster-wide)", Run: view.Terminating, SortColumns: []string{"kind", "ns", "name", "stuck-for", "blocker", "finalizers", "verdict"}, Watch: true},
-	{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler, SortColumns: []string{"nodegroup", "health", "ready", "target", "min", "max", "scaleup", "scaledown", "last-change"}, Watch: true, IgnoresNamespace: true},
-	{Name: "unused-config", Summary: "List ConfigMaps and Secrets nothing references in the current namespace (-A for all; -A excludes kube-system)", Run: view.UnusedConfig, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "type", "owner"}},
-	{Name: "certs", Summary: "List TLS secrets with their certificate expiry and a renewal verdict in the current namespace (-A for all); a secret name prints all its names", Run: view.Certs, CurrentNSDefault: true, SortColumns: []string{"ns", "secret", "names", "issuer", "not_after", "in", "verdict"}},
-	{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true},
+	{Name: "pending", Summary: "List Pending pods with the synthesized blocking reason in the current namespace (-A for all)", Run: view.Pending, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "reason"}, Watch: true, NameColumns: []string{"pod"}},
+	{Name: "hpa", Summary: "List HorizontalPodAutoscalers with an autoscaling verdict in the current namespace (-A for all)", Run: view.Hpa, CurrentNSDefault: true, SortColumns: []string{"ns", "name", "ref", "targets", "min", "max", "current", "desired", "verdict"}, NameColumns: []string{"name"}},
+	{Name: "spread", Summary: "Show replica placement across nodes/zones with a single-point-of-failure verdict in the current namespace (-A for all)", Run: view.Spread, CurrentNSDefault: true, SortColumns: []string{"ns", "workload", "replicas", "nodes", "zones", "verdict"}, NameColumns: []string{"workload"}},
+	{Name: "qos", Summary: "Show each pod's QoS class and effective requests/limits with an eviction-risk verdict in the current namespace (-A for all; -A excludes kube-system)", Run: view.Qos, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "workload", "qos", "req_cpu", "lim_cpu", "req_mem", "lim_mem", "verdict"}, ByOwner: true, NameColumns: []string{"pod", "workload"}},
+	{Name: "rollouts", Summary: "List workloads that are not finished rolling out, incl. Argo Rollouts, in the current namespace (-A for all)", Run: view.Rollouts, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "desired", "ready", "updated", "available", "state", "verdict"}, Watch: true, NameColumns: []string{"name"}},
+	{Name: "probes", Summary: "List containers' readiness/liveness/startup probes with a reliability verdict in the current namespace (-A for all; -A excludes kube-system)", Run: view.Probes, CurrentNSDefault: true, SortColumns: []string{"ns", "pod", "workload", "container", "readiness", "liveness", "startup", "verdict"}, ByOwner: true, NameColumns: []string{"pod", "workload"}},
+	{Name: "terminating", Summary: "List pods and namespaces stuck being deleted, with the blocker (cluster-wide)", Run: view.Terminating, SortColumns: []string{"kind", "ns", "name", "stuck-for", "blocker", "finalizers", "verdict"}, Watch: true, NameColumns: []string{"name"}},
+	{Name: "autoscaler", Summary: "Print the cluster-autoscaler status (kube-system)", Run: view.Autoscaler, SortColumns: []string{"nodegroup", "health", "ready", "target", "min", "max", "scaleup", "scaledown", "last-change"}, Watch: true, IgnoresNamespace: true, NameColumns: []string{"nodegroup"}},
+	{Name: "unused-config", Summary: "List ConfigMaps and Secrets nothing references in the current namespace (-A for all; -A excludes kube-system)", Run: view.UnusedConfig, CurrentNSDefault: true, SortColumns: []string{"ns", "kind", "name", "type", "owner"}, NameColumns: []string{"name"}},
+	{Name: "certs", Summary: "List TLS secrets with their certificate expiry and a renewal verdict in the current namespace (-A for all); a secret name prints all its names", Run: view.Certs, CurrentNSDefault: true, SortColumns: []string{"ns", "secret", "names", "issuer", "not_after", "in", "verdict"}, OwnArgs: true},
+	{Name: "secret", Summary: "Browse secrets interactively (pick secret, then key); args skip the pickers", Run: view.Secret, CurrentNSDefault: true, OwnArgs: true},
 }
 
 // globalFlag is a flag shared by every subcommand. The globalFlags table is the
@@ -217,6 +226,17 @@ func (a App) Run(args []string) int {
 	pos, err := parseInterspersed(fs, args[1:])
 	if err != nil {
 		return 1
+	}
+	switch {
+	case len(cmd.NameColumns) > 0:
+		for _, n := range pos {
+			if _, err := path.Match(n, ""); err != nil {
+				return a.fail("invalid name pattern %q: %v", n, err)
+			}
+		}
+		f.Names, f.NameColumns = pos, cmd.NameColumns
+	case len(pos) > 0 && !cmd.OwnArgs:
+		return a.fail("%s does not take a name (got %q)", cmd.Name, strings.Join(pos, " "))
 	}
 	if f.Sort != "" && !slices.Contains(cmd.SortColumns, f.Sort) {
 		return a.fail("invalid --sort %q for %s (want %s)", f.Sort, cmd.Name, strings.Join(cmd.SortColumns, "|"))

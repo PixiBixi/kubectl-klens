@@ -73,6 +73,7 @@ func PvOrphan(ctx context.Context, c kube.Clients, f kube.Flags, _ []string, out
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	return flushVerdicts(t, f.Sort, "FAILED", "RETAINED", "RECLAIMING", "UNCLAIMED")
 }
 

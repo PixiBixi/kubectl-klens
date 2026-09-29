@@ -62,6 +62,7 @@ func Qos(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 		row = append(row, sevPaint(paint, e.sev)(e.verdict))
 		t.Row(row...)
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	return flushVerdicts(t, podSort(f, f.Sort, "POD"), "EVICT-FIRST", "NO-MEM-FLOOR", "BURSTABLE", "GUARANTEED")
 }
 

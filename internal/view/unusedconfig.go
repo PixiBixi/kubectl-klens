@@ -130,6 +130,7 @@ func UnusedConfig(ctx context.Context, c kube.Clients, f kube.Flags, args []stri
 		e := &list[i]
 		t.Row(e.ns, e.kind, e.name, e.typ, e.owner, humanBytes(e.size), age(e.created))
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	t.SortBy(f.Sort)
 	return t.Flush()
 }

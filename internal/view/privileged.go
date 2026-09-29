@@ -36,6 +36,7 @@ func Privileged(ctx context.Context, c kube.Clients, f kube.Flags, args []string
 			t.Row(p.Namespace, p.Name, pc.Spec.Name, pc.Kind, paint.Bad(strings.Join(flags, ",")))
 		}
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	t.SortBy(f.Sort)
 	return t.Flush()
 }

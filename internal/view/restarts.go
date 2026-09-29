@@ -60,6 +60,7 @@ func Restarts(ctx context.Context, c kube.Clients, f kube.Flags, args []string, 
 		e := &list[i]
 		t.Row(e.ns, e.pod, e.container, e.kind, paint.Warn(strconv.Itoa(int(e.restarts))), paint.Status(e.state), exitCell(paint, e.exit, e.hasExit), lastCell(paint, e.last, e.hasLast))
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	t.SortBy(f.Sort)
 	return t.Flush()
 }

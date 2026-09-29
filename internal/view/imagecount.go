@@ -52,6 +52,7 @@ func ImageCount(ctx context.Context, c kube.Clients, f kube.Flags, args []string
 	for _, e := range list {
 		t.Row(strconv.Itoa(e.n), e.registry, e.repo, latestTag(paint, e.tag))
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	return t.Flush()
 }
 

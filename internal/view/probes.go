@@ -81,6 +81,7 @@ func Probes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 		)
 		t.Row(row...)
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	return flushVerdicts(t, podSort(f, f.Sort, "POD"), "NO-PROBES", "NO-READINESS", "NO-LIVENESS", "OK")
 }
 

@@ -46,6 +46,7 @@ func PodsPerNode(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 	for _, e := range list {
 		t.Row(e.node, strconv.Itoa(e.n))
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	t.SortBy(f.Sort)
 	return t.Flush()
 }

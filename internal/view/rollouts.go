@@ -77,6 +77,7 @@ func Rollouts(ctx context.Context, c kube.Clients, f kube.Flags, args []string, 
 			sevPaint(paint, sev)(v),
 		)
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	return flushVerdicts(t, f.Sort, "STALLED", "DOWN", "NOT-OBSERVED", "PROGRESSING", "PAUSED", "SCALED-ZERO", "OK")
 }
 
