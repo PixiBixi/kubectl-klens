@@ -308,6 +308,19 @@ kubectl klens image-count --sort registry
 kubectl klens pdb --sort verdict
 ```
 
+### Name filter (positional args)
+
+A command that declares `NameColumns` treats its positional args as names or
+globs: a row stays when one of those columns matches one of them. Flags parse
+anywhere on the line, so `rollouts web --watch` watches. A command without
+`NameColumns` or `OwnArgs` (`netpol`) rejects a positional instead of ignoring
+it.
+
+```bash
+kubectl klens pdb delivery-prod-kafka
+kubectl klens rollouts 'prometheus-*' --watch
+```
+
 ### Watch (`-w/--watch`)
 
 A command that sets `Watch: true` in the registry opts into `-w/--watch`, which

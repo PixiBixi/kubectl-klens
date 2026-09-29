@@ -198,3 +198,41 @@ func BenchmarkTableFlush(b *testing.B) {
 		}
 	}
 }
+
+func TestTableFilterBy(t *testing.T) {
+	tests := []struct {
+		name    string
+		columns []string
+		names   []string
+		want    []string
+	}{
+		{"exact", []string{"name"}, []string{"kafka"}, []string{"kafka"}},
+		{"glob", []string{"name"}, []string{"kafka*"}, []string{"kafka", "kafka-exporter"}},
+		{"several names", []string{"name"}, []string{"api", "kafka"}, []string{"kafka", "api"}},
+		{"any column", []string{"pod", "name"}, []string{"api"}, []string{"api"}},
+		{"no match", []string{"name"}, []string{"nope"}, nil},
+		{"no names keeps all", []string{"name"}, nil, []string{"kafka", "kafka-exporter", "api"}},
+		{"absent column keeps all", []string{"pod"}, []string{"api"}, []string{"kafka", "kafka-exporter", "api"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			tbl := NewTable(&buf, NewPainter(Flags{Color: true}), "NAME", "VERDICT")
+			for _, n := range []string{"kafka", "kafka-exporter", "api"} {
+				tbl.Row(NewPainter(Flags{Color: true}).OK(n), "OK")
+			}
+			tbl.FilterBy(tc.columns, tc.names)
+			if err := tbl.Flush(); err != nil {
+				t.Fatal(err)
+			}
+			lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")[1:]
+			var got []string
+			for _, l := range lines {
+				got = append(got, strings.Fields(stripANSI(l))[0])
+			}
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

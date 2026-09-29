@@ -26,10 +26,15 @@ subcommand. `App.Run` (`cli.go`):
    `s` toggle).
 3. Registers the global flags, plus `--sort` if the command declares
    `SortColumns` and `-w/--watch` + `--interval` if it declares `Watch`, then
-   parses args. `-w` on a command that does not declare `Watch` is caught before
-   parsing (`wantsWatch` in `watch.go`) so the error names the command instead of
-   leaving the `flag` package to say "not defined".
-4. Validates `--sort` against the command's columns, `--color` against
+   parses args with `parseInterspersed`, so flags are read on either side of a
+   positional (the `flag` package alone stops at the first one). `-w` on a
+   command that does not declare `Watch` is caught before parsing (`wantsWatch`
+   in `watch.go`) so the error names the command instead of leaving the `flag`
+   package to say "not defined".
+4. Routes the positionals: into `Flags.Names` (with `Flags.NameColumns`) for a
+   command that declares `NameColumns`, to the command untouched for one that
+   sets `OwnArgs`, and otherwise refuses them. Validates `--sort` against the
+   command's columns, `--color` against
    `auto|always|never`, and `--interval` against `kube.MinWatchInterval`;
    resolves `Flags.Color` once via `kube.ResolveColor`. `--watch` on a non-TTY
    stdout is refused here, before any cluster call.
@@ -56,6 +61,8 @@ type Command struct {
     Watch            bool     // enables -w/--watch + --interval
     IgnoresNamespace bool     // cluster-scoped only; skips -n resolution
     ByOwner          bool     // enables --by-owner
+    NameColumns      []string // lowercased headers positional names match
+    OwnArgs          bool     // command reads its positional args itself
 }
 ```
 
@@ -219,6 +226,9 @@ All columnar output goes through `kube.NewTable(out, painter, headers...)`.
   `Flush`, auto-detecting numeric columns so counts order by value. `SortRank`
   registers a custom key for a column whose alphabetical order is meaningless -
   used by verdict commands to order a `VERDICT` column worst-first.
+- **Name filter.** `FilterBy(columns, names)` drops, at `Flush` and before the
+  sort, every row where none of the columns matches one of the names
+  (`path.Match` globs, ANSI stripped). Absent columns or no names keep all rows.
 
 Headers are bolded via the `Painter`. `kube.Label(painter, labels, keys...)` renders
 the value of the first key present or a muted `<none>`.
@@ -430,6 +440,10 @@ colored too, not only the anomaly.
    - set `SortColumns` to the lowercased headers to enable `--sort`, then call
      `t.SortBy(f.Sort)` in the view. `TestSortColumnsMatchHeaders` guards that
      those columns actually exist as headers;
+   - set `NameColumns` to the lowercased headers positional names match, and
+     call `t.FilterBy(f.NameColumns, f.Names)` before `Flush` (or set `OwnArgs`
+     if the command reads its args itself). `TestNameColumnsMatchHeaders` guards
+     the columns;
    - set `Watch: true` only if the view's answer changes while you watch it (and
      update `TestWatchFlags`);
    - set `ByOwner: true` only if the view's rows are pod _spec_ and nothing else,

@@ -51,6 +51,7 @@ func reportMissing(ctx context.Context, c kube.Clients, f kube.Flags, out io.Wri
 			}
 		}
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	t.SortBy(podSort(f, f.Sort, "POD"))
 	return t.Flush()
 }

@@ -79,6 +79,7 @@ func PvcUnused(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	return flushVerdicts(t, f.Sort, "LOST", "ORPHAN", "SCALED-DOWN", "STS-RESERVED", "UNBOUND")
 }
 

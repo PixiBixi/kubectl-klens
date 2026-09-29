@@ -61,6 +61,7 @@ func SvcBackends(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 			sevPaint(paint, e.sev)(e.verdict),
 		)
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	return flushVerdicts(t, f.Sort, "UNWIRED", "NO-PODS", "NO-READY", "DEGRADED", "MANUAL", "EXTERNAL", "OK")
 }
 

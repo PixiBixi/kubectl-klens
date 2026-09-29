@@ -26,6 +26,7 @@ func DefaultSA(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 		p := &pods[i]
 		t.Row(p.Namespace, p.Name)
 	}
+	t.FilterBy(f.NameColumns, f.Names)
 	t.SortBy(f.Sort)
 	return t.Flush()
 }

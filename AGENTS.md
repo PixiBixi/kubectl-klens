@@ -49,14 +49,20 @@ Three packages under `internal/`, layered cli → view → kube:
   client, applies namespace defaulting, then calls the command's `RunFunc`. A
   command that sets `SortColumns` opts into `--sort <column>`: the dispatcher
   registers the flag, validates the value against that list, and the value flows
-  through `kube.Flags.Sort`. A command that sets `Watch` opts into `-w/--watch` +
-  `--interval`: the dispatcher refuses both on a non-TTY stdout and hands
-  `cmd.Run` to the redraw loop in `watch.go`, which re-polls into a buffer every
-  interval; `TestWatchFlags` locks the watchable set (`pending`, `restarts`,
-  `rollouts`, `terminating`, `autoscaler`, `node-conditions`, `svc-backends`,
-  `max-pods`, `pvc-resize`). A command that sets `ByOwner` opts into
-  `--by-owner` (`TestByOwnerFlags`); one that sets `IgnoresNamespace` reads only
-  cluster-scoped objects and skips `-n` resolution (`TestIgnoresNamespaceFlags`).
+  through `kube.Flags.Sort`. Flags are parsed on either side of
+  positionals (`parseInterspersed`). A command that sets `NameColumns` treats
+  positionals as names/globs: they land in `kube.Flags.Names` and the view
+  calls `t.FilterBy(f.NameColumns, f.Names)` before `Flush`
+  (`TestNameColumnsMatchHeaders`); one that sets `OwnArgs` reads its args
+  itself; any other rejects them. A command that sets `Watch` opts into
+  `-w/--watch` + `--interval`: the dispatcher refuses both on a non-TTY stdout
+  and hands `cmd.Run` to the redraw loop in `watch.go`, which re-polls into a
+  buffer every interval; `TestWatchFlags` locks the watchable set (`pending`,
+  `restarts`, `rollouts`, `terminating`, `autoscaler`, `node-conditions`,
+  `svc-backends`, `max-pods`, `pvc-resize`). A command that sets `ByOwner`
+  opts into `--by-owner` (`TestByOwnerFlags`); one that sets `IgnoresNamespace`
+  reads only cluster-scoped objects and skips `-n` resolution
+  (`TestIgnoresNamespaceFlags`).
   Global flags (`-n`, `--context`, ...) live once in the `globalFlags` table,
   which drives both FlagSet registration and the `--help` listing so the two
   can't drift - add a global flag there, not in two places. `complete.go`
@@ -131,7 +137,9 @@ therefore seed `Namespace` objects into the fake (`namespaceObjs` in
    update `TestWatchFlags`; set `ByOwner: true` only for a view whose rows are
    pod *spec* - a view of runtime state would hide the one pod that differs -
    and update `TestByOwnerFlags`). `TestSortColumnsMatchHeaders` guards that
-   those columns exist, in both `--by-owner` modes.
+   those columns exist, in both `--by-owner` modes. Set `NameColumns` (and call
+   `t.FilterBy(f.NameColumns, f.Names)` before `Flush`) or `OwnArgs`, otherwise
+   a positional arg is an error.
 3. Add a `_test.go` next to it. Shell completion, `--help`, and dispatch are all
    registry-driven - no extra wiring.
 4. Anything called once per pod takes the field it reads, not `kube.Flags` by
