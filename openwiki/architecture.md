@@ -300,11 +300,11 @@ replica at once. See `pdbVerdict` for the canonical example.
 
 Shared helpers (`flushVerdicts`, `byNsName`, `sevPaint`, `verdictRank`) live in
 [`internal/view/verdict.go`](../internal/view/verdict.go); `pdb`, `hpa`,
-`spread`, `probes`, `qos`, `svc-backends`, `rollouts`, `ingress`, and
-`terminating`, `pvc-unused`, `pvc-resize`, `pv-orphan` and `certs` reuse them
-(`pending`
-renders a plain `REASON`
-column and only needs `SortBy`).
+`spread`, `probes`, `qos`, `svc-backends`, `rollouts`, `ingress`,
+`terminating`, `pvc-unused`, `pvc-resize`, `pv-orphan` and `certs` reuse them.
+`pending` renders a plain `REASON` column and only needs `SortBy`. `netpol` has
+two verdict columns, so `flushNetpol` registers a rank on both `INGRESS` and
+`EGRESS` instead of calling `flushVerdicts`.
 
 ## Shared view helpers (`internal/view/view.go`)
 
@@ -490,18 +490,19 @@ apiserver indexes for it.
 
 ## Where to change what
 
-| You want to…                                    | Touch                                                                        |
-| ----------------------------------------------- | ---------------------------------------------------------------------------- |
-| Add/rename a command                            | `commands` slice in `internal/cli/cli.go` (+ its view file + test)           |
-| Add a global flag                               | `globalFlags` table in `cli.go` (drives registration _and_ help)             |
-| Change a command's namespace scope              | `CurrentNSDefault` in the registry + `TestCurrentNSDefaultFlags`             |
-| Fetch a new resource kind / change paging       | `internal/kube/list.go`                                                      |
-| Change table alignment/sorting                  | `internal/kube/table.go`                                                     |
-| Change colors / color precedence                | `internal/kube/color.go`                                                     |
-| Change kubeconfig/context resolution            | `internal/kube/client.go`                                                    |
-| Change request bounds / interrupts              | `cfg.Timeout` in `client.go` + the exit-code switch in `cli.go`              |
-| Change the watch loop / which commands watch    | `internal/cli/watch.go` + `Watch` in the registry + `TestWatchFlags`         |
-| Add/adjust a health verdict                     | the command's `xVerdict` in `internal/view/<name>.go`                        |
-| Add a controller kind to `--by-owner`           | `internal/view/byowner.go` (+ `unknownAnnotation` for what it cannot answer) |
-| Support another cloud's node-pool / spot labels | the ordered tables in `internal/view/nodelabels.go`                          |
-| Change completion behaviour                     | `internal/cli/complete.go`                                                   |
+| You want to…                                    | Touch                                                                                                            |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Add/rename a command                            | `commands` slice in `internal/cli/cli.go` (+ its view file + test)                                               |
+| Add a global flag                               | `globalFlags` table in `cli.go` (drives registration _and_ help)                                                 |
+| Change a command's namespace scope              | `CurrentNSDefault` in the registry + `TestCurrentNSDefaultFlags`                                                 |
+| Fetch a new resource kind / change paging       | `internal/kube/list.go`                                                                                          |
+| Change table alignment/sorting                  | `internal/kube/table.go`                                                                                         |
+| Add a behavior applied to every table at flush  | every flush path: `t.Flush`, `flushVerdicts`, `flushNetpol`, `renderAutoscalerStatus`, `renderNodes`/`nodeTable` |
+| Change colors / color precedence                | `internal/kube/color.go`                                                                                         |
+| Change kubeconfig/context resolution            | `internal/kube/client.go`                                                                                        |
+| Change request bounds / interrupts              | `cfg.Timeout` in `client.go` + the exit-code switch in `cli.go`                                                  |
+| Change the watch loop / which commands watch    | `internal/cli/watch.go` + `Watch` in the registry + `TestWatchFlags`                                             |
+| Add/adjust a health verdict                     | the command's `xVerdict` in `internal/view/<name>.go`                                                            |
+| Add a controller kind to `--by-owner`           | `internal/view/byowner.go` (+ `unknownAnnotation` for what it cannot answer)                                     |
+| Support another cloud's node-pool / spot labels | the ordered tables in `internal/view/nodelabels.go`                                                              |
+| Change completion behaviour                     | `internal/cli/complete.go`                                                                                       |
