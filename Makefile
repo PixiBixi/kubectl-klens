@@ -1,4 +1,4 @@
-.PHONY: help build lint test bench snapshot clean
+.PHONY: help build lint lint-md test bench snapshot clean
 .DEFAULT_GOAL := help
 
 build: ## Build the local kubectl-klens binary
@@ -6,6 +6,12 @@ build: ## Build the local kubectl-klens binary
 
 lint: ## Run golangci-lint (config: .golangci.yml)
 	golangci-lint run
+
+# Same markdownlint-cli version reviewdog/action-markdownlint pins. CI only
+# reports the lines a PR touches and the tree carries old findings, so pass
+# FILES=<the .md files you changed> to see what CI will flag.
+lint-md: ## Run markdownlint-cli as CI does (FILES=<paths>, default: whole tree)
+	npx --yes markdownlint-cli@0.49.1 --ignore dist $(or $(FILES),.)
 
 test: ## Run tests with the race detector
 	go test -race ./...
