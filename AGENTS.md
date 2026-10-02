@@ -4,14 +4,21 @@ Guidance for coding agents working in this repository.
 
 ## OpenWiki
 
-This repository has documentation located in the /openwiki directory.
+[`openwiki/architecture.md`](openwiki/architecture.md) holds the code map;
+jump to the section for the task instead of searching the tree:
 
-Start here:
-- [OpenWiki quickstart](openwiki/quickstart.md)
+| Task                                       | Section                                                                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Find which file to touch                   | [Where to change what](openwiki/architecture.md#where-to-change-what)                                                                      |
+| Add a command or a `Command` field         | [Adding a subcommand](openwiki/architecture.md#adding-a-subcommand), [registry entry](openwiki/architecture.md#the-command-registry-entry) |
+| Change how a table renders, sorts, filters | [`Table`](openwiki/architecture.md#table-internalkubetablego), [verdict pattern](openwiki/architecture.md#the-verdict-command-pattern)     |
+| Reuse a pod/node/concurrency helper        | [Shared view helpers](openwiki/architecture.md#shared-view-helpers-internalviewviewgo)                                                     |
+| List a resource, push a filter down        | [Listing: paging and pushdown](openwiki/architecture.md#listing-paging-and-pushdown-internalkubelistgo)                                    |
+| Write a test                               | [Testing](openwiki/architecture.md#testing)                                                                                                |
+| Measure a change                           | [`openwiki/performance.md`](openwiki/performance.md)                                                                                       |
 
-OpenWiki includes repository overview, architecture notes, workflows, domain concepts, operations, integrations, testing guidance, and source maps.
-
-When working in this repository, read the OpenWiki quickstart first, then follow its links to the relevant architecture, workflow, domain, operation, and testing notes.
+[`openwiki/quickstart.md`](openwiki/quickstart.md) is the user-facing tour and
+command catalog.
 
 ## What this is
 
@@ -46,24 +53,25 @@ Three packages under `internal/`, layered cli → view → kube:
 - **`internal/cli`** - the dispatcher. `App` holds injected `NewClient` and
   `Namespace` functions so `Run` is testable without a real cluster (see
   `NewApp` for the production wiring). `commands` (a package-level slice) is the
-  single registry of `Command` entries; `Run` parses global flags, builds the
-  client, applies namespace defaulting, then calls the command's `RunFunc`. A
-  command that sets `SortColumns` opts into `--sort <column>`: the dispatcher
-  registers the flag, validates the value against that list, and the value flows
-  through `kube.Flags.Sort`. Flags are parsed on either side of
-  positionals (`parseInterspersed`). A command that sets `NameColumns` treats
-  positionals as names/globs: they land in `kube.Flags.Names` and the view
-  calls `t.FilterBy(f.NameColumns, f.Names)` before `Flush`
-  (`TestNameColumnsMatchHeaders`); one that sets `OwnArgs` reads its args
-  itself; any other rejects them. A command that sets `Watch` opts into
-  `-w/--watch` + `--interval`: the dispatcher refuses both on a non-TTY stdout
-  and hands `cmd.Run` to the redraw loop in `watch.go`, which re-polls into a
-  buffer every interval; `TestWatchFlags` locks the watchable set (`pending`,
-  `restarts`, `rollouts`, `terminating`, `autoscaler`, `node-conditions`,
-  `svc-backends`, `max-pods`, `pvc-resize`). A command that sets `ByOwner`
-  opts into `--by-owner` (`TestByOwnerFlags`); one that sets `IgnoresNamespace`
-  reads only cluster-scoped objects and skips `-n` resolution
-  (`TestIgnoresNamespaceFlags`).
+  single registry of `Command` entries; `Run` parses global flags (on either
+  side of positionals, `parseInterspersed`), builds the client, applies
+  namespace defaulting, then calls the command's `RunFunc`. A command opts into
+  behavior through its `Command` fields, each locked by a test in `cli_test.go`
+  that is the authoritative list of commands setting it:
+
+  | Field              | Effect                                                                        | Guard test                    | The view must                                 |
+  | ------------------ | ----------------------------------------------------------------------------- | ----------------------------- | --------------------------------------------- |
+  | `CurrentNSDefault` | scope to the current kubeconfig namespace when neither `-n` nor `-A` is given | `TestCurrentNSDefaultFlags`   | nothing                                       |
+  | `SortColumns`      | `--sort <column>`, validated against the list, passed as `kube.Flags.Sort`    | `TestSortColumnsMatchHeaders` | call `t.SortBy(f.Sort)` before `Flush`        |
+  | `NameColumns`      | positionals are names/globs, passed as `kube.Flags.Names`                     | `TestNameColumnsMatchHeaders` | call `t.FilterBy(f.NameColumns, f.Names)`     |
+  | `OwnArgs`          | positionals reach the view untouched (any other command rejects them)         | -                             | validate its args                             |
+  | `Watch`            | `-w/--watch` + `--interval`, refused on a non-TTY stdout, loop in `watch.go`  | `TestWatchFlags`              | nothing (re-run into a buffer every interval) |
+  | `ByOwner`          | `--by-owner`: rows come from controllers, not pods (`byowner.go`)             | `TestByOwnerFlags`            | read nothing but the pod spec                 |
+  | `IgnoresNamespace` | cluster-scoped objects only, `-n` resolution skipped                          | `TestIgnoresNamespaceFlags`   | nothing                                       |
+
+  Views flush through more than one path (`t.Flush`, `flushVerdicts`,
+  `flushNetpol`, `renderAutoscalerStatus`, `renderNodes`/`nodeTable`): a
+  per-table behavior goes in every one of them.
   Global flags (`-n`, `--context`, ...) live once in the `globalFlags` table,
   which drives both FlagSet registration and the `--help` listing so the two
   can't drift - add a global flag there, not in two places. `complete.go`
@@ -76,8 +84,7 @@ Three packages under `internal/`, layered cli → view → kube:
 - **`internal/view`** - one file per subcommand, each a `RunFunc`:
   `func(ctx, kube.Clients, kube.Flags, args []string, out io.Writer) error`.
   Shared node helpers live in `view.go`. `byowner.go` holds `podsForView`, the
-  shared source for the six `--by-owner` commands (`reqlim`, `no-limits`,
-  `no-requests`, `images`, `probes`, `qos`): it lists Deployments, StatefulSets,
+  shared source for the `--by-owner` commands: it lists Deployments, StatefulSets,
   DaemonSets, Argo Rollouts, Strimzi PodSets and CloudNativePG Clusters instead
   of pods and turns each into a synthetic pod (Namespace/Name from the
   controller, Spec its template, Status zero), which then flows through the
@@ -113,12 +120,8 @@ Three packages under `internal/`, layered cli → view → kube:
 `Command.CurrentNSDefault` controls scoping. When `true` and the user passed
 neither `-n` nor `-A`, the dispatcher resolves the current kubeconfig namespace
 (kubens/kubectx) before running. When `false`, the command lists all namespaces
-by default. The current `CurrentNSDefault` set (`reqlim`, `no-limits`,
-`no-requests`, `images`, `restarts`, `pvc`, `pvc-unused`, `pvc-resize`,
-`svc-fqdn`, `svc-backends`, `ingress`, `secret`, `privileged`, `certs`, `pdb`,
-`pending`, `hpa`, `spread`, `probes`, `qos`, `rollouts`, `unused-config`) is locked in by
-`TestCurrentNSDefaultFlags` in `cli_test.go`, which is the authoritative list -
-update that map whenever you change a command's scoping.
+by default. `TestCurrentNSDefaultFlags` in `cli_test.go` holds the
+authoritative set - update that map whenever you change a command's scoping.
 
 Separately, `kube.ResolveScope` validates `-n` against the cluster before every
 command that does not set `IgnoresNamespace`: an unknown namespace, or a glob
@@ -163,8 +166,14 @@ therefore seed `Namespace` objects into the fake (`namespaceObjs` in
 Tests use `k8s.io/client-go/kubernetes/fake.NewClientset(objs...)`, run the
 command writing to a `bytes.Buffer`, and assert on substrings. Dispatcher tests
 inject a fake client + observable `Namespace` resolver and inspect
-`clientset.Actions()` to assert the namespace a list was scoped to (see
-`listedNamespace` and the `reqlim` tests in `cli_test.go`).
+`clientset.Actions()` to assert the namespace a list was scoped to. Helpers:
+
+- `internal/cli/cli_test.go`: `testApp(out, errw)` builds an `App` on a fake,
+  `namespaceObjs` seeds the namespaces `ResolveScope` checks, and
+  `listedNamespace(s)` reads back the scope of the lists issued.
+- `internal/view/fake_test.go`: `clients(c)` wraps a clientset into
+  `kube.Clients`; `newClientsetWithFieldSelectors` + `assertFieldSelector`
+  test a pushdown view, because the plain fake ignores field selectors.
 
 ## Releasing
 
