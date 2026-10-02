@@ -27,6 +27,7 @@ make build      # go build -ldflags "-s" -o kubectl-klens .
 make test       # go test -race ./...
 make bench      # go test -bench (BENCH=<re> COUNT=<n>); see openwiki/performance.md
 make lint       # golangci-lint run (config: .golangci.yml)
+make lint-md FILES="README.md AGENTS.md"  # markdownlint, as the CI job runs it
 make snapshot   # goreleaser release --snapshot --clean (dry-run)
 
 go test -race ./internal/view -run TestNodes   # single test

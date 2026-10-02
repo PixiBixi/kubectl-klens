@@ -17,6 +17,11 @@ tasks:
     cmds:
       - golangci-lint run
 
+  lint-md:
+    desc: Run markdownlint-cli as CI does (task lint-md -- <paths>)
+    cmds:
+      - npx --yes markdownlint-cli@0.49.1 --ignore dist {{.CLI_ARGS | default "."}}
+
   test:
     desc: Run tests with the race detector
     cmds:
