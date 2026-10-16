@@ -42,7 +42,7 @@ func TestNoLimits(t *testing.T) {
 	if strings.Contains(out, "full") {
 		t.Fatalf("container with both limits must be omitted:\n%s", out)
 	}
-	if strings.Contains(out, "system") {
+	if strings.Contains(out, "kube-system") {
 		t.Fatalf("kube-system must be excluded:\n%s", out)
 	}
 	if !strings.Contains(out, "nomem") || !strings.Contains(out, "memory") {

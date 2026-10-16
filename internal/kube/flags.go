@@ -29,6 +29,7 @@ type Flags struct {
 	Namespace      string   // raw -n value: a namespace name or a glob
 	Namespaces     []string // -n resolved against the cluster; see ResolveScope
 	AllNamespaces  bool
+	IncludeSystem  bool          // keep system namespaces in an all-namespaces view
 	Sort           string        // command-specific sort column (e.g. image-count)
 	ColorMode      string        // raw --color value: "auto"|"always"|"never"|"" (unset)
 	Color          bool          // resolved: whether to emit ANSI color

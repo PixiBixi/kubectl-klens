@@ -37,9 +37,6 @@ func Qos(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 	list := make([]entry, 0, len(pods))
 	for i := range pods {
 		p := &pods[i]
-		if skipNamespace(f, p.Namespace) {
-			continue
-		}
 		class := qosClass(p)
 		req, lim := podResources(p)
 		v, sev := qosVerdict(class, req[corev1.ResourceMemory])
@@ -63,6 +60,7 @@ func Qos(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out i
 		t.Row(row...)
 	}
 	t.FilterBy(f.NameColumns, f.Names)
+	hideSystem(t, f)
 	return flushVerdicts(t, podSort(f, f.Sort, "POD"), "EVICT-FIRST", "NO-MEM-FLOOR", "BURSTABLE", "GUARANTEED")
 }
 

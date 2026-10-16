@@ -119,7 +119,7 @@ Karpenter) and AKS. `node-ips` reads `CLASS` from the same labels:
 
 | Command | Shows |
 | --- | --- |
-| `reqlim` † | requests/limits per container (`-A` excl. kube-system) |
+| `reqlim` † | requests/limits per container (`-A` excl. system namespaces) |
 | `no-limits` † | containers missing CPU/mem limits |
 | `no-requests` † | containers missing CPU/mem requests |
 | `qos` † | QoS class + pod totals + eviction-risk verdict |
@@ -137,8 +137,11 @@ secrets, Ingress TLS, container args), skips what the platform owns
 and names the owning controller. It cannot see an object a controller reads by
 fixed name, so read it as a review queue, not a delete script.
 
-`reqlim`, `no-limits`, `no-requests`, `probes`, `qos` and `unused-config` drop
-kube-system from the `-A` view only; an explicit `-n kube-system` still returns
+`reqlim`, `no-limits`, `no-requests`, `probes`, `qos`,
+`unused-config`, `certs`, `pending` and `rollouts` drop
+system namespaces (`kube-*`, `gke-*`, `gmp-*`, `amazon-*`, `aws-*`, `azure-*`)
+from the `-A` view only, with a count of hidden rows under the table;
+`--include-system` keeps them, and an explicit `-n kube-system` still returns
 its rows.
 
 `reqlim`, `no-limits`, `no-requests`, `images`, `probes` and `qos` accept
@@ -228,8 +231,8 @@ In a picker, `/` filters as you type. A single-key secret skips the key picker.
 
 ## Flags
 
-`--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`, `--color`,
-`--request-timeout`, `--version`.
+`--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
+`--include-system`, `--color`, `--request-timeout`, `--version`.
 
 `--request-timeout` bounds each apiserver request (default `1m0s`) so an
 unresponsive control plane can't hang the command forever; `--request-timeout=0`

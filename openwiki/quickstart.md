@@ -148,9 +148,11 @@ The authoritative list is the `commands` slice in
 report **every** container of a pod - init and ephemeral ones included - and name
 the role in a `KIND` column (`app`/`init`/`eph`), because an init container's
 requests, images and security context count exactly as much as an app
-container's. `reqlim`, `no-limits`, `no-requests`, `probes`, `qos` and
-`unused-config` drop kube-system from the `-A` view only; an explicit
-`-n kube-system` still returns its rows. The README's
+container's. `reqlim`, `no-limits`, `no-requests`, `probes`, `qos`,
+`unused-config`, `certs`, `pending` and `rollouts` drop system namespaces
+(`kube-*`, `gke-*`, `gmp-*`, `amazon-*`, `aws-*`, `azure-*`) from the `-A` view
+only, printing how many rows they hid; `--include-system` keeps them, and an
+explicit `-n kube-system` still returns its rows. The README's
 [Container kinds](../README.md#container-kinds) and
 [Security flags](../README.md#security-flags) sections are the reference for
 the `KIND` and `FLAGS` values.
@@ -222,6 +224,7 @@ kubens/kubectx); the rest default to **all namespaces**.
   `pending`, `hpa`, `spread`, `probes`, `qos`, `rollouts`, `ingress`,
   `pvc-unused`, `pvc-resize`, `certs`, `unused-config`.
 - `-A` / `--all-namespaces` widens to all; `-n <ns>` targets one.
+  `--include-system` keeps the system namespaces `-A` otherwise hides.
 - `nodes`, `taints`, `capacity`, `zones`, `node-ips`, `max-pods`,
   `node-conditions`, `pv-orphan` and `autoscaler` read only cluster-scoped objects and ignore
   namespace flags entirely.

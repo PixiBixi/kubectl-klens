@@ -192,3 +192,18 @@ func TestPendingPinnedNode(t *testing.T) {
 		t.Fatalf("pinned pod must not report the affinity clause:\n%s", out)
 	}
 }
+
+func TestPendingHidesSystemNamespaces(t *testing.T) {
+	pending := func(name, ns string) *corev1.Pod {
+		return &corev1.Pod{Name: name, Namespace: ns, Status: corev1.PodStatus{Phase: corev1.PodPending}}
+	}
+	c := fake.NewClientset(pending("api", "default"), pending("gmp-collector", "gmp-system"))
+	var buf bytes.Buffer
+	if err := Pending(context.Background(), clients(c), kube.Flags{AllNamespaces: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "gmp-collector") || !strings.Contains(out, "api") || !strings.Contains(out, "1 row hidden") {
+		t.Fatalf("-A must hide gmp-system and say so:\n%s", out)
+	}
+}

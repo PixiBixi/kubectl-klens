@@ -60,6 +60,7 @@ func Pending(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 		t.Row(e.pod.Namespace, e.pod.Name, age(e.pod.CreationTimestamp), orMutedDash(paint, e.node), paint.Status(e.reason), orMutedDash(paint, e.detail))
 	}
 	t.FilterBy(f.NameColumns, f.Names)
+	hideSystem(t, f)
 	t.SortBy(f.Sort)
 	return t.Flush()
 }

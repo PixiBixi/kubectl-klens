@@ -191,3 +191,15 @@ func TestRolloutsColor(t *testing.T) {
 		}
 	}
 }
+
+func TestRolloutsHidesSystemNamespaces(t *testing.T) {
+	c := fake.NewClientset(deploy("web", "app", 2, 0, 2, 0), deploy("konnectivity", "kube-system", 2, 0, 2, 0))
+	var buf bytes.Buffer
+	if err := Rollouts(context.Background(), clients(c), kube.Flags{AllNamespaces: true}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if strings.Contains(out, "konnectivity") || !strings.Contains(out, "web") || !strings.Contains(out, "1 row hidden") {
+		t.Fatalf("-A must hide kube-system and say so:\n%s", out)
+	}
+}

@@ -72,7 +72,7 @@ shell completion candidates all read the same slice, so they cannot drift.
 ### Global flags - one source of truth
 
 Global flags (`--kubeconfig`, `--context`, `-n/--namespace`, `-A/--all-namespaces`,
-`--color`, `--request-timeout`) live once in the `globalFlags` table in `cli.go`.
+`--include-system`, `--color`, `--request-timeout`) live once in the `globalFlags` table in `cli.go`.
 That table drives **both** FlagSet registration and the `--help` listing, so the
 two can't diverge. Add a global flag there, not in two places.
 
@@ -169,8 +169,8 @@ test - work without a dispatcher round trip. `Flags.NamespaceScope()` survives
 only for the two `Get` call sites in `secret.go`, which need a single namespace
 or nothing.
 
-`Flags.ScopeIsAll()` is the allocation-free form used by `skipNamespace`, which
-runs once per object.
+`Flags.ScopeIsAll()` is the allocation-free form of that check, used by
+`hideSystem`.
 
 ## The `kube` package
 
@@ -229,6 +229,9 @@ All columnar output goes through `kube.NewTable(out, painter, headers...)`.
 - **Name filter.** `FilterBy(columns, names)` drops, at `Flush` and before the
   sort, every row where none of the columns matches one of the names
   (`path.Match` globs, ANSI stripped). Absent columns or no names keep all rows.
+- **Hidden rows.** `HideRows(column, hide, note)` drops, after the name filter,
+  the rows whose cell matches `hide`, and writes a muted `N rows hidden <note>`
+  line under the table so the drop is never silent.
 
 Headers are bolded via the `Painter`. `kube.Label(painter, labels, keys...)` renders
 the value of the first key present or a muted `<none>`.
@@ -315,10 +318,11 @@ two verdict columns, so `flushNetpol` registers a rank on both `INGRESS` and
   security context, images and resource requests as app containers, and walking
   only `spec.containers` is exactly the blind spot that made `privileged` report
   "clean" on a privileged init container.
-- `skipNamespace(f, ns)` drops kube-system **only from the cluster-wide (`-A`)
-  listing**. An explicit `-n kube-system` must still return rows - filtering it
-  out regardless of scope silently answers a different question than the one
-  asked.
+- `hideSystem(t, f)` drops system-namespace rows (`systemPrefixes`) **only from
+  the cluster-wide (`-A`) listing**, unless `--include-system`, through
+  `Table.HideRows`: applied at `Flush` after `FilterBy`, so the "N rows hidden"
+  footer counts only rows the user would have seen. An explicit
+  `-n kube-system` must still return rows.
 - `nodeStatus(n)` returns `Ready` / `NotReady` / `Unknown`. `Unknown` is kept
   distinct on purpose: it means the kubelet stopped reporting altogether (the
   state that starts the eviction clock), not a kubelet answering unready.

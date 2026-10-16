@@ -21,6 +21,9 @@ type Table struct {
 	sortRanks map[string]func(string) int
 	filterCol []string
 	names     []string
+	hideCol   string
+	hide      func(cell string) bool
+	hideNote  string
 	arena     []string
 }
 
@@ -62,6 +65,13 @@ func (t *Table) FilterBy(columns, names []string) {
 	t.filterCol, t.names = columns, names
 }
 
+// HideRows drops the rows whose column cell matches hide, after FilterBy, and
+// writes a muted "N rows hidden <note>" line under the table so the drop is
+// never silent. Applied at Flush.
+func (t *Table) HideRows(column string, hide func(cell string) bool, note string) {
+	t.hideCol, t.hide, t.hideNote = column, hide, note
+}
+
 // SortRank registers a custom sort key for a column, overriding the default
 // text/numeric ordering when the table is sorted by it. Rows are ordered by the
 // returned key ascending. Used for severity columns (e.g. a VERDICT column)
@@ -80,6 +90,7 @@ const tableGap = 2
 // padded (no trailing whitespace).
 func (t *Table) Flush() error {
 	t.filterRows()
+	hidden := t.hideRows()
 	if idx := t.columnIndex(t.sortCol); idx >= 0 {
 		t.sortRows(idx)
 	}
@@ -100,6 +111,14 @@ func (t *Table) Flush() error {
 	t.writeLine(&b, widths, t.headers, true)
 	for _, r := range t.rows {
 		t.writeLine(&b, widths, r, false)
+	}
+	if hidden > 0 {
+		noun := " rows hidden "
+		if hidden == 1 {
+			noun = " row hidden "
+		}
+		b.WriteString(t.painter.Muted(strconv.Itoa(hidden) + noun + t.hideNote))
+		b.WriteByte('\n')
 	}
 	_, err := io.WriteString(t.out, b.String())
 	return err
@@ -127,6 +146,17 @@ func (t *Table) filterRows() {
 		}
 		return true
 	})
+}
+
+// hideRows drops the rows HideRows excludes, in place, and returns how many.
+func (t *Table) hideRows() int {
+	idx := t.columnIndex(t.hideCol)
+	if t.hide == nil || idx < 0 {
+		return 0
+	}
+	n := len(t.rows)
+	t.rows = slices.DeleteFunc(t.rows, func(r []string) bool { return t.hide(stripANSI(cell(r, idx))) })
+	return n - len(t.rows)
 }
 
 // MatchesAny reports whether s equals one of patterns, each a name or a
