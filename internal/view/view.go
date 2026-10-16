@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"iter"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -133,13 +134,26 @@ func bothLists[A, B any](listA func() (A, error), listB func() (B, error)) (a A,
 	return a, b, err
 }
 
-// skipNamespace reports whether a pod's namespace should be dropped from a
-// cluster-wide listing. kube-system is excluded from the -A view so operator
-// noise doesn't bury workload rows - but only there: when the user scoped to a
-// single namespace they asked for it explicitly, and silently returning nothing
-// for `-n kube-system` would be a lie.
-func skipNamespace(f kube.Flags, namespace string) bool {
-	return f.ScopeIsAll() && namespace == "kube-system"
+// hideSystem drops system-namespace rows from a cluster-wide listing so platform
+// noise doesn't bury workload rows - but only there: `-n kube-system` asked for
+// it explicitly. The table prints how many rows it hid.
+func hideSystem(t *kube.Table, f kube.Flags) {
+	if f.ScopeIsAll() && !f.IncludeSystem {
+		t.HideRows("NS", isSystemNamespace, "in system namespaces (--include-system to show)")
+	}
+}
+
+// systemPrefixes are the namespaces cloud providers manage (GKE, GMP, EKS, AKS).
+// No "*-system" suffix: it would catch product namespaces like payment-system.
+var systemPrefixes = []string{"kube-", "gke-", "gmp-", "amazon-", "aws-", "azure-"}
+
+func isSystemNamespace(ns string) bool {
+	for _, p := range systemPrefixes {
+		if strings.HasPrefix(ns, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // orMutedDash returns s, or a muted "-" placeholder when it is empty.

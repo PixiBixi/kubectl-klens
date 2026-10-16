@@ -73,9 +73,6 @@ func Certs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out
 	shown := make(map[string]bool, len(secrets))
 	for i := range secrets {
 		s := &secrets[i]
-		if skipNamespace(f, s.Namespace) {
-			continue
-		}
 		if len(args) > 0 && s.Name != args[0] {
 			continue
 		}
@@ -121,7 +118,7 @@ func Certs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out
 	for i := range certs {
 		st := certState(&certs[i])
 		ns := certs[i].GetNamespace()
-		if st.secret == "" || shown[ns+"/"+st.secret] || skipNamespace(f, ns) {
+		if st.secret == "" || shown[ns+"/"+st.secret] {
 			continue
 		}
 		if len(args) > 0 && st.secret != args[0] {
@@ -156,6 +153,7 @@ func Certs(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out
 	// lexically and reads 1090d, 296d, 33d, 3438d. Plain ascending by days, so
 	// --sort in puts the soonest first, as every non-verdict column does.
 	t.SortRank("IN", daysRank)
+	hideSystem(t, f)
 	return flushVerdicts(t, f.Sort, certVerdictsWorstFirst...)
 }
 

@@ -1,7 +1,10 @@
 package view
 
 import (
+	"bytes"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,25 +91,43 @@ func TestPodContainerStatusesOrderAndKinds(t *testing.T) {
 	}
 }
 
-// TestSkipNamespace locks in that kube-system is only dropped from the
-// cluster-wide view: an explicit -n kube-system must return its rows rather than
-// silently print nothing.
-func TestSkipNamespace(t *testing.T) {
+// TestHideSystem locks in that system namespaces are only dropped from the
+// cluster-wide view, with a count of what was hidden: an explicit -n kube-system
+// or --include-system must return its rows rather than silently print nothing.
+func TestHideSystem(t *testing.T) {
+	const note = "1 row hidden in system namespaces (--include-system to show)"
 	tests := []struct {
-		name string
-		f    kube.Flags
-		ns   string
-		want bool
+		name     string
+		f        kube.Flags
+		rows     []string
+		wantRows []string
+		wantNote bool
 	}{
-		{"all namespaces skips kube-system", kube.Flags{AllNamespaces: true}, "kube-system", true},
-		{"all namespaces keeps workloads", kube.Flags{AllNamespaces: true}, "team-a", false},
-		{"explicit -n kube-system is honoured", kube.Flags{Namespace: "kube-system"}, "kube-system", false},
-		{"scoped namespace keeps its rows", kube.Flags{Namespace: "team-a"}, "team-a", false},
+		{"all namespaces hides system", kube.Flags{AllNamespaces: true}, []string{"kube-system", "team-a"}, []string{"team-a"}, true},
+		{"cloud prefixes are system", kube.Flags{}, []string{"gke-managed-cim", "gmp-system", "amazon-cloudwatch", "aws-observability", "azure-arc", "kube-node-lease"}, nil, false},
+		{"suffix -system is not", kube.Flags{AllNamespaces: true}, []string{"payment-system"}, []string{"payment-system"}, false},
+		{"explicit -n kube-system is honoured", kube.Flags{Namespace: "kube-system"}, []string{"kube-system"}, []string{"kube-system"}, false},
+		{"--include-system keeps them", kube.Flags{AllNamespaces: true, IncludeSystem: true}, []string{"kube-system"}, []string{"kube-system"}, false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := skipNamespace(tc.f, tc.ns); got != tc.want {
-				t.Fatalf("skipNamespace(%+v, %q) = %v, want %v", tc.f, tc.ns, got, tc.want)
+			var out bytes.Buffer
+			tbl := kube.NewTable(&out, kube.Painter{}, "NS", "POD")
+			for _, ns := range tc.rows {
+				tbl.Row(ns, "p")
+			}
+			hideSystem(tbl, tc.f)
+			if err := tbl.Flush(); err != nil {
+				t.Fatal(err)
+			}
+			got := out.String()
+			for _, ns := range tc.rows {
+				if want := slices.Contains(tc.wantRows, ns); strings.Contains(got, ns+" ") != want {
+					t.Errorf("row %q shown = %v, want %v:\n%s", ns, !want, want, got)
+				}
+			}
+			if strings.Contains(got, note) != tc.wantNote {
+				t.Errorf("note shown = %v, want %v:\n%s", !tc.wantNote, tc.wantNote, got)
 			}
 		})
 	}

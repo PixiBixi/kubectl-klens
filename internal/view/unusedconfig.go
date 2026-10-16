@@ -94,7 +94,7 @@ func UnusedConfig(ctx context.Context, c kube.Clients, f kube.Flags, args []stri
 	var list []entry
 	for i := range cms {
 		cm := &cms[i]
-		if skipNamespace(f, cm.Namespace) || platformConfigMap(cm) || used.has(refConfigMap, cm.Namespace, cm.Name) {
+		if platformConfigMap(cm) || used.has(refConfigMap, cm.Namespace, cm.Name) {
 			continue
 		}
 		list = append(list, entry{
@@ -105,7 +105,7 @@ func UnusedConfig(ctx context.Context, c kube.Clients, f kube.Flags, args []stri
 	}
 	for i := range secrets {
 		s := &secrets[i]
-		if skipNamespace(f, s.Namespace) || platformSecret(s) || used.has(refSecret, s.Namespace, s.Name) {
+		if platformSecret(s) || used.has(refSecret, s.Namespace, s.Name) {
 			continue
 		}
 		list = append(list, entry{
@@ -131,6 +131,7 @@ func UnusedConfig(ctx context.Context, c kube.Clients, f kube.Flags, args []stri
 		t.Row(e.ns, e.kind, e.name, e.typ, e.owner, humanBytes(e.size), age(e.created))
 	}
 	t.FilterBy(f.NameColumns, f.Names)
+	hideSystem(t, f)
 	t.SortBy(f.Sort)
 	return t.Flush()
 }

@@ -39,9 +39,6 @@ func reportMissing(ctx context.Context, c kube.Clients, f kube.Flags, out io.Wri
 	row := make([]string, 0, 6)
 	for i := range pods {
 		p := &pods[i]
-		if skipNamespace(f, p.Namespace) {
-			continue
-		}
 		for _, pc := range podContainers(p) {
 			if m := missingResources(pick(pc.Spec)); m != "" {
 				row = append(row[:0], p.Namespace, p.Name)
@@ -52,6 +49,7 @@ func reportMissing(ctx context.Context, c kube.Clients, f kube.Flags, out io.Wri
 		}
 	}
 	t.FilterBy(f.NameColumns, f.Names)
+	hideSystem(t, f)
 	t.SortBy(podSort(f, f.Sort, "POD"))
 	return t.Flush()
 }

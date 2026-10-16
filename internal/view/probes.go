@@ -35,9 +35,6 @@ func Probes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 	var list []entry
 	for i := range pods {
 		p := &pods[i]
-		if skipNamespace(f, p.Namespace) {
-			continue
-		}
 		if ref := metav1.GetControllerOf(p); ref != nil && ref.Kind == "Job" {
 			continue
 		}
@@ -82,6 +79,7 @@ func Probes(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 		t.Row(row...)
 	}
 	t.FilterBy(f.NameColumns, f.Names)
+	hideSystem(t, f)
 	return flushVerdicts(t, podSort(f, f.Sort, "POD"), "NO-PROBES", "NO-READINESS", "NO-LIVENESS", "OK")
 }
 

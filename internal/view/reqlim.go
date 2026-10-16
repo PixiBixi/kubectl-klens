@@ -34,9 +34,6 @@ func Reqlim(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 	row := make([]string, 0, 9)
 	for i := range pods {
 		p := &pods[i]
-		if skipNamespace(f, p.Namespace) {
-			continue
-		}
 		for _, pc := range podContainers(p) {
 			req, lim := pc.Spec.Resources.Requests, pc.Spec.Resources.Limits
 			row = append(row[:0], p.Namespace, p.Name)
@@ -47,6 +44,7 @@ func Reqlim(ctx context.Context, c kube.Clients, f kube.Flags, args []string, ou
 		}
 	}
 	t.FilterBy(f.NameColumns, f.Names)
+	hideSystem(t, f)
 	t.SortBy(podSort(f, f.Sort, "POD"))
 	return t.Flush()
 }
