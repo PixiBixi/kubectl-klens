@@ -509,11 +509,12 @@ goimports (`golang.org/x/tools`) in `go-format.yml` - so a regex
 `customManager` keyed on the `# renovate:` comment above each keeps those pins
 current too.
 
-Three `gomod`-manager settings decide _which_ Go updates Renovate proposes in
-the first place. `constraintsFiltering: "strict"` limits it to releases
-compatible with the `go` directive - the default is none, so without it
-Renovate offers versions that cannot build and the breakage surfaces at build
-time instead of in the PR. The `go-toolchain` rule matches both the `golang`
+Two `gomod`-manager settings decide _which_ Go updates Renovate proposes in
+the first place. `constraintsFiltering: "strict"` is deliberately **not** set:
+it discarded every `golang.org/x/net` and `golang.org/x/term` release and
+almost every `k8s.io` one, so Renovate silently stopped proposing Go module
+updates. A dependency that needs a newer `go` directive fails the PR's CI
+instead, which gates automerge. The `go-toolchain` rule matches both the `golang`
 and `toolchain` depTypes with `rangeStrategy: "bump"`, because Renovate bumps
 the `toolchain` directive by default but leaves the `go` directive alone unless
 `bump` unlocks it. `gomodUpdateImportPaths` (in `postUpdateOptions`, next to
