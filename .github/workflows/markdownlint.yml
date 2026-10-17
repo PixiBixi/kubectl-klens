@@ -17,13 +17,13 @@ jobs:
       pull-requests: write
     steps:
       - name: Harden the runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: reviewdog/action-markdownlint@a223028b797326efe9d3c9b55e24d740480c3352 # v0.31.2
+      - uses: reviewdog/action-markdownlint@34762a7b2dddebf3eb82f7e3a63b9d0242d0a42a # v0.31.4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           reporter: github-pr-review
