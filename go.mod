@@ -1,6 +1,6 @@
 module github.com/PixiBixi/kubectl-klens
 
-go 1.27.1
+go 1.27.2
 
 require (
 	github.com/manifoldco/promptui v0.9.0
