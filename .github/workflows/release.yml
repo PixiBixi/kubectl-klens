@@ -8,6 +8,11 @@ on:
 
 permissions: {}
 
+# Serialize releases: concurrent runs computed the same next tag and published out of order.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-26.04
