@@ -1,6 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": { "enabled": true, "automerge": true },
   "extends": [
     "config:recommended",
     "helpers:pinGitHubActionDigests"
@@ -15,6 +16,11 @@
       "description": "Cooldown before automerge picks up a release: a hijacked package is usually spotted and yanked within days. digest is in here because a digest-only update means an upstream tag moved onto another commit. vulnerabilityAlerts overrides this, so CVE fixes still land at once",
       "matchUpdateTypes": ["major", "minor", "patch", "digest"],
       "minimumReleaseAge": "5 days"
+    },
+    {
+      "description": "Docker digests carry no release timestamp: under the default timestamp-required, minimumReleaseAge held them forever",
+      "matchUpdateTypes": ["digest"],
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
     },
     {
       "description": "Automerge all safe updates (minor/patch/digest) via PR once CI passes",
