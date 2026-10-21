@@ -13,7 +13,7 @@ permissions: {}
 jobs:
   analysis:
     name: Analyze
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       security-events: write # upload the SARIF to code scanning
       id-token: write        # keyless signing of the published result
