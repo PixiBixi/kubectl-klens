@@ -435,7 +435,9 @@ goreleaser in the same job. A `GITHUB_TOKEN`-created tag does not re-trigger a
 workflow, which is why the tagging and the release live in one job. So you
 release by writing the right commit type, not by tagging. Pushing a `v*` tag by
 hand still works as an escape hatch (the goreleaser steps also fire on
-`ref_type == 'tag'`).
+`ref_type == 'tag'`). Runs are serialized (`concurrency: release-<ref>`, no
+cancel-in-progress): two concurrent runs computed the same next tag and
+published out of order.
 
 Two consequences worth knowing: **`perf:` does not cut a release** - svu
 implements the Conventional Commits spec, where only `fix` and `feat` are
@@ -500,14 +502,20 @@ only after a **5-day `minimumReleaseAge` cooldown**: a hijacked package is
 usually spotted and yanked within days, so waiting costs nothing and catches the
 window that matters. Digest-only updates sit in the same hold, because a moved
 tag means an upstream ref now points at a different commit.
-`vulnerabilityAlerts` overrides the cooldown, so CVE fixes still land at once.
+`vulnerabilityAlerts` overrides the cooldown, so CVE fixes still land at once,
+and `osvVulnerabilityAlerts` also raises those security PRs from OSV advisories
+(not only GitHub's). Digest updates use `minimumReleaseAgeBehaviour:
+"timestamp-optional"`: Docker digests carry no release timestamp, and the
+default held them forever. `lockFileMaintenance` is enabled and automerges.
 Actions are pinned to commit digests rather than tags
 (`helpers:pinGitHubActionDigests`, `pinDigests`), so Renovate keeps the digests
-moving instead of trusting a mutable tag. Two tools are pinned as plain
-`*_VERSION` env vars that no built-in manager sees - svu in `release.yml` and
-goimports (`golang.org/x/tools`) in `go-format.yml` - so a regex
-`customManager` keyed on the `# renovate:` comment above each keeps those pins
-current too.
+moving instead of trusting a mutable tag. The one exception is
+`golangci/golangci-lint`: golangci-lint-action's `version` input takes a tag,
+and pinning it to a digest failed the whole `github-actions` group.
+Two tools are pinned as plain `*_VERSION` env vars that no built-in manager
+sees - svu in `release.yml` and goimports (`golang.org/x/tools`) in
+`go-format.yml` - so a regex `customManager` keyed on the `# renovate:`
+comment above each keeps those pins current too.
 
 Two `gomod`-manager settings decide _which_ Go updates Renovate proposes in
 the first place. `constraintsFiltering: "strict"` is deliberately **not** set:
