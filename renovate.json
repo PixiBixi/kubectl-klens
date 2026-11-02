@@ -70,7 +70,9 @@
     {
       "customType": "regex",
       "description": "Tools pinned as plain env vars in the workflows (svu, goimports), which no built-in manager sees",
-      "fileMatch": ["^\\.github/workflows/.+\\.yml$"],
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.+\\.yml$/"
+      ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[a-z-]+?) depName=(?<depName>.+?)\\s+[A-Z0-9_]+_VERSION: (?<currentValue>.+?)\\s"
       ],
