@@ -13,6 +13,11 @@
   "pinDigests": true,
   "packageRules": [
     {
+      "description": "golangci-lint-action's version input takes a tag, not a digest: pinning it failed the whole github-actions group with update failure",
+      "matchDepNames": ["golangci/golangci-lint"],
+      "pinDigests": false
+    },
+    {
       "description": "Cooldown before automerge picks up a release: a hijacked package is usually spotted and yanked within days. digest is in here because a digest-only update means an upstream tag moved onto another commit. vulnerabilityAlerts overrides this, so CVE fixes still land at once",
       "matchUpdateTypes": ["major", "minor", "patch", "digest"],
       "minimumReleaseAge": "5 days"
