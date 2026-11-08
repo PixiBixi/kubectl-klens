@@ -37,4 +37,19 @@ jobs:
       - name: Build
         run: go build -v ./...
       - name: Tests
-        run: go test -race ./...
+        run: go run gotest.tools/gotestsum@v1.13.0 --junitfile junit.xml -- -race -coverprofile=coverage.out ./...
+      # annotate_only: no check run, so no checks: write and fork PRs still get annotations.
+      - name: Test report
+        if: ${{ !cancelled() }}
+        uses: mikepenz/action-junit-report@8a133bfa3ecb0ea9024c1e2ae788b4c25f6cdb9d # v6.6.2
+        with:
+          report_paths: junit.xml
+          annotate_only: true
+      - name: Coverage summary
+        run: |
+          {
+            echo '### Coverage'
+            echo '```'
+            go tool cover -func=coverage.out | tail -n 1
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
