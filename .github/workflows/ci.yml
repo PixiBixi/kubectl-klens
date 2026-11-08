@@ -24,6 +24,14 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      # The Release job installs svu with this same toolchain: fail on the PR
+      # when a svu bump needs a newer go directive, not after the merge.
+      - name: Check svu installs with this toolchain
+        run: |
+          set -euo pipefail
+          SVU_VERSION=$(sed -n 's/^ *SVU_VERSION: *//p' .github/workflows/release.yml)
+          test -n "$SVU_VERSION"
+          GOBIN="${RUNNER_TEMP}/bin" go install "github.com/caarlos0/svu/v3@${SVU_VERSION}"
       - name: Verify dependencies
         run: go mod verify
       - name: Build
