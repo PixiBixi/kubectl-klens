@@ -75,7 +75,7 @@ jobs:
       # binary it downloads; without cosign on PATH it silently skips that check.
       - name: Install cosign
         if: github.ref_type == 'tag' || steps.tag.outputs.new_tag != ''
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       # goreleaser shells out to syft for the SBOMs and fails the whole release
       # if it is missing, after the archives are already built.
       - name: Install syft
@@ -121,7 +121,7 @@ jobs:
           egress-policy: audit
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
 
       - name: Download the published artifacts
         run: |
