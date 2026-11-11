@@ -71,10 +71,10 @@ func Terminating(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 		if p.DeletionTimestamp == nil {
 			continue
 		}
-		v, sev := terminatingVerdict(*p.DeletionTimestamp, p.DeletionGracePeriodSeconds)
+		v, sev := terminatingVerdict(*p.DeletionTimestamp)
 		rows = append(rows, row{
 			kind: "Pod", ns: p.Namespace, name: p.Name,
-			stuck:      age(*p.DeletionTimestamp),
+			stuck:      stuckFor(*p.DeletionTimestamp),
 			blocker:    podBlocker(paint, p, unreachable),
 			finalizers: finalizerCell(paint, p.Finalizers),
 			verdict:    v, sev: sev,
@@ -91,10 +91,10 @@ func Terminating(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 		// A namespace has no grace period: it is deleted as soon as its content
 		// is gone, so any elapsed time is time spent blocked on something.
 		deleted := deletionTime(n)
-		v, sev := terminatingVerdict(deleted, nil)
+		v, sev := terminatingVerdict(deleted)
 		rows = append(rows, row{
 			kind: "Namespace", ns: paint.Muted("-"), name: n.Name,
-			stuck:      age(deleted),
+			stuck:      stuckFor(deleted),
 			blocker:    namespaceBlocker(paint, n),
 			finalizers: finalizerCell(paint, namespaceFinalizers(n)),
 			verdict:    v, sev: sev,
@@ -119,17 +119,26 @@ func Terminating(ctx context.Context, c kube.Clients, f kube.Flags, args []strin
 	return flushVerdicts(t, f.Sort, "STUCK", "DELETING", "GRACE")
 }
 
-// terminatingVerdict grades how long a deletion has been pending. grace is the
-// object's own remaining grace period when it has one.
-func terminatingVerdict(deleted metav1.Time, grace *int64) (verdict, sev string) {
-	elapsed := time.Since(deleted.Time)
-	if grace != nil && elapsed < time.Duration(*grace)*time.Second {
+// terminatingVerdict grades a pending deletion from deadline. For a pod the
+// apiserver sets deletionTimestamp to request time + grace period, so it is
+// GRACE until the deadline and only then does the stuck clock start.
+func terminatingVerdict(deadline metav1.Time) (verdict, sev string) {
+	elapsed := time.Since(deadline.Time)
+	if elapsed < 0 {
 		return "GRACE", "muted" // still shutting down within the period it was given
 	}
 	if elapsed < stuckAfter {
-		return "DELETING", "warn" // past its grace period, not yet long enough to call it wedged
+		return "DELETING", "warn" // past its deadline, not yet long enough to call it wedged
 	}
 	return "STUCK", "bad"
+}
+
+// stuckFor is the time past the deadline, never negative inside the grace period.
+func stuckFor(deadline metav1.Time) string {
+	if time.Now().Before(deadline.Time) {
+		return "0s"
+	}
+	return age(deadline)
 }
 
 // podBlocker names what is most likely holding the pod, worst cause first: an

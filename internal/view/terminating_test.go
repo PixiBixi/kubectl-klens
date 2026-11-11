@@ -14,10 +14,11 @@ import (
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
-// deletingPod builds a pod already carrying a deletionTimestamp, as the
-// apiserver stamps it the moment a delete is accepted.
-func deletingPod(name, ns, node string, ago time.Duration, grace *int64, finalizers ...string) *corev1.Pod {
-	ts := metav1.NewTime(time.Now().Add(-ago))
+// deletingPod builds a pod carrying a deletionTimestamp. The apiserver stamps
+// request time + grace period, so pastDeadline is negative while the pod is
+// still inside its grace period.
+func deletingPod(name, ns, node string, pastDeadline time.Duration, grace *int64, finalizers ...string) *corev1.Pod {
+	ts := metav1.NewTime(time.Now().Add(-pastDeadline))
 	return &corev1.Pod{
 		Name: name, Namespace: ns,
 		DeletionTimestamp:          &ts,
@@ -45,7 +46,7 @@ func TestTerminating(t *testing.T) {
 	grace := int64(30)
 	c := fake.NewClientset(
 		readyNode("n1"), lostNode("n2"),
-		deletingPod("shutting-down", "app", "n1", 5*time.Second, &grace),
+		deletingPod("shutting-down", "app", "n1", -20*time.Second, &grace),
 		deletingPod("wedged", "app", "n1", 30*time.Minute, &grace, "example.com/cleanup"),
 		deletingPod("orphaned", "app", "n2", 20*time.Minute, &grace),
 		&corev1.Pod{Name: "alive", Namespace: "app", Spec: corev1.PodSpec{NodeName: "n1"}},
@@ -121,7 +122,7 @@ func TestTerminatingColor(t *testing.T) {
 	grace := int64(30)
 	c := fake.NewClientset(
 		readyNode("n1"),
-		deletingPod("fresh", "app", "n1", 2*time.Second, &grace),
+		deletingPod("fresh", "app", "n1", -20*time.Second, &grace),
 		deletingPod("recent", "app", "n1", time.Minute, &grace),
 		deletingPod("wedged", "app", "n1", time.Hour, &grace),
 	)
@@ -133,6 +134,38 @@ func TestTerminatingColor(t *testing.T) {
 	for _, want := range []string{"\x1b[90mGRACE", "\x1b[33mDELETING", "\x1b[31mSTUCK"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output missing colored %q:\n%q", want, out)
+		}
+	}
+}
+
+// TestTerminatingDeadlineModel: deletionTimestamp is the end of the grace
+// period, so a pod before it is GRACE (no negative age) and one just past it
+// is DELETING, not GRACE for another full period.
+func TestTerminatingDeadlineModel(t *testing.T) {
+	grace := int64(30)
+	c := fake.NewClientset(
+		readyNode("n1"),
+		deletingPod("inside", "app", "n1", -20*time.Second, &grace),
+		deletingPod("justpast", "app", "n1", 10*time.Second, &grace),
+		deletingPod("longpast", "app", "n1", 6*time.Minute, &grace),
+	)
+	var buf bytes.Buffer
+	if err := Terminating(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for l := range strings.SplitSeq(buf.String(), "\n") {
+		f := strings.Fields(l)
+		if len(f) > 3 {
+			got[f[2]] = l
+		}
+	}
+	if strings.Contains(buf.String(), "<invalid>") {
+		t.Fatalf("negative age rendered:\n%s", buf.String())
+	}
+	for name, verdict := range map[string]string{"inside": "GRACE", "justpast": "DELETING", "longpast": "STUCK"} {
+		if !strings.HasSuffix(strings.TrimSpace(got[name]), verdict) {
+			t.Errorf("%s: want verdict %s, got %q", name, verdict, got[name])
 		}
 	}
 }
