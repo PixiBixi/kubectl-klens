@@ -40,6 +40,9 @@ func reportMissing(ctx context.Context, c kube.Clients, f kube.Flags, out io.Wri
 	for i := range pods {
 		p := &pods[i]
 		for _, pc := range podContainers(p) {
+			if pc.Kind == kindEph {
+				continue // ephemeral containers cannot carry resources
+			}
 			if m := missingResources(pick(pc.Spec)); m != "" {
 				row = append(row[:0], p.Namespace, p.Name)
 				row = appendOwnerCells(row, paint, f.ByOwner, p)
