@@ -3,6 +3,7 @@ package kube
 import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -14,9 +15,13 @@ import (
 //
 // Dynamic is nil in tests that never touch a CRD, so a view must treat a
 // missing dynamic client as "CRD unavailable" instead of dereferencing it.
+//
+// Metadata lists objects without their payload (PartialObjectMetadataList); nil
+// in tests, where ListSecretMeta falls back to the typed client.
 type Clients struct {
 	kubernetes.Interface
-	Dynamic dynamic.Interface
+	Dynamic  dynamic.Interface
+	Metadata metadata.Interface
 }
 
 // clientConfig builds the deferred loading config from the default loading
@@ -78,7 +83,11 @@ func NewClients(f Flags) (Clients, error) {
 	if err != nil {
 		return Clients{}, err
 	}
-	return Clients{Interface: typed, Dynamic: dyn}, nil
+	meta, err := metadata.NewForConfig(cfg)
+	if err != nil {
+		return Clients{}, err
+	}
+	return Clients{Interface: typed, Dynamic: dyn, Metadata: meta}, nil
 }
 
 // CurrentNamespace returns the namespace of the active kubeconfig context - the

@@ -25,7 +25,7 @@ import (
 func Ingress(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	var (
 		svcs    []corev1.Service
-		secrets []corev1.Secret
+		secrets []metav1.PartialObjectMetadata
 		// Reading secrets is a privilege many users are not granted, and the
 		// backend checks are worth having without it, so a refusal downgrades
 		// the TLS column instead of failing the command.
@@ -48,7 +48,7 @@ func Ingress(ctx context.Context, c kube.Clients, f kube.Flags, args []string, o
 				return err
 			},
 			func() error {
-				list, err := kube.ListSecrets(ctx, c, scope, metav1.ListOptions{})
+				list, err := kube.ListSecretMeta(ctx, c, scope, metav1.ListOptions{})
 				if apierrors.IsForbidden(err) {
 					secretsKnown = false
 					return nil

@@ -3,14 +3,17 @@ package view
 import (
 	"bytes"
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	metafake "k8s.io/client-go/metadata/fake"
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -211,5 +214,32 @@ func TestIngressSkipsSecondaryListsWhenNoIngress(t *testing.T) {
 	}
 	if !slices.Contains(listed, "ingresses") {
 		t.Errorf("ingresses must still be listed: %v", listed)
+	}
+}
+
+// TestIngressListsSecretsMetadataOnly: the TLS check must go through the
+// metadata client, never a typed Secret list that would carry the payloads.
+func TestIngressListsSecretsMetadataOnly(t *testing.T) {
+	c := fake.NewClientset(
+		svcWithPort("web", "app", 80, "http"),
+		ingressFor("ok", "app", "app.example.com", "/", "web", 80, "app.example.com", "web-tls"),
+	)
+	c.PrependReactor("list", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("typed secret list must not be used")
+	})
+	scheme := metafake.NewTestScheme()
+	scheme.AddKnownTypeWithName(corev1.SchemeGroupVersion.WithKind("Secret"), &metav1.PartialObjectMetadata{})
+	scheme.AddKnownTypeWithName(corev1.SchemeGroupVersion.WithKind("SecretList"), &metav1.PartialObjectMetadataList{})
+	meta := metafake.NewSimpleMetadataClient(scheme, &metav1.PartialObjectMetadata{
+		APIVersion: "v1", Kind: "Secret",
+		Name: "web-tls", Namespace: "app",
+	})
+	var buf bytes.Buffer
+	cl := kube.Clients{Interface: c, Metadata: meta}
+	if err := Ingress(context.Background(), cl, kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if out := buf.String(); !strings.Contains(out, "OK") || strings.Contains(out, "NO-SECRET") {
+		t.Fatalf("want OK via metadata secrets:\n%s", out)
 	}
 }

@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/metadata"
 )
 
 // pageBounded issues one page request while holding a slot in inFlight. The slot
@@ -274,6 +275,27 @@ func ListNodes(ctx context.Context, c kubernetes.Interface, opts metav1.ListOpti
 // ListSecrets returns every secret in scope matching opts.
 func ListSecrets(ctx context.Context, c kubernetes.Interface, s Scope, opts metav1.ListOptions) ([]corev1.Secret, error) {
 	return scoped(ctx, s, opts, c.CoreV1().Secrets, func(l *corev1.SecretList) []corev1.Secret { return l.Items })
+}
+
+// ListSecretMeta returns the metadata of every secret in scope, without data:
+// helm release blobs and TLS bundles make Secrets the heaviest collection, and
+// callers that only need names should not pull them. Falls back to the typed
+// client when no metadata client is set.
+func ListSecretMeta(ctx context.Context, c Clients, s Scope, opts metav1.ListOptions) ([]metav1.PartialObjectMetadata, error) {
+	if c.Metadata == nil {
+		full, err := ListSecrets(ctx, c, s, opts)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]metav1.PartialObjectMetadata, len(full))
+		for i := range full {
+			out[i].ObjectMeta = full[i].ObjectMeta
+		}
+		return out, nil
+	}
+	gvr := corev1.SchemeGroupVersion.WithResource("secrets")
+	at := func(ns string) metadata.ResourceInterface { return c.Metadata.Resource(gvr).Namespace(ns) }
+	return scoped(ctx, s, opts, at, func(l *metav1.PartialObjectMetadataList) []metav1.PartialObjectMetadata { return l.Items })
 }
 
 // ListServices returns every service in scope matching opts.
