@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
@@ -14,13 +15,17 @@ import (
 
 // PodsPerNode counts pods grouped by node, sorted by count descending.
 func PodsPerNode(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
-	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{})
+	pods, err := kube.ListPods(ctx, c, f.Scope(), metav1.ListOptions{FieldSelector: activePodsSelector})
 	if err != nil {
 		return err
 	}
 	counts := map[string]int{}
 	for i := range pods {
 		p := &pods[i]
+		// Selector already filters server side; this keeps stores that ignore it honest.
+		if p.Status.Phase == corev1.PodSucceeded || p.Status.Phase == corev1.PodFailed {
+			continue
+		}
 		node := p.Spec.NodeName
 		if node == "" {
 			node = "<unscheduled>"
