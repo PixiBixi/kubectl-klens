@@ -76,7 +76,10 @@ func ResolveScope(ctx context.Context, c kubernetes.Interface, f *Flags) error {
 				// and reported missing, which is true but unhelpful.
 				return fmt.Errorf("namespace %q not found%s", f.Namespace, globHint(f.Namespace))
 			}
-			return fmt.Errorf("cannot verify namespace %q: %w", f.Namespace, err)
+			if !apierrors.IsForbidden(err) {
+				return fmt.Errorf("cannot verify namespace %q: %w", f.Namespace, err)
+			}
+			// Namespace-scoped RBAC cannot Get namespaces: trust the literal, the lists are authoritative.
 		}
 		f.Namespaces = []string{f.Namespace}
 		return nil

@@ -65,21 +65,19 @@ func TestResolveScopeRejectsUnknownNamespace(t *testing.T) {
 	}
 }
 
-// TestResolveScopeSurfacesForbidden checks a 403 is not reported as "not found":
-// the namespace may well exist, and telling the user to fix a typo would send
-// them after the wrong problem.
-func TestResolveScopeSurfacesForbidden(t *testing.T) {
+// TestResolveScopeForbiddenAcceptsLiteral: a user bound only inside their
+// namespace cannot Get namespaces cluster-wide, yet their lists are allowed.
+func TestResolveScopeForbiddenAcceptsLiteral(t *testing.T) {
 	c := fake.NewClientset()
 	c.PrependReactor("get", "namespaces", func(k8stesting.Action) (bool, runtime.Object, error) {
 		return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "namespaces"}, "be-znof", nil)
 	})
 	f := Flags{Namespace: "be-znof"}
-	err := ResolveScope(context.Background(), c, &f)
-	if err == nil || strings.Contains(err.Error(), "not found") {
-		t.Fatalf("want a forbidden error distinct from not-found, got %v", err)
+	if err := ResolveScope(context.Background(), c, &f); err != nil {
+		t.Fatalf("forbidden must be accepted for a literal, got %v", err)
 	}
-	if !strings.Contains(err.Error(), "cannot verify") {
-		t.Fatalf("want a cannot-verify message, got %q", err)
+	if got, _ := f.Scope().One(); got != "be-znof" {
+		t.Fatalf("want scope be-znof, got %v", f.Scope().Names())
 	}
 }
 
