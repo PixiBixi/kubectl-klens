@@ -9,7 +9,9 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
@@ -114,5 +116,24 @@ func TestMaxPodsUnknownAllocatable(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "none") {
 		t.Fatalf("want 'none' when allocatable pods is unset:\n%s", buf.String())
+	}
+}
+
+// TestMaxPodsFiltersPhaseServerSide: finished pods must never be transferred.
+func TestMaxPodsFiltersPhaseServerSide(t *testing.T) {
+	c := fake.NewClientset(nodeMaxPods("n1", 10), pod("a", "ns", "n1"))
+	var selector string
+	c.PrependReactor("list", "pods", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		if la, ok := a.(k8stesting.ListAction); ok {
+			selector = la.GetListRestrictions().Fields.String()
+		}
+		return false, nil, nil
+	})
+	var buf bytes.Buffer
+	if err := MaxPods(context.Background(), clients(c), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if selector != activePodsSelector {
+		t.Fatalf("want field selector %q, got %q", activePodsSelector, selector)
 	}
 }
