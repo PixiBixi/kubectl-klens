@@ -102,7 +102,7 @@ func PvcResize(ctx context.Context, c kube.Clients, f kube.Flags, args []string,
 	}
 	t.FilterBy(f.NameColumns, f.Names)
 	return flushVerdicts(t, f.Sort,
-		"SC-NO-EXPAND", "INFEASIBLE", "FAILED", "SHRINK", "FS-PENDING", "RESIZING", "PENDING",
+		"SC-NO-EXPAND", "INFEASIBLE", "FAILED", "FS-PENDING", "RESIZING", "PENDING",
 	)
 }
 
@@ -169,11 +169,6 @@ func resizeVerdict(p *corev1.PersistentVolumeClaim, expandable map[string]bool) 
 		return "RESIZING", "warn"
 	case growing:
 		return "PENDING", "warn"
-	case asked && requested.Cmp(capacity) < 0:
-		// Kubernetes cannot shrink a PVC. The spec was lowered and nothing happened,
-		// which reads like a completed change on a `kubectl get pvc` that only shows
-		// capacity - and leaves the two numbers disagreeing for good.
-		return "SHRINK", "warn"
 	}
 	return "", ""
 }
