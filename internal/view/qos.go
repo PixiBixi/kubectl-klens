@@ -3,6 +3,7 @@ package view
 import (
 	"context"
 	"io"
+	"maps"
 	"slices"
 
 	corev1 "k8s.io/api/core/v1"
@@ -96,6 +97,9 @@ func qosClass(p *corev1.Pod) corev1.PodQOSClass {
 			for _, name := range cpuMem {
 				rq, hasReq := r.Requests[name]
 				lq, hasLim := r.Limits[name]
+				if !hasReq && hasLim {
+					rq, hasReq = lq, true // requests default to limits at Pod creation
+				}
 				anySet = anySet || hasReq || hasLim
 				// Guaranteed demands both set and equal on both resources. A
 				// limit-only container qualifies on a real cluster because the
@@ -124,7 +128,13 @@ func qosClass(p *corev1.Pod) corev1.PodQOSClass {
 func podResources(p *corev1.Pod) (req, lim corev1.ResourceList) {
 	req, lim = corev1.ResourceList{}, corev1.ResourceList{}
 	add := func(c *corev1.Container) {
-		addQuantities(req, c.Resources.Requests)
+		// Requests default to limits at Pod creation; templates keep them unset.
+		r := maps.Clone(c.Resources.Limits)
+		if r == nil {
+			r = corev1.ResourceList{}
+		}
+		maps.Copy(r, c.Resources.Requests)
+		addQuantities(req, r)
 		addQuantities(lim, c.Resources.Limits)
 	}
 	for i := range p.Spec.Containers {

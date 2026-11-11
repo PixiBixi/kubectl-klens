@@ -118,6 +118,8 @@ func TestQosDerivesClassWithoutStatus(t *testing.T) {
 		{"guaranteed", qosPod("g", "app", "", "1", "1", "1Gi", "1Gi"), "Guaranteed"},
 		{"burstable", qosPod("b", "app", "", "1", "2", "1Gi", "2Gi"), "Burstable"},
 		{"besteffort", qosPod("e", "app", "", "", "", "", ""), "BestEffort"},
+		// Requests default to limits at Pod creation, so limits-only is Guaranteed.
+		{"limitsonly", qosPod("l", "app", "", "", "1", "", "1Gi"), "Guaranteed"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -164,5 +166,20 @@ func TestQosColor(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output missing colored %q:\n%q", want, out)
 		}
+	}
+}
+
+// TestPodResourcesDefaultsRequestToLimit: a workload template with limits only
+// reserves its limits once pods are created.
+func TestPodResourcesDefaultsRequestToLimit(t *testing.T) {
+	p := &corev1.Pod{Spec: corev1.PodSpec{Containers: []corev1.Container{
+		{Name: "app", Resources: resourcesFor("", "1", "", "1Gi")},
+	}}}
+	req, _ := podResources(p)
+	if got := req.Cpu().String(); got != "1" {
+		t.Fatalf("want request cpu defaulted to 1, got %q", got)
+	}
+	if got := req.Memory().String(); got != "1Gi" {
+		t.Fatalf("want request memory defaulted to 1Gi, got %q", got)
 	}
 }

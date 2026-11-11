@@ -423,7 +423,7 @@ prod   api-7f9c-x2k    Insufficient cpu
 | `ingress` | `OK` | `NO-TLS` | `NO-SERVICE`/`NO-PORT`/`NO-SECRET` | `RESOURCE` |
 | `terminating` | - | `DELETING` | `STUCK` | `GRACE` |
 | `pvc-unused` | - | `STS-RESERVED`/`SCALED-DOWN` | `ORPHAN`/`LOST` | `UNBOUND` |
-| `pvc-resize` | - | `PENDING`/`RESIZING`/`FS-PENDING`/`SHRINK` | `FAILED`/`INFEASIBLE`/`SC-NO-EXPAND` | - |
+| `pvc-resize` | - | `PENDING`/`RESIZING`/`FS-PENDING` | `FAILED`/`INFEASIBLE`/`SC-NO-EXPAND` | - |
 | `pv-orphan` | - | `RECLAIMING`/`UNCLAIMED` | `RETAINED`/`FAILED` | - |
 | `netpol` | `DEFAULT-DENY`/`DENY`/`RESTRICTED` | `ALLOW-ALL`/`PARTIAL` | `OPEN` | `NO-PODS`/`HOST-NETWORK`, `kube-*`/`gke-*`/`gmp-*` rows |
 

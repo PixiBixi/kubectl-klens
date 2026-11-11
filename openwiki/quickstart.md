@@ -107,9 +107,8 @@ The authoritative list is the `commands` slice in
   resize stalled: `SC-NO-EXPAND` never starts (the StorageClass forbids
   expansion, and only a new PVC gets you out), `INFEASIBLE` is past the disk
   type's ceiling, `FS-PENDING` waits on a node remount and the `POD` column names
-  the pod to restart, `SHRINK` is a silent no-op because Kubernetes cannot shrink
-  a claim. Claims already at their requested size are not listed, so an empty
-  table means nothing is in flight or stuck
+  the pod to restart. Claims already at their requested size are not listed, so
+  an empty table means nothing is in flight or stuck
 - `default-sa` - pods still on the default service account
 - `privileged` - containers with privileged/host security flags. `privesc-default`
   (`allowPrivilegeEscalation` left unset, which resolves to true) is only ever

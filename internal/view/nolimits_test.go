@@ -105,3 +105,19 @@ func TestNoLimitsColor(t *testing.T) {
 		t.Fatalf("missing resources not yellow:\n%s", buf.String())
 	}
 }
+
+// TestNoLimitsSkipsEphemeralContainers: debug containers cannot carry resources.
+func TestNoLimitsSkipsEphemeralContainers(t *testing.T) {
+	p := podWithLimits("dbg", "default", corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("100m"),
+		corev1.ResourceMemory: resource.MustParse("128Mi"),
+	})
+	p.Spec.EphemeralContainers = []corev1.EphemeralContainer{{Name: "debugger"}}
+	var buf bytes.Buffer
+	if err := NoLimits(context.Background(), clients(fake.NewClientset(p)), kube.Flags{}, nil, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "debugger") {
+		t.Fatalf("ephemeral container must not be reported:\n%s", buf.String())
+	}
+}

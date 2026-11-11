@@ -102,15 +102,15 @@ func emitValue(out io.Writer, paint kube.Painter, s *corev1.Secret, key string) 
 	return nil
 }
 
-func pickSecret(ctx context.Context, c kubernetes.Interface, f kube.Flags) (*corev1.Secret, error) {
-	list, err := kube.ListSecrets(ctx, c, f.Scope(), metav1.ListOptions{})
+func pickSecret(ctx context.Context, c kube.Clients, f kube.Flags) (*corev1.Secret, error) {
+	list, err := kube.ListSecretMeta(ctx, c, f.Scope(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 	if len(list) == 0 {
 		return nil, errors.New("no secrets found in the current scope")
 	}
-	sortSecrets(list)
+	slices.SortFunc(list, func(a, b metav1.PartialObjectMetadata) int { return byNsName(&a.ObjectMeta, &b.ObjectMeta) })
 	_, single := f.Scope().One()
 	allNS := !single
 	items := make([]string, len(list))
@@ -131,7 +131,7 @@ func pickSecret(ctx context.Context, c kubernetes.Interface, f kube.Flags) (*cor
 	if err != nil {
 		return nil, err
 	}
-	return &list[idx], nil
+	return getSecret(ctx, c, list[idx].Namespace, list[idx].Name)
 }
 
 func pickKey(s *corev1.Secret) (string, error) {

@@ -11,13 +11,18 @@ import (
 	"github.com/PixiBixi/kubectl-klens/internal/kube"
 )
 
+// activePodsSelector drops finished pods server side: they hold no kubelet slot.
+const activePodsSelector = "status.phase!=Failed,status.phase!=Succeeded"
+
 // MaxPods shows each node's pod ceiling (allocatable pods) next to the current
 // pod count and the remaining free slots. Pods are counted cluster-wide since
 // node saturation is independent of namespace.
 func MaxPods(ctx context.Context, c kube.Clients, f kube.Flags, args []string, out io.Writer) error {
 	nodes, pods, err := bothLists(
 		func() ([]corev1.Node, error) { return kube.ListNodes(ctx, c, metav1.ListOptions{}) },
-		func() ([]corev1.Pod, error) { return kube.ListPods(ctx, c, kube.Scope{}, metav1.ListOptions{}) },
+		func() ([]corev1.Pod, error) {
+			return kube.ListPods(ctx, c, kube.Scope{}, metav1.ListOptions{FieldSelector: activePodsSelector})
+		},
 	)
 	if err != nil {
 		return err
